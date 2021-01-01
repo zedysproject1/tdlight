@@ -58,12 +58,12 @@ fileSourceSupergroupFull supergroup_id:int32 = FileSource;               // repa
 */
 
 FileSourceId FileReferenceManager::get_current_file_source_id() const {
-  return FileSourceId(narrow_cast<int32>(file_sources_.size()));
+  return FileSourceId(narrow_cast<int32>((int32) unique_file_source_id));
 }
 
 template <class T>
 FileSourceId FileReferenceManager::add_file_source_id(T source, Slice source_str) {
-  file_sources_[unique_file_source_id++] = (std::move(source));
+  file_sources_[++unique_file_source_id] = (std::move(source));
   VLOG(file_references) << "Create file source " << file_sources_.size() << " for " << source_str;
   return get_current_file_source_id();
 }
