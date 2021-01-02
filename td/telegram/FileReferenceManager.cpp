@@ -64,9 +64,10 @@ FileSourceId FileReferenceManager::get_current_file_source_id() const {
 
 template <class T>
 FileSourceId FileReferenceManager::add_file_source_id(T source, Slice source_str) {
-  file_sources_[++unique_file_source_id] = (std::move(source));
-  VLOG(file_references) << "Create file source " << file_sources_.size() << " for " << source_str;
-  return get_current_file_source_id();
+  auto source_id = ++unique_file_source_id; 
+  file_sources_[source_id] = (std::move(source));
+  VLOG(file_references) << "Create file source " << source_id << " for " << source_str;
+  return FileSourceId(narrow_cast<int32>((int32) source_id));
 }
 
 FileSourceId FileReferenceManager::create_message_file_source(FullMessageId full_message_id) {
@@ -144,8 +145,7 @@ vector<FullMessageId> FileReferenceManager::get_some_message_file_sources(NodeId
 
   vector<FullMessageId> result;
   for (auto file_source_id : file_source_ids) {
-    auto index = static_cast<size_t>(file_source_id.get()) - 1;
-    const auto &file_source = file_sources_[index];
+    const auto &file_source = file_sources_[file_source_id.get()];
     if (file_source.get_offset() == 0) {
       result.push_back(file_source.get<FileSourceMessage>().full_message_id);
     }
@@ -248,8 +248,7 @@ void FileReferenceManager::send_query(Destination dest, FileSourceId file_source
     send_closure(file_manager, &FileManager::on_file_reference_repaired, dest.node_id, file_source_id,
                  std::move(result), std::move(new_promise));
   });
-  auto index = static_cast<size_t>(file_source_id.get()) - 1;
-  file_sources_[index].visit(overloaded(
+  file_sources_[file_source_id.get()].visit(overloaded(
       [&](const FileSourceMessage &source) {
         send_closure_later(G()->messages_manager(), &MessagesManager::get_message_from_server, source.full_message_id,
                            std::move(promise), nullptr);

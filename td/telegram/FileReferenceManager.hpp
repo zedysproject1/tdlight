@@ -28,8 +28,7 @@ namespace td {
 
 template <class StorerT>
 void FileReferenceManager::store_file_source(FileSourceId file_source_id, StorerT &storer) const {
-  auto index = static_cast<size_t>(file_source_id.get()) - 1;
-  auto source_tuple = file_sources_.find(index);
+  auto source_tuple = file_sources_.find(file_source_id.get());
   auto source = source_tuple->second;
 
   td::store(source.get_offset(), storer);
