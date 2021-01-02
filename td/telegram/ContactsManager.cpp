@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2020
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2021
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -47,6 +47,7 @@
 #include "td/db/SqliteKeyValue.h"
 #include "td/db/SqliteKeyValueAsync.h"
 
+#include "td/utils/algorithm.h"
 #include "td/utils/base64.h"
 #include "td/utils/buffer.h"
 #include "td/utils/format.h"
@@ -13945,10 +13946,10 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
   bool is_verified = (channel.flags_ & CHANNEL_FLAG_IS_VERIFIED) != 0;
   auto restriction_reasons = get_restriction_reasons(std::move(channel.restriction_reason_));
   bool is_scam = (channel.flags_ & CHANNEL_FLAG_IS_SCAM) != 0;
-  int32 participant_count =
-      (channel.flags_ & CHANNEL_FLAG_HAS_PARTICIPANT_COUNT) != 0 ? channel.participants_count_ : 0;
+  bool have_participant_count = (channel.flags_ & CHANNEL_FLAG_HAS_PARTICIPANT_COUNT) != 0;
+  int32 participant_count = have_participant_count ? channel.participants_count_ : 0;
 
-  if (participant_count != 0) {
+  if (have_participant_count) {
     auto channel_full = get_channel_full_const(channel_id);
     if (channel_full != nullptr && channel_full->administrator_count > participant_count) {
       participant_count = channel_full->administrator_count;
@@ -14043,16 +14044,10 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
   on_update_channel_default_permissions(c, channel_id,
                                         get_restricted_rights(std::move(channel.default_banned_rights_)));
 
-  if (participant_count != 0 && participant_count != c->participant_count) {
+  bool need_update_participant_count = have_participant_count && participant_count != c->participant_count;
+  if (need_update_participant_count) {
     c->participant_count = participant_count;
     c->is_changed = true;
-
-    auto channel_full = get_channel_full(channel_id, "on_chat_update");
-    if (channel_full != nullptr && channel_full->participant_count != participant_count) {
-      channel_full->participant_count = participant_count;
-      channel_full->is_changed = true;
-      update_channel_full(channel_full, channel_id);
-    }
   }
 
   bool need_invalidate_channel_full = false;
@@ -14082,6 +14077,15 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
   }
   c->is_received_from_server = true;
   update_channel(c, channel_id);
+
+  if (need_update_participant_count) {
+    auto channel_full = get_channel_full(channel_id, "on_chat_update");
+    if (channel_full != nullptr && channel_full->participant_count != participant_count) {
+      channel_full->participant_count = participant_count;
+      channel_full->is_changed = true;
+      update_channel_full(channel_full, channel_id);
+    }
+  }
 
   if (need_invalidate_channel_full) {
     invalidate_channel_full(channel_id, false, !c->is_slow_mode_enabled);
@@ -14168,17 +14172,10 @@ void ContactsManager::on_chat_update(telegram_api::channelForbidden &channel, co
     c->is_changed = true;
   }
 
-  if (c->participant_count != 0) {
+  bool need_drop_participant_count = c->participant_count != 0;
+  if (need_drop_participant_count) {
     c->participant_count = 0;
     c->is_changed = true;
-
-    auto channel_full = get_channel_full(channel_id, "on_chat_update");
-    if (channel_full != nullptr && channel_full->participant_count != 0) {
-      channel_full->participant_count = 0;
-      channel_full->administrator_count = 0;
-      channel_full->is_changed = true;
-      update_channel_full(channel_full, channel_id);
-    }
   }
 
   if (c->cache_version != Channel::CACHE_VERSION) {
@@ -14188,6 +14185,15 @@ void ContactsManager::on_chat_update(telegram_api::channelForbidden &channel, co
   c->is_received_from_server = true;
   update_channel(c, channel_id);
 
+  if (need_drop_participant_count) {
+    auto channel_full = get_channel_full(channel_id, "on_chat_update");
+    if (channel_full != nullptr && channel_full->participant_count != 0) {
+      channel_full->participant_count = 0;
+      channel_full->administrator_count = 0;
+      channel_full->is_changed = true;
+      update_channel_full(channel_full, channel_id);
+    }
+  }
   if (need_invalidate_channel_full) {
     invalidate_channel_full(channel_id, false, !c->is_slow_mode_enabled);
   }

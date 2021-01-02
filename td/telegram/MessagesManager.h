@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2020
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2021
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -1821,7 +1821,7 @@ class MessagesManager : public Actor {
 
   static FullMessageId get_replied_message_id(DialogId dialog_id, const Message *m);
 
-  MessageId get_reply_to_message_id(Dialog *d, MessageId top_thread_message_id, MessageId message_id);
+  MessageId get_reply_to_message_id(Dialog *d, MessageId top_thread_message_id, MessageId message_id, bool for_draft);
 
   static void fix_server_reply_to_message_id(DialogId dialog_id, MessageId message_id, DialogId reply_in_dialog_id,
                                              MessageId &reply_to_message_id);
@@ -3018,6 +3018,7 @@ class MessagesManager : public Actor {
   int32 accumulated_pts_count_ = 0;
   int32 accumulated_pts_ = -1;
   Timeout pts_gap_timeout_;
+  double last_pts_jump_warning_time_ = 0;
 
   std::unordered_map<FileId, std::pair<FullMessageId, FileId>, FileIdHash>
       being_uploaded_files_;  // file_id -> message, thumbnail_file_id

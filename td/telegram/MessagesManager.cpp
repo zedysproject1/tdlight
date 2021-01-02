@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2020
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2021
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -61,6 +61,7 @@
 #include "td/db/SqliteKeyValue.h"
 #include "td/db/SqliteKeyValueAsync.h"
 
+#include "td/utils/algorithm.h"
 #include "td/utils/format.h"
 #include "td/utils/misc.h"
 #include "td/utils/Random.h"
@@ -6350,24 +6351,25 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
   }
 
   int32 old_pts = td_->updates_manager_->get_pts();
-  if (new_pts < old_pts - 19999) {
-    // restore pts after delete_first_messages
-    LOG(ERROR) << "Restore pts after delete_first_messages from " << old_pts << " to " << new_pts
-               << " is temporarily disabled, pts_count = " << pts_count << ", update is from " << source << ": "
-               << oneline(to_string(update));
-    if (old_pts < 10000000 && update->get_id() == telegram_api::updateNewMessage::ID) {
-      auto update_new_message = static_cast<telegram_api::updateNewMessage *>(update.get());
-      auto dialog_id = get_message_dialog_id(update_new_message->message_);
-      dump_debug_message_op(get_dialog(dialog_id), 6);
+  if (new_pts < old_pts - 99 && Slice(source) != "after get difference") {
+    bool need_restore_pts = new_pts < old_pts - 19999;
+    auto now = Time::now();
+    if (now > last_pts_jump_warning_time_ + 1 && (need_restore_pts || now < last_pts_jump_warning_time_ + 5)) {
+      LOG(ERROR) << "Restore pts after delete_first_messages from " << old_pts << " to " << new_pts
+                 << " is disabled, pts_count = " << pts_count << ", update is from " << source << ": "
+                 << oneline(to_string(update));
+      last_pts_jump_warning_time_ = now;
     }
-    set_get_difference_timeout(0.001);
+    if (need_restore_pts) {
+      set_get_difference_timeout(0.001);
 
-    /*
-    LOG(WARNING) << "Restore pts after delete_first_messages";
-    td_->updates_manager_->set_pts(new_pts - 1, "restore pts after delete_first_messages");
-    old_pts = td_->updates_manager_->get_pts();
-    CHECK(old_pts == new_pts - 1);
-    */
+      /*
+      LOG(WARNING) << "Restore pts after delete_first_messages";
+      td_->updates_manager_->set_pts(new_pts - 1, "restore pts after delete_first_messages");
+      old_pts = td_->updates_manager_->get_pts();
+      CHECK(old_pts == new_pts - 1);
+      */
+    }
   }
 
   if (new_pts <= old_pts) {
@@ -6377,8 +6379,10 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
 
   if (td_->updates_manager_->running_get_difference() || !postponed_pts_updates_.empty()) {
     LOG(INFO) << "Save pending update got while running getDifference from " << source;
-    if (!(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID)) {
-      return;
+    if (td_->updates_manager_->running_get_difference()) {
+      if (!(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID)) {
+        return;
+      }
     }
     postpone_pts_update(std::move(update), new_pts, pts_count, std::move(promise));
     return;
@@ -7259,11 +7263,12 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
     if (new_pts <= old_pts) {  // very old or unuseful update
       if (new_pts < old_pts - 19999 && !is_postponed_update) {
         // restore channel pts after delete_first_messages
-        LOG(ERROR) << "Restore pts in " << d->dialog_id << " from " << source << " after delete_first_messages from "
-                   << old_pts << " to " << new_pts << " is temporarily disabled, pts_count = " << pts_count
-                   << ", update is from " << source << ": " << oneline(to_string(update));
-        if (old_pts < 10000000) {
-          dump_debug_message_op(d, 6);
+        auto now = Time::now();
+        if (now > last_pts_jump_warning_time_ + 1) {
+          LOG(ERROR) << "Restore pts in " << d->dialog_id << " from " << source << " after delete_first_messages from "
+                     << old_pts << " to " << new_pts << " is temporarily disabled, pts_count = " << pts_count
+                     << ", update is from " << source << ": " << oneline(to_string(update));
+          last_pts_jump_warning_time_ = now;
         }
         get_channel_difference(dialog_id, old_pts, true, "add_pending_channel_update old");
       }
@@ -11985,6 +11990,7 @@ void MessagesManager::init() {
   always_wait_for_mailbox();
 
   start_time_ = Time::now();
+  last_pts_jump_warning_time_ = start_time_ - 3600;
 
   bool is_authorized = td_->auth_manager_->is_authorized();
   bool was_authorized_user = td_->auth_manager_->was_authorized() && !td_->auth_manager_->is_bot();
@@ -18176,7 +18182,7 @@ Status MessagesManager::set_dialog_draft_message(DialogId dialog_id, MessageId t
     new_draft_message = make_unique<DraftMessage>();
     new_draft_message->date = G()->unix_time();
     new_draft_message->reply_to_message_id =
-        get_reply_to_message_id(d, top_thread_message_id, MessageId(draft_message->reply_to_message_id_));
+        get_reply_to_message_id(d, top_thread_message_id, MessageId(draft_message->reply_to_message_id_), true);
 
     auto input_message_content = std::move(draft_message->input_message_text_);
     if (input_message_content != nullptr) {
@@ -22946,10 +22952,12 @@ MessageId MessagesManager::get_persistent_message_id(const Dialog *d, MessageId 
   return message_id;
 }
 
-MessageId MessagesManager::get_reply_to_message_id(Dialog *d, MessageId top_thread_message_id, MessageId message_id) {
+MessageId MessagesManager::get_reply_to_message_id(Dialog *d, MessageId top_thread_message_id, MessageId message_id,
+                                                   bool for_draft) {
   CHECK(d != nullptr);
   if (!message_id.is_valid()) {
-    if (message_id == MessageId() && top_thread_message_id.is_valid() && top_thread_message_id.is_server() &&
+    if (!for_draft && message_id == MessageId() && top_thread_message_id.is_valid() &&
+        top_thread_message_id.is_server() &&
         get_message_force(d, top_thread_message_id, "get_reply_to_message_id 1") != nullptr) {
       return top_thread_message_id;
     }
@@ -22964,7 +22972,7 @@ MessageId MessagesManager::get_reply_to_message_id(Dialog *d, MessageId top_thre
       // allow to reply yet unreceived server message
       return message_id;
     }
-    if (top_thread_message_id.is_valid() && top_thread_message_id.is_server() &&
+    if (!for_draft && top_thread_message_id.is_valid() && top_thread_message_id.is_server() &&
         get_message_force(d, top_thread_message_id, "get_reply_to_message_id 3") != nullptr) {
       return top_thread_message_id;
     }
@@ -23173,7 +23181,7 @@ Result<MessageId> MessagesManager::send_message(DialogId dialog_id, MessageId to
 
   LOG(INFO) << "Begin to send message to " << dialog_id << " in reply to " << reply_to_message_id;
 
-  reply_to_message_id = get_reply_to_message_id(d, top_thread_message_id, reply_to_message_id);
+  reply_to_message_id = get_reply_to_message_id(d, top_thread_message_id, reply_to_message_id, false);
 
   if (input_message_content->get_id() == td_api::inputMessageForwarded::ID) {
     auto input_message = td_api::move_object_as<td_api::inputMessageForwarded>(input_message_content);
@@ -23433,7 +23441,7 @@ Result<vector<MessageId>> MessagesManager::send_message_group(
     }
   }
 
-  reply_to_message_id = get_reply_to_message_id(d, top_thread_message_id, reply_to_message_id);
+  reply_to_message_id = get_reply_to_message_id(d, top_thread_message_id, reply_to_message_id, false);
   TRY_STATUS(can_use_top_thread_message_id(d, top_thread_message_id, reply_to_message_id));
 
   int64 media_album_id = 0;
@@ -24246,7 +24254,7 @@ Result<MessageId> MessagesManager::send_inline_query_result_message(DialogId dia
     return Status::Error(5, "Inline query result not found");
   }
 
-  reply_to_message_id = get_reply_to_message_id(d, top_thread_message_id, reply_to_message_id);
+  reply_to_message_id = get_reply_to_message_id(d, top_thread_message_id, reply_to_message_id, false);
   TRY_STATUS(can_use_message_send_options(message_send_options, content->message_content, 0));
   TRY_STATUS(can_send_message_content(dialog_id, content->message_content.get(), false));
   TRY_STATUS(can_use_top_thread_message_id(d, top_thread_message_id, reply_to_message_id));
@@ -26172,7 +26180,7 @@ Result<vector<MessageId>> MessagesManager::resend_messages(DialogId dialog_id, v
                                get_message_schedule_date(message.get()));
     Message *m = get_message_to_send(
         d, message->top_thread_message_id,
-        get_reply_to_message_id(d, message->top_thread_message_id, message->reply_to_message_id), options,
+        get_reply_to_message_id(d, message->top_thread_message_id, message->reply_to_message_id, false), options,
         std::move(new_contents[i]), &need_update_dialog_pos, false, nullptr, message->is_copy);
     m->reply_markup = std::move(message->reply_markup);
     m->via_bot_user_id = message->via_bot_user_id;
@@ -26407,7 +26415,7 @@ Result<MessageId> MessagesManager::add_local_message(
     m->sender_dialog_id = sender_dialog_id;
   }
   m->date = G()->unix_time();
-  m->reply_to_message_id = get_reply_to_message_id(d, MessageId(), reply_to_message_id);
+  m->reply_to_message_id = get_reply_to_message_id(d, MessageId(), reply_to_message_id, false);
   if (m->reply_to_message_id.is_valid()) {
     const Message *reply_m = get_message(d, m->reply_to_message_id);
     if (reply_m != nullptr) {
