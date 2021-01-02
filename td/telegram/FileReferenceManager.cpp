@@ -384,6 +384,8 @@ void FileReferenceManager::memory_cleanup() {
 
         elements_it++;
       }
+      
+      file_nodes_it++;
     }
 
     if (remove) {
