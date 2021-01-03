@@ -13,6 +13,7 @@
 #include "td/telegram/files/FileLocation.h"
 #include "td/telegram/files/FileManager.h"
 #include "td/telegram/net/DcId.h"
+#include "td/telegram/ConfigShared.h"
 
 #include "td/utils/algorithm.h"
 #include "td/utils/base64.h"
@@ -395,7 +396,11 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
     case telegram_api::photoStrippedSize::ID: {
       auto size = move_tl_object_as<telegram_api::photoStrippedSize>(size_ptr);
       if (!expect_jpeg_minithumbnail) {
-        LOG(ERROR) << "Receive unexpected JPEG minithumbnail";
+        if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+          LOG(DEBUG) << "Receive unexpected JPEG minithumbnail";
+        } else {
+          LOG(ERROR) << "Receive unexpected JPEG minithumbnail";
+        }
         return std::move(res);
       }
       return size->bytes_.as_slice().str();
