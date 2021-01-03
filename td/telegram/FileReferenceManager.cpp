@@ -140,6 +140,14 @@ vector<FileSourceId> FileReferenceManager::get_some_file_sources(NodeId node_id)
   return it->second.file_source_ids.get_some_elements();
 }
 
+vector<FileSourceId> FileReferenceManager::get_all_file_sources(NodeId node_id) {
+  auto it = nodes_.find(node_id);
+  if (it == nodes_.end()) {
+    return {};
+  }
+  return it->second.file_source_ids.get_all_elements();
+}
+
 vector<FullMessageId> FileReferenceManager::get_some_message_file_sources(NodeId node_id) {
   auto file_source_ids = get_some_file_sources(node_id);
 
@@ -372,7 +380,7 @@ void FileReferenceManager::memory_cleanup() {
     auto remove = true;
 
     while (file_nodes_it != nodes_.end() && remove) {
-      auto elements = get_some_file_sources(file_nodes_it->first);
+      auto elements = get_all_file_sources(file_nodes_it->first);
       auto elements_it = elements.begin();
 
       while (elements_it != elements.end()) {

@@ -159,6 +159,8 @@ class FileReferenceManager : public Actor {
   template <class T>
   FileSourceId add_file_source_id(T source, Slice source_str);
 
+  vector<FileSourceId> FileReferenceManager::get_all_file_sources(NodeId node_id);
+
   FileSourceId get_current_file_source_id() const;
 };
 

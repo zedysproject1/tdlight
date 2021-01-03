@@ -18,6 +18,14 @@ namespace td {
 template <class T>
 class FastSetWithPosition {
  public:
+  std::vector<T> get_unchecked() const {
+    std::vector<T> res;
+    res.insert(res.end(), checked_.begin(), checked_.end());
+    res.insert(res.end(), not_checked_.begin(), not_checked_.end());
+    td::unique(res);
+    return res;
+  }
+
   std::vector<T> get_some_elements() const {
     std::vector<T> res;
     res.reserve(4);
@@ -106,6 +114,16 @@ class FastSetWithPosition {
 template <class T>
 class SetWithPosition {
  public:
+  std::vector<T> get_all_elements() const {
+    if (fast_) {
+      return fast_->get_unchecked();
+    }
+    if (has_value_) {
+      return {value_};
+    }
+    return {};
+  }
+
   std::vector<T> get_some_elements() const {
     if (fast_) {
       return fast_->get_some_elements();
