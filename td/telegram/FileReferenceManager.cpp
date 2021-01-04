@@ -14,6 +14,7 @@
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/StickerSetId.h"
 #include "td/telegram/StickersManager.h"
+#include "td/telegram/ConfigShared.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/WebPagesManager.h"
 
@@ -372,35 +373,55 @@ void FileReferenceManager::reload_photo(PhotoSizeSource source, Promise<Unit> pr
 }
 
 void FileReferenceManager::memory_cleanup() {
+  if (!G()->shared_config().get_option_boolean("experiment_enable_file_reference_cleanup", false)) {
+    return;
+  }
+  auto print_debug_messages = G()->shared_config().get_option_boolean("experiment_debug_file_reference_cleanup", false);
+
+  if (print_debug_messages) LOG(ERROR) << "memory_cleanup begin";
+
   auto file_source_it = file_sources_.begin();
 
   while (file_source_it != file_sources_.end()) {
+    if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop begin";
     auto source_id = file_source_it->first;
     auto file_nodes_it = nodes_.begin();
     auto remove = true;
 
     while (file_nodes_it != nodes_.end() && remove) {
+      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop begin";
       auto elements = get_all_file_sources(file_nodes_it->first);
       auto elements_it = elements.begin();
 
       while (elements_it != elements.end()) {
+        if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop begin";
         if (source_id == (u_long) elements_it->get()) {
+          if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop break";
           remove = false;
           break;
         }
 
         elements_it++;
+        if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop next";
       }
+      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop end";
       
       file_nodes_it++;
+      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop next";
     }
+    if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop end";
 
     if (remove) {
+      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> remove element from file_source";
       file_source_it = file_sources_.erase(file_source_it);
     } else {
       file_source_it++;
     }
+    if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop next";
   }
+  if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop end";
+
+  if (print_debug_messages) LOG(ERROR) << "memory_cleanup end";
 }
 
 void FileReferenceManager::memory_cleanup(NodeId node_id) {

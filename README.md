@@ -28,6 +28,8 @@ We added some options:
 * **delete_chat_reference_after_seconds** (positive number) During cleanup, free the memory of the chats that have not been touched for more than X seconds
 * **delete_user_reference_after_seconds** (positive number) During cleanup, free the memory of the users that have not been touched for more than X seconds
 * **delete_file_reference_after_seconds** (positive number) During cleanup, free the memory of the files that have not been touched for more than X seconds
+* **experiment_enable_file_reference_cleanup** (true/false) During cleanup, free the memory of the file references (Experimental!)
+* **experiment_debug_file_reference_cleanup** (true/false) During cleanup, print log messages about file references cleanup (Experimental!)
 
 ## Custom API functions
 ### TdApi.OptimizeMemory
