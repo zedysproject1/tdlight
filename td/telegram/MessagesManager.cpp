@@ -7210,14 +7210,14 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
   CHECK(update != nullptr);
   if (dialog_id.get_type() != DialogType::Channel) {
     if (dialog_id != DialogId() || !td_->auth_manager_->is_bot()) {
-      LOG(ERROR) << "Receive channel update in invalid " << dialog_id << " from " << source << ": "
+      LOG(WARNING) << "Receive channel update in invalid " << dialog_id << " from " << source << ": "
                  << oneline(to_string(update));
     }
     promise.set_value(Unit());
     return;
   }
   if (pts_count < 0 || new_pts <= pts_count) {
-    LOG(ERROR) << "Receive channel update from " << source << " with wrong pts = " << new_pts
+    LOG(WARNING) << "Receive channel update from " << source << " with wrong pts = " << new_pts
                << " or pts_count = " << pts_count << ": " << oneline(to_string(update));
     promise.set_value(Unit());
     return;
