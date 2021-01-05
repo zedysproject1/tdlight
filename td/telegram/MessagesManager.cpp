@@ -7267,7 +7267,7 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
         // restore channel pts after delete_first_messages
         auto now = Time::now();
         if (now > last_pts_jump_warning_time_ + 1) {
-          LOG(ERROR) << "Restore pts in " << d->dialog_id << " from " << source << " after delete_first_messages from "
+          LOG(WARNING) << "Restore pts in " << d->dialog_id << " from " << source << " after delete_first_messages from "
                      << old_pts << " to " << new_pts << " is temporarily disabled, pts_count = " << pts_count
                      << ", update is from " << source << ": " << oneline(to_string(update));
           last_pts_jump_warning_time_ = now;
