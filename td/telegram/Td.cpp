@@ -144,6 +144,7 @@ namespace td {
 
 int VERBOSITY_NAME(td_init) = VERBOSITY_NAME(DEBUG) + 3;
 int VERBOSITY_NAME(td_requests) = VERBOSITY_NAME(INFO);
+int VERBOSITY_NAME(messages) = VERBOSITY_NAME(INFO);
 
 void Td::ResultHandler::set_td(Td *new_td) {
   CHECK(td == nullptr);

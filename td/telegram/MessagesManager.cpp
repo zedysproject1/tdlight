@@ -52,6 +52,7 @@
 #include "td/telegram/UpdatesManager.h"
 #include "td/telegram/Version.h"
 #include "td/telegram/WebPageId.h"
+#include "td/telegram/Td.h"  // for VERBOSITY_NAME(messages)
 
 #include "td/actor/PromiseFuture.h"
 #include "td/actor/SleepActor.h"
@@ -6272,7 +6273,7 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
   // do not try to run getDifference from this function
   CHECK(update != nullptr);
   CHECK(source != nullptr);
-  LOG(INFO) << "Receive from " << source << " pending " << to_string(update) << "new_pts = " << new_pts
+  VLOG(messages) << "Receive from " << source << " pending " << to_string(update) << "new_pts = " << new_pts
             << ", pts_count = " << pts_count << ", force_apply = " << force_apply;
   if (pts_count < 0 || new_pts <= pts_count) {
     LOG(ERROR) << "Receive update with wrong pts = " << new_pts << " or pts_count = " << pts_count << " from " << source
@@ -6378,7 +6379,7 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
   }
 
   if (td_->updates_manager_->running_get_difference() || !postponed_pts_updates_.empty()) {
-    LOG(INFO) << "Save pending update got while running getDifference from " << source;
+    VLOG(messages) << "Save pending update got while running getDifference from " << source;
     if (td_->updates_manager_->running_get_difference()) {
       if (!(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID)) {
         LOG(ERROR) << "Failed CHECK(\"update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID\"). Postponed pts size: " << postponed_pts_updates_.size();
@@ -7205,7 +7206,7 @@ void MessagesManager::cancel_user_dialog_action(DialogId dialog_id, const Messag
 void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_ptr<telegram_api::Update> &&update,
                                                  int32 new_pts, int32 pts_count, Promise<Unit> &&promise,
                                                  const char *source, bool is_postponed_update) {
-  LOG(INFO) << "Receive from " << source << " pending " << to_string(update);
+  VLOG(messages) << "Receive from " << source << " pending " << to_string(update);
   CHECK(update != nullptr);
   if (dialog_id.get_type() != DialogType::Channel) {
     if (dialog_id != DialogId() || !td_->auth_manager_->is_bot()) {
