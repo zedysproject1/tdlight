@@ -7300,7 +7300,7 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
 
       LOG_IF(WARNING, new_pts == old_pts && pts_count == 0)
           << "Receive from " << source << " useless channel update " << oneline(to_string(update));
-      LOG(INFO) << "Skip already applied channel update";
+      VLOG(messages) << "Skip already applied channel update";
       promise.set_value(Unit());
       return;
     }
@@ -35313,7 +35313,7 @@ void MessagesManager::on_get_channel_difference(
     return;
   }
 
-  LOG(INFO) << "Receive result of getChannelDifference for " << dialog_id << " with pts = " << request_pts
+  VLOG(messages) << "Receive result of getChannelDifference for " << dialog_id << " with pts = " << request_pts
             << " and limit = " << request_limit << ": " << to_string(difference_ptr);
 
   switch (difference_ptr->get_id()) {
