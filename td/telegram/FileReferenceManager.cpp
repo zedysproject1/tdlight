@@ -380,38 +380,42 @@ void FileReferenceManager::memory_cleanup() {
 
   if (print_debug_messages) LOG(ERROR) << "memory_cleanup begin";
 
+  // Iterate all file sources and delete the unused ones
   auto file_source_it = file_sources_.begin();
-
   while (file_source_it != file_sources_.end()) {
     if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop begin";
     auto source_id = file_source_it->first;
+
+    // Mark immediately the file source as unused
+    auto file_source_unused = true;
+
+    // Iterate all the file nodes while the source is unused
     auto file_nodes_it = nodes_.begin();
-    auto remove = true;
-
-    while (file_nodes_it != nodes_.end() && remove) {
+    while (file_nodes_it != nodes_.end() && file_source_unused) {
       if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop begin";
+      // Get all the file sources related to the current file node
       auto elements = get_all_file_sources(file_nodes_it->first);
-      auto elements_it = elements.begin();
 
-      while (elements_it != elements.end()) {
+      // Iterate all the file sources related to the current file node
+      auto elements_it = elements.begin();
+      while (elements_it != elements.end() && file_source_unused) {
         if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop begin";
         if (source_id == (u_long) elements_it->get()) {
           if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop break";
-          remove = false;
-          break;
+          file_source_unused = false;
+        } else {
+          elements_it++;
+          if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop next";
         }
-
-        elements_it++;
-        if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop next";
       }
       if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop end";
-      
+
       file_nodes_it++;
       if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop next";
     }
     if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop end";
 
-    if (remove) {
+    if (file_source_unused) {
       if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> remove element from file_source";
       file_source_it = file_sources_.erase(file_source_it);
     } else {

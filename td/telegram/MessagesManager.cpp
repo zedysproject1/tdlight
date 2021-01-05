@@ -6381,6 +6381,7 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
     LOG(INFO) << "Save pending update got while running getDifference from " << source;
     if (td_->updates_manager_->running_get_difference()) {
       if (!(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID)) {
+        LOG(ERROR) << "Failed CHECK(\"update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID\"). Postponed pts size: " << postponed_pts_updates_.size();
         return;
       }
     }
@@ -22255,7 +22256,10 @@ void MessagesManager::on_get_scheduled_messages_from_database(DialogId dialog_id
     return;
   }
   auto d = get_dialog(dialog_id);
-  if (d == nullptr) { return; }
+  if (d == nullptr) {
+    LOG(ERROR) << "Dialog == nullptr in \"on_get_scheduled_messages_from_database\"";
+    return;
+  }
   d->has_loaded_scheduled_messages_from_database = true;
 
   LOG(INFO) << "Receive " << messages.size() << " scheduled messages from database in " << dialog_id;
