@@ -2170,7 +2170,7 @@ void GroupCallManager::on_user_speaking_in_group_call(GroupCallId group_call_id,
 
   if (!td_->contacts_manager_->have_user_force(user_id)) {
     if (recursive) {
-      LOG(ERROR) << "Failed to find speaking " << user_id << " from " << input_group_call_id;
+      LOG(WARNING) << "Failed to find speaking " << user_id << " from " << input_group_call_id;
     } else {
       auto query_promise = PromiseCreator::lambda([actor_id = actor_id(this), group_call_id, user_id,
                                                    date](Result<Unit> &&result) {
