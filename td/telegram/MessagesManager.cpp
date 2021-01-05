@@ -16350,14 +16350,14 @@ void MessagesManager::on_get_blocked_dialogs(int32 offset, int32 limit, int64 ra
       if (td_->contacts_manager_->have_user(dialog_id.get_user_id())) {
         result.push_back(dialog_id);
       } else {
-        LOG(ERROR) << "Have no info about " << dialog_id.get_user_id();
+        LOG(WARNING) << "Have no info about " << dialog_id.get_user_id();
       }
     } else {
       force_create_dialog(dialog_id, "on_get_blocked_dialogs");
       if (have_dialog(dialog_id)) {
         result.push_back(dialog_id);
       } else {
-        LOG(ERROR) << "Have no info about " << dialog_id;
+        LOG(WARNING) << "Have no info about " << dialog_id;
       }
     }
   }
@@ -25526,7 +25526,7 @@ void MessagesManager::on_get_game_high_scores(int64 random_id,
       continue;
     }
     UserId user_id(high_score->user_id_);
-    LOG_IF(ERROR, !td_->contacts_manager_->have_user(user_id)) << "Have no info about " << user_id;
+    LOG_IF(WARNING, !td_->contacts_manager_->have_user(user_id)) << "Have no info about " << user_id;
     int32 score = high_score->score_;
     if (score < 0) {
       LOG(ERROR) << "Receive wrong score = " << score;
@@ -31366,7 +31366,7 @@ void MessagesManager::on_get_event_log(ChannelId channel_id, int64 random_id,
       LOG(ERROR) << "Receive invalid " << user_id;
       continue;
     }
-    LOG_IF(ERROR, !td_->contacts_manager_->have_user(user_id)) << "Have no info about " << user_id;
+    LOG_IF(WARNING, !td_->contacts_manager_->have_user(user_id)) << "Have no info about " << user_id;
 
     auto action = get_chat_event_action_object(channel_id, std::move(event->action_));
     if (action == nullptr) {
@@ -33447,9 +33447,9 @@ void MessagesManager::force_create_dialog(DialogId dialog_id, const char *source
     }
     if (!have_input_peer(dialog_id, AccessRights::Read)) {
       if (!have_dialog_info(dialog_id)) {
-        LOG(ERROR) << "Have no info about " << dialog_id << " received from " << source << ", but forced to create it";
+        LOG(WARNING) << "Have no info about " << dialog_id << " received from " << source << ", but forced to create it";
       } else if (!expect_no_access) {
-        LOG(ERROR) << "Have no access to " << dialog_id << " received from " << source << ", but forced to create it";
+        LOG(WARNING) << "Have no access to " << dialog_id << " received from " << source << ", but forced to create it";
       }
     }
   } else if (force_update_dialog_pos) {
@@ -34576,7 +34576,7 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
         send_get_dialog_query(dialog_id, Auto());
       }
     } else {
-      LOG(ERROR) << "Have no info about " << dialog_id << " to repair it";
+      LOG(WARNING) << "Have no info about " << dialog_id << " to repair it";
     }
   }
   CHECK(dialog_id == d->dialog_id);
@@ -36189,7 +36189,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         auto dialog_id = log_event.dialog_id_;
         CHECK(dialog_id.get_type() == DialogType::SecretChat);
         if (!td_->contacts_manager_->have_secret_chat_force(dialog_id.get_secret_chat_id())) {
-          LOG(ERROR) << "Have no info about " << dialog_id;
+          LOG(WARNING) << "Have no info about " << dialog_id;
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
         }
