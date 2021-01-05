@@ -14293,7 +14293,7 @@ td_api::object_ptr<td_api::updateUser> ContactsManager::get_update_unknown_user_
 
 int32 ContactsManager::get_user_id_object(UserId user_id, const char *source) const {
   if (user_id.is_valid() && get_user(user_id) == nullptr && unknown_users_.count(user_id) == 0) {
-    LOG(ERROR) << "Have no info about " << user_id << " from " << source;
+    LOG(WARNING) << "Have no info about " << user_id << " from " << source;
     unknown_users_.insert(user_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_user_object(user_id));
   }
@@ -14360,7 +14360,7 @@ td_api::object_ptr<td_api::updateBasicGroup> ContactsManager::get_update_unknown
 
 int32 ContactsManager::get_basic_group_id_object(ChatId chat_id, const char *source) const {
   if (chat_id.is_valid() && get_chat(chat_id) == nullptr && unknown_chats_.count(chat_id) == 0) {
-    LOG(ERROR) << "Have no info about " << chat_id << " from " << source;
+    LOG(WARNING) << "Have no info about " << chat_id << " from " << source;
     unknown_chats_.insert(chat_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_basic_group_object(chat_id));
   }
@@ -14411,7 +14411,7 @@ td_api::object_ptr<td_api::updateSupergroup> ContactsManager::get_update_unknown
 
 int32 ContactsManager::get_supergroup_id_object(ChannelId channel_id, const char *source) const {
   if (channel_id.is_valid() && get_channel(channel_id) == nullptr && unknown_channels_.count(channel_id) == 0) {
-    LOG(ERROR) << "Have no info about " << channel_id << " received from " << source;
+    LOG(WARNING) << "Have no info about " << channel_id << " received from " << source;
     unknown_channels_.insert(channel_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_supergroup_object(channel_id));
   }
@@ -14481,7 +14481,7 @@ td_api::object_ptr<td_api::updateSecretChat> ContactsManager::get_update_unknown
 int32 ContactsManager::get_secret_chat_id_object(SecretChatId secret_chat_id, const char *source) const {
   if (secret_chat_id.is_valid() && get_secret_chat(secret_chat_id) == nullptr &&
       unknown_secret_chats_.count(secret_chat_id) == 0) {
-    LOG(ERROR) << "Have no info about " << secret_chat_id << " from " << source;
+    LOG(WARNING) << "Have no info about " << secret_chat_id << " from " << source;
     unknown_secret_chats_.insert(secret_chat_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_secret_chat_object(secret_chat_id));
   }
