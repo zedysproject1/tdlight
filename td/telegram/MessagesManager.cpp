@@ -52,7 +52,7 @@
 #include "td/telegram/UpdatesManager.h"
 #include "td/telegram/Version.h"
 #include "td/telegram/WebPageId.h"
-#include "td/telegram/Td.h"  // for VERBOSITY_NAME(messages)
+#include "td/telegram/Td.h"  // for VERBOSITY_NAME(messages) and VERBOSITY_NAME(postponed_pts_update)
 
 #include "td/actor/PromiseFuture.h"
 #include "td/actor/SleepActor.h"
@@ -7547,6 +7547,7 @@ void MessagesManager::drop_pending_updates() {
 
 void MessagesManager::postpone_pts_update(tl_object_ptr<telegram_api::Update> &&update, int32 pts, int32 pts_count,
                                           Promise<Unit> &&promise) {
+  VLOG(postponed_pts_update) << "Postponed pts size: " << postponed_pts_updates_.size();
   postponed_pts_updates_.emplace(pts, PendingPtsUpdate(std::move(update), pts, pts_count, std::move(promise)));
 }
 
