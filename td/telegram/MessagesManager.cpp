@@ -6381,10 +6381,7 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
   if (td_->updates_manager_->running_get_difference() || !postponed_pts_updates_.empty()) {
     VLOG(messages) << "Save pending update got while running getDifference from " << source;
     if (td_->updates_manager_->running_get_difference()) {
-      if (!(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID)) {
-        LOG(ERROR) << "Failed CHECK(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID). Postponed pts size: " << postponed_pts_updates_.size();
-        return;
-      }
+      CHECK(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID);
     }
     postpone_pts_update(std::move(update), new_pts, pts_count, std::move(promise));
     return;
