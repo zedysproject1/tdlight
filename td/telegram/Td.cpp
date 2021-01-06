@@ -7345,6 +7345,9 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
       if (set_boolean_option("experiment_debug_file_reference_cleanup")) {
         return;
       }
+      if (set_boolean_option("experiment_enable_chat_access_hash_cleanup")) {
+        return;
+      }
       break;
     case 'i':
       if (set_boolean_option("ignore_background_updates")) {

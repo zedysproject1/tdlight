@@ -14685,6 +14685,7 @@ void ContactsManager::memory_cleanup() {
 
   auto user_ttl = !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 3600);
   auto chat_ttl = !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 3600);
+  auto chat_access_hash_cleanup = !G()->shared_config().get_option_boolean("experiment_enable_chat_access_hash_cleanup", false);
 
   /* DESTROY INVALID USERS */
   {
@@ -14719,59 +14720,65 @@ void ContactsManager::memory_cleanup() {
   my_photo_file_id_.clear();
   my_photo_file_id_.rehash(0);
 
-  /* DESTROY INVALID CHATS */
-  {
-    auto it = chats_.begin();
-    while (it != chats_.end()) {
-      //auto &chat = it->second;
-      auto chat_id = it->first;
+  if (chat_access_hash_cleanup) {
+    /* DESTROY INVALID CHATS */
+    {
+      auto it = chats_.begin();
+      while (it != chats_.end()) {
+        //auto &chat = it->second;
+        auto chat_id = it->first;
 
-      auto is_invalid = time - chat_id.get_time() > chat_ttl;
+        auto is_invalid = time - chat_id.get_time() > chat_ttl;
 
-      if (is_invalid) {
-        chat_id.reset_time();
-        it = chats_.erase(it);
-      } else {
-        it++;
+        if (is_invalid) {
+          chat_id.reset_time();
+          it = chats_.erase(it);
+        } else {
+          it++;
+        }
       }
     }
-  }
 
-  chats_.rehash(0);
+    chats_.rehash(0);
+  }
   chats_full_.clear();
   chats_full_.rehash(0);
   unknown_chats_.clear();
   unknown_chats_.rehash(0);
-  chat_full_file_source_ids_.clear();
-  chat_full_file_source_ids_.rehash(0);
-  min_channels_.clear();
-  min_channels_.rehash(0);
+  if (chat_access_hash_cleanup) {
+    chat_full_file_source_ids_.clear();
+    chat_full_file_source_ids_.rehash(0);
+    min_channels_.clear();
+    min_channels_.rehash(0);
 
-  /* DESTROY INVALID CHANNELS */
-  {
-    auto it = channels_.begin();
-    while (it != channels_.end()) {
-      //auto &channel = it->second;
-      auto channel_id = it->first;
+    /* DESTROY INVALID CHANNELS */
+    {
+      auto it = channels_.begin();
+      while (it != channels_.end()) {
+        //auto &channel = it->second;
+        auto channel_id = it->first;
 
-      auto is_invalid = time - channel_id.get_time() > chat_ttl;
+        auto is_invalid = time - channel_id.get_time() > chat_ttl;
 
-      if (is_invalid) {
-        channel_id.reset_time();
-        it = channels_.erase(it);
-      } else {
-        it++;
+        if (is_invalid) {
+          channel_id.reset_time();
+          it = channels_.erase(it);
+        } else {
+          it++;
+        }
       }
     }
-  }
 
-  channels_.rehash(0);
-  channels_full_.clear();
-  channels_full_.rehash(0);
+    channels_.rehash(0);
+    channels_full_.clear();
+    channels_full_.rehash(0);
+  }
   unknown_channels_.clear();
   unknown_channels_.rehash(0);
-  channel_full_file_source_ids_.clear();
-  channel_full_file_source_ids_.rehash(0);
+  if (chat_access_hash_cleanup) {
+    channel_full_file_source_ids_.clear();
+    channel_full_file_source_ids_.rehash(0);
+  }
   //secret_chats_.clear();
   //secret_chats_.rehash(0);
   //unknown_secret_chats_.clear();
