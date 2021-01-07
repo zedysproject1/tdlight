@@ -14685,7 +14685,7 @@ void ContactsManager::memory_cleanup() {
 
   auto user_ttl = !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 3600);
   auto chat_ttl = !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 3600);
-  auto chat_access_hash_cleanup = !G()->shared_config().get_option_boolean("experiment_enable_chat_access_hash_cleanup", false);
+  auto chat_access_hash_cleanup = !G()->shared_config().get_option_boolean("experiment_enable_chat_access_hash_cleanup", true);
 
   /* DESTROY INVALID USERS */
   {

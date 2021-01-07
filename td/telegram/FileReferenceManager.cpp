@@ -373,7 +373,7 @@ void FileReferenceManager::reload_photo(PhotoSizeSource source, Promise<Unit> pr
 }
 
 void FileReferenceManager::memory_cleanup() {
-  if (!G()->shared_config().get_option_boolean("experiment_enable_file_reference_cleanup", false)) {
+  if (!G()->shared_config().get_option_boolean("experiment_enable_file_reference_cleanup", true)) {
     return;
   }
   auto print_debug_messages = G()->shared_config().get_option_boolean("experiment_debug_file_reference_cleanup", false);

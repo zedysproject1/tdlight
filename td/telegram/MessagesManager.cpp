@@ -6386,7 +6386,7 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
   }
 
   auto old_postponed_pts_updates_behavior
-      = G()->shared_config().get_option_boolean("experiment_old_postponed_pts_updates_behavior", false);
+      = G()->shared_config().get_option_boolean("experiment_old_postponed_pts_updates_behavior", true);
   if (td_->updates_manager_->running_get_difference() || (!old_postponed_pts_updates_behavior && !postponed_pts_updates_.empty())) {
     VLOG(messages) << "Save pending update got while running getDifference from " << source;
     if (td_->updates_manager_->running_get_difference()) {

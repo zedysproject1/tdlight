@@ -18,19 +18,18 @@ TDLight if used with care doesn't grow in memory usage with time. Look at **TdAp
 
 ### Custom options
 We added some options:
-* **disable_minithumbnails** (true/false) This setting removes minithumbnails everywhere. It reduces memory usage because tdlib keeps them in RAM.
-* **disable_document_filenames** (true/false) If you don't care about having the original filenames of every file stored in RAM, you can disable them using this option. It reduces memory usage.
-* **disable_notifications** (true/false) In TDLib pending notification updates are stored in ram until you "read" them. This option disables completely notifications and keeps the pending notifications queue empty, reducing memory usage.
-* **ignore_update_chat_last_message**  (true/false) If you don't care about have updateChatLastMessage updates enable this
-* **ignore_update_chat_read_inbox**  (true/false) If you don't care about have updateChatReadInbox updates enable this
-* **ignore_update_user_chat_action**  (true/false) If you don't care about have updateUserChatAction updates enable this
-* **ignore_server_deletes_and_reads**  (true/false) If you don't care about receiving read receipts and remote deletes from other users, enable this, it will reduce memory usage
+* **disable_minithumbnails** (true/**false**) This setting removes minithumbnails everywhere. It reduces memory usage because tdlib keeps them in RAM
+* **disable_document_filenames** (true/**false**) If you don't care about having the original filenames of every file stored in RAM, you can disable them using this option. It reduces memory usage
+* **disable_notifications** (true/**false**) In TDLib pending notification updates are stored in ram until you "read" them. This option disables completely notifications and keeps the pending notifications queue empty, reducing memory usage
+* **ignore_update_chat_last_message**  (true/**false**) If you don't care about have updateChatLastMessage updates enable this
+* **ignore_update_chat_read_inbox**  (true/**false**) If you don't care about have updateChatReadInbox updates enable this
+* **ignore_update_user_chat_action**  (true/**false**) If you don't care about have updateUserChatAction updates enable this
+* **ignore_server_deletes_and_reads**  (true/**false**) If you don't care about receiving read receipts and remote deletes from other users, enable this, it will reduce memory usage
 * **delete_chat_reference_after_seconds** (positive number) During cleanup, free the memory of the chats that have not been touched for more than X seconds
 * **delete_user_reference_after_seconds** (positive number) During cleanup, free the memory of the users that have not been touched for more than X seconds
 * **delete_file_reference_after_seconds** (positive number) During cleanup, free the memory of the files that have not been touched for more than X seconds
-* **experiment_enable_file_reference_cleanup** (true/false) During cleanup, free the memory of the file references (Experimental!)
-* **experiment_debug_file_reference_cleanup** (true/false) During cleanup, print log messages about file references cleanup (Experimental!)
-* **experiment_enable_chat_access_hash_cleanup** (true/false) During cleanup, clean chats and channels access hash (Experimental!)
+* **experiment_enable_file_reference_cleanup** (**true**/false) During cleanup, free the memory of the file references
+* **experiment_enable_chat_access_hash_cleanup** (**true**/false) During cleanup, clean chats and channels access hash
 
 ## Custom API functions
 ### TdApi.OptimizeMemory
