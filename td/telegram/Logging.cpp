@@ -56,7 +56,7 @@ static const std::map<Slice, int *> log_tags{
     ADD_TAG(file_loader), ADD_TAG(mtproto),          ADD_TAG(raw_mtproto),   ADD_TAG(fd),
     ADD_TAG(actor),       ADD_TAG(sqlite),           ADD_TAG(notifications), ADD_TAG(get_difference),
     ADD_TAG(file_gc),     ADD_TAG(config_recoverer), ADD_TAG(dns_resolver),  ADD_TAG(file_references),
-    ADD_TAG(messages),    ADD_TAG(postponed_pts_update)};
+    ADD_TAG(messages),    ADD_TAG(postponed_pts_update),    ADD_TAG(add_pending_update)};
 #undef ADD_TAG
 
 Status Logging::set_current_stream(td_api::object_ptr<td_api::LogStream> stream) {

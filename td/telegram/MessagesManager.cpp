@@ -52,7 +52,7 @@
 #include "td/telegram/UpdatesManager.h"
 #include "td/telegram/Version.h"
 #include "td/telegram/WebPageId.h"
-#include "td/telegram/Td.h"  // for VERBOSITY_NAME(messages) and VERBOSITY_NAME(postponed_pts_update)
+#include "td/telegram/Td.h"  // for VERBOSITY_NAME(messages, postponed_pts_update and add_pending_update)
 
 #include "td/actor/PromiseFuture.h"
 #include "td/actor/SleepActor.h"
@@ -666,6 +666,7 @@ class UnpinAllMessagesQuery : public Td::ResultHandler {
                                                           affected_history->pts_, affected_history->pts_count_,
                                                           std::move(promise), "unpin all messages");
       } else {
+        VLOG(add_pending_update) << "Calling add_pending_update (1)";
         td->messages_manager_->add_pending_update(make_tl_object<dummyUpdate>(), affected_history->pts_,
                                                   affected_history->pts_count_, false, std::move(promise),
                                                   "unpin all messages");
@@ -1571,6 +1572,7 @@ class ReadMessagesContentsQuery : public Td::ResultHandler {
     CHECK(affected_messages->get_id() == telegram_api::messages_affectedMessages::ID);
 
     if (affected_messages->pts_count_ > 0) {
+      VLOG(add_pending_update) << "Calling add_pending_update (2)";
       td->messages_manager_->add_pending_update(make_tl_object<dummyUpdate>(), affected_messages->pts_,
                                                 affected_messages->pts_count_, false, Promise<Unit>(),
                                                 "read messages content query");
@@ -1789,6 +1791,7 @@ class ReadHistoryQuery : public Td::ResultHandler {
     LOG(INFO) << "Receive result for ReadHistoryQuery: " << to_string(affected_messages);
 
     if (affected_messages->pts_count_ > 0) {
+      VLOG(add_pending_update) << "Calling add_pending_update (3)";
       td->messages_manager_->add_pending_update(make_tl_object<dummyUpdate>(), affected_messages->pts_,
                                                 affected_messages->pts_count_, false, Promise<Unit>(),
                                                 "read history query");
@@ -2259,6 +2262,7 @@ class DeleteHistoryQuery : public Td::ResultHandler {
     CHECK(affected_history->get_id() == telegram_api::messages_affectedHistory::ID);
 
     if (affected_history->pts_count_ > 0) {
+      VLOG(add_pending_update) << "Calling add_pending_update (4)";
       td->messages_manager_->add_pending_update(make_tl_object<dummyUpdate>(), affected_history->pts_,
                                                 affected_history->pts_count_, false, Promise<Unit>(),
                                                 "delete history query");
@@ -2459,6 +2463,7 @@ class ReadAllMentionsQuery : public Td::ResultHandler {
                    << dialog_id_;
         td->updates_manager_->get_difference("Wrong messages_readMentions result");
       } else {
+        VLOG(add_pending_update) << "Calling add_pending_update (5)";
         td->messages_manager_->add_pending_update(make_tl_object<dummyUpdate>(), affected_history->pts_,
                                                   affected_history->pts_count_, false, Promise<Unit>(),
                                                   "read all mentions query");
@@ -2595,6 +2600,7 @@ class SendMessageActor : public NetActorOnce {
       return;
     }
 
+    VLOG(add_pending_update) << "Calling add_pending_update (6)";
     td->messages_manager_->add_pending_update(
         make_tl_object<updateSentMessage>(random_id_, message_id, sent_message->date_), sent_message->pts_,
         sent_message->pts_count_, false, Promise<Unit>(), "send message actor");
@@ -3617,6 +3623,7 @@ class DeleteMessagesQuery : public Td::ResultHandler {
     CHECK(affected_messages->get_id() == telegram_api::messages_affectedMessages::ID);
 
     if (affected_messages->pts_count_ > 0) {
+      VLOG(add_pending_update) << "Calling add_pending_update (7)";
       td->messages_manager_->add_pending_update(make_tl_object<dummyUpdate>(), affected_messages->pts_,
                                                 affected_messages->pts_count_, false, Promise<Unit>(),
                                                 "delete messages query");
@@ -6378,7 +6385,9 @@ void MessagesManager::add_pending_update(tl_object_ptr<telegram_api::Update> &&u
     return promise.set_value(Unit());
   }
 
-  if (td_->updates_manager_->running_get_difference() || !postponed_pts_updates_.empty()) {
+  auto old_postponed_pts_updates_behavior
+      = G()->shared_config().get_option_boolean("experiment_old_postponed_pts_updates_behavior", false);
+  if (td_->updates_manager_->running_get_difference() || (!old_postponed_pts_updates_behavior && !postponed_pts_updates_.empty())) {
     VLOG(messages) << "Save pending update got while running getDifference from " << source;
     if (td_->updates_manager_->running_get_difference()) {
       CHECK(update->get_id() == dummyUpdate::ID || update->get_id() == updateSentMessage::ID);
@@ -8895,7 +8904,7 @@ void MessagesManager::before_get_difference() {
 void MessagesManager::after_get_difference() {
   CHECK(!td_->updates_manager_->running_get_difference());
 
-  if (postponed_pts_updates_.size()) {
+  if (!postponed_pts_updates_.empty()) {
     LOG(INFO) << "Begin to apply postponed pts updates";
     auto old_pts = td_->updates_manager_->get_pts();
     for (auto &update : postponed_pts_updates_) {
@@ -8905,6 +8914,7 @@ void MessagesManager::after_get_difference() {
                                 "after get difference");
         update.second.promise.set_value(Unit());
       } else {
+        VLOG(add_pending_update) << "Calling add_pending_update (8)";
         add_pending_update(std::move(update.second.update), update.second.pts, update.second.pts_count, false,
                            std::move(update.second.promise), "after get difference");
       }
