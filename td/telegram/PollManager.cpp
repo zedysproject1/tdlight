@@ -501,7 +501,7 @@ td_api::object_ptr<td_api::poll> PollManager::get_poll_object(PollId poll_id) co
     return td_api::make_object<td_api::poll>(
         poll_id.get(), poll->question, std::move(opts), 0,
         std::move(votes), true,
-        std::move(td_api::make_object<td_api::pollTypeRegular>(false)),
+        td_api::make_object<td_api::pollTypeRegular>(false),
         1, G()->unix_time() - 1, poll->is_closed);
   }
   return get_poll_object(poll_id, poll);
