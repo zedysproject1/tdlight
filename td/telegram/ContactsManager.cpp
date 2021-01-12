@@ -2952,6 +2952,8 @@ ContactsManager::ContactsManager(Td *td, ActorShared<> parent) : td_(td), parent
 }
 
 void ContactsManager::tear_down() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
   parent_.reset();
 }
 
@@ -14681,6 +14683,10 @@ void ContactsManager::get_current_state(vector<td_api::object_ptr<td_api::Update
 }
 
 void ContactsManager::memory_cleanup() {
+  memory_cleanup(false);
+}
+
+void ContactsManager::memory_cleanup(bool full) {
   auto time = std::time(nullptr);
 
   auto user_ttl = !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 3600);
@@ -14688,7 +14694,9 @@ void ContactsManager::memory_cleanup() {
   auto chat_access_hash_cleanup = !G()->shared_config().get_option_boolean("experiment_enable_chat_access_hash_cleanup", true);
 
   /* DESTROY INVALID USERS */
-  {
+  if (full) {
+    users_.clear();
+  } else {
     auto it = users_.begin();
     while (it != users_.end()) {
       //auto &user = it->second;
@@ -14720,9 +14728,11 @@ void ContactsManager::memory_cleanup() {
   my_photo_file_id_.clear();
   my_photo_file_id_.rehash(0);
 
-  if (chat_access_hash_cleanup) {
+  if (full || chat_access_hash_cleanup) {
     /* DESTROY INVALID CHATS */
-    {
+    if (full) {
+      chats_.clear();
+    } else {
       auto it = chats_.begin();
       while (it != chats_.end()) {
         //auto &chat = it->second;
@@ -14738,21 +14748,22 @@ void ContactsManager::memory_cleanup() {
         }
       }
     }
-
     chats_.rehash(0);
   }
   chats_full_.clear();
   chats_full_.rehash(0);
   unknown_chats_.clear();
   unknown_chats_.rehash(0);
-  if (chat_access_hash_cleanup) {
+  if (full || chat_access_hash_cleanup) {
     chat_full_file_source_ids_.clear();
     chat_full_file_source_ids_.rehash(0);
     min_channels_.clear();
     min_channels_.rehash(0);
 
     /* DESTROY INVALID CHANNELS */
-    {
+    if (full) {
+      channels_.clear();
+    } else {
       auto it = channels_.begin();
       while (it != channels_.end()) {
         //auto &channel = it->second;
@@ -14775,16 +14786,18 @@ void ContactsManager::memory_cleanup() {
   }
   unknown_channels_.clear();
   unknown_channels_.rehash(0);
-  if (chat_access_hash_cleanup) {
+  if (full || chat_access_hash_cleanup) {
     channel_full_file_source_ids_.clear();
     channel_full_file_source_ids_.rehash(0);
   }
-  //secret_chats_.clear();
-  //secret_chats_.rehash(0);
-  //unknown_secret_chats_.clear();
-  //unknown_secret_chats_.rehash(0);
-  //secret_chats_with_user_.clear();
-  //secret_chats_with_user_.rehash(0);
+  if (full) {
+    secret_chats_.clear();
+    secret_chats_.rehash(0);
+    unknown_secret_chats_.clear();
+    unknown_secret_chats_.rehash(0);
+    secret_chats_with_user_.clear();
+    secret_chats_with_user_.rehash(0);
+  }
   dialog_invite_links_.clear();
   dialog_invite_links_.rehash(0);
   invite_link_infos_.clear();
@@ -14811,10 +14824,12 @@ void ContactsManager::memory_cleanup() {
   loaded_from_database_channels_.rehash(0);
   unavailable_channel_fulls_.clear();
   unavailable_channel_fulls_.rehash(0);
-  //load_secret_chat_from_database_queries_.clear();
-  //load_secret_chat_from_database_queries_.rehash(0);
-  //loaded_from_database_secret_chats_.clear();
-  //loaded_from_database_secret_chats_.rehash(0);
+  if (full) {
+    load_secret_chat_from_database_queries_.clear();
+    load_secret_chat_from_database_queries_.rehash(0);
+    loaded_from_database_secret_chats_.clear();
+    loaded_from_database_secret_chats_.rehash(0);
+  }
   dialog_administrators_.clear();
   dialog_administrators_.rehash(0);
   uploaded_profile_photos_.clear();

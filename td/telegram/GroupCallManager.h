@@ -97,6 +97,8 @@ class GroupCallManager : public Actor {
 
   void tear_down() override;
 
+  void memory_cleanup(bool full);
+
   static void on_check_group_call_is_joined_timeout_callback(void *group_call_manager_ptr, int64 group_call_id_int);
 
   void on_check_group_call_is_joined_timeout(GroupCallId group_call_id);

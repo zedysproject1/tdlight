@@ -466,10 +466,16 @@ GroupCallManager::GroupCallManager(Td *td, ActorShared<> parent) : td_(td), pare
 GroupCallManager::~GroupCallManager() = default;
 
 void GroupCallManager::tear_down() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
   parent_.reset();
 }
 
 void GroupCallManager::memory_cleanup() {
+  memory_cleanup(false);
+}
+
+void GroupCallManager::memory_cleanup(bool full) {
   this->group_call_participants_.clear();
   this->group_call_participants_.rehash(0);
   this->group_call_recent_speakers_.clear();

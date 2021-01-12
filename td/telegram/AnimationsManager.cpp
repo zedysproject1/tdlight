@@ -145,6 +145,9 @@ AnimationsManager::AnimationsManager(Td *td, ActorShared<> parent) : td_(td), pa
 }
 
 void AnimationsManager::tear_down() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
+
   parent_.reset();
 }
 
@@ -965,12 +968,22 @@ void AnimationsManager::get_current_state(vector<td_api::object_ptr<td_api::Upda
     updates.push_back(std::move(update_animation_search_parameters));
   }
 }
+
 void AnimationsManager::memory_cleanup() {
+  memory_cleanup(false);
+}
+
+void AnimationsManager::memory_cleanup(bool full) {
   animations_.clear();
   animations_.rehash(0);
+  saved_animation_ids_.clear();
+  saved_animation_file_ids_.clear();
 }
+
 void AnimationsManager::memory_stats(vector<string> &output) {
   output.push_back("\"animations_\":"); output.push_back(std::to_string(animations_.size()));
+  output.push_back(",");
+  output.push_back("\"saved_animation_ids_\":"); output.push_back(std::to_string(this->saved_animation_ids_.size()));
   output.push_back(",");
   output.push_back("\"saved_animation_file_ids_\":"); output.push_back(std::to_string(this->saved_animation_file_ids_.size()));
 }

@@ -24,6 +24,12 @@ class Enumerator {
     return map_;
   }
 
+  void clear() {
+    map_.clear();
+    arr_.clear();
+    next_id = 1;
+  }
+
   void lock_access_mutex() const {
     access_mutex.lock();
   }

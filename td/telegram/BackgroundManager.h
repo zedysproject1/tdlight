@@ -33,6 +33,10 @@ class BackgroundManager : public Actor {
  public:
   BackgroundManager(Td *td, ActorShared<> parent);
 
+  void memory_cleanup();
+
+  void memory_stats(vector<string> &output);
+
   void get_backgrounds(Promise<Unit> &&promise);
 
   Result<string> get_background_url(const string &name,
@@ -91,6 +95,8 @@ class BackgroundManager : public Actor {
   void start_up() override;
 
   void tear_down() override;
+
+  void memory_cleanup(bool full);
 
   static string get_background_database_key(bool for_dark_theme);
 

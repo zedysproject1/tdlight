@@ -1734,6 +1734,8 @@ class MessagesManager : public Actor {
 
   static constexpr bool DROP_UPDATES = false;
 
+  void memory_cleanup(bool full);
+
   static FullMessageId get_full_message_id(const tl_object_ptr<telegram_api::Message> &message_ptr, bool is_scheduled);
 
   static int32 get_message_date(const tl_object_ptr<telegram_api::Message> &message_ptr);

@@ -1689,4 +1689,39 @@ void PollManager::on_binlog_events(vector<BinlogEvent> &&events) {
   }
 }
 
+void PollManager::memory_cleanup() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
+  memory_cleanup(false);
+}
+
+void PollManager::memory_cleanup(bool full) {
+  polls_.clear();
+  polls_.rehash(0);
+  poll_messages_.clear();
+  poll_messages_.rehash(0);
+  pending_answers_.clear();
+  pending_answers_.rehash(0);
+  poll_voters_.clear();
+  poll_voters_.rehash(0);
+  loaded_from_database_polls_.clear();
+  loaded_from_database_polls_.rehash(0);
+  being_closed_polls_.clear();
+  being_closed_polls_.rehash(0);
+}
+
+void PollManager::memory_stats(vector<string> &output) {
+  output.push_back("\"polls_\":"); output.push_back(std::to_string(polls_.size()));
+  output.push_back(",");
+  output.push_back("\"poll_messages_\":"); output.push_back(std::to_string(poll_messages_.size()));
+  output.push_back(",");
+  output.push_back("\"pending_answers_\":"); output.push_back(std::to_string(pending_answers_.size()));
+  output.push_back(",");
+  output.push_back("\"poll_voters_\":"); output.push_back(std::to_string(poll_voters_.size()));
+  output.push_back(",");
+  output.push_back("\"loaded_from_database_polls_\":"); output.push_back(std::to_string(loaded_from_database_polls_.size()));
+  output.push_back(",");
+  output.push_back("\"being_closed_polls_\":"); output.push_back(std::to_string(being_closed_polls_.size()));
+}
+
 }  // namespace td

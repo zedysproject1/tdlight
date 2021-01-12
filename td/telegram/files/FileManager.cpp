@@ -3795,6 +3795,10 @@ void FileManager::destroy_query(int32 file_id) {
 
 
 void FileManager::memory_cleanup() {
+  memory_cleanup(false);
+}
+
+void FileManager::memory_cleanup(bool full) {
   LOG(ERROR) << "Initial registered ids: " << file_id_info_.size() << " registered nodes: " << file_nodes_.size();
 
   std::unordered_set<int32> file_to_be_deleted = {};
@@ -3802,7 +3806,9 @@ void FileManager::memory_cleanup() {
   auto file_ttl = !G()->shared_config().get_option_integer("delete_file_reference_after_seconds", 30);
 
   /* DESTROY OLD file_id_info_ */
-  if (true) {
+  if (full) {
+    file_id_info_.clear();
+  } else {
     auto it = file_id_info_.begin();
     auto time = std::time(nullptr);
 
@@ -3868,7 +3874,7 @@ void FileManager::memory_cleanup() {
   }
 
   /* DESTROY INVALID FILES */
-  if (true) {
+  if (!full) {
     auto it = file_id_info_.begin();
     while (it != file_id_info_.end()) {
       auto is_invalid = false;
@@ -3894,7 +3900,9 @@ void FileManager::memory_cleanup() {
   }
 
   /* DESTROY INVALID file_nodes_ */
-  if (true) {
+  if (full) {
+    file_nodes_.clear();
+  } else {
     auto it = file_nodes_.begin();
     while (it != file_nodes_.end()) {
       auto is_invalid = false;
@@ -3931,7 +3939,9 @@ void FileManager::memory_cleanup() {
   }
 
   /* DESTROY INVALID file_hash_to_file_id_ */
-  if (true) {
+  if (full) {
+    file_hash_to_file_id_.clear();
+  } else {
     auto it = file_hash_to_file_id_.begin();
     while (it != file_hash_to_file_id_.end()) {
       auto is_invalid = false;
@@ -3957,7 +3967,9 @@ void FileManager::memory_cleanup() {
   }
 
   /* DESTROY INVALID local_location_to_file_id_ */
-  if (true) {
+  if (full) {
+    local_location_to_file_id_.clear();
+  } else {
     auto it = local_location_to_file_id_.begin();
     while (it != local_location_to_file_id_.end()) {
       auto is_invalid = false;
@@ -3983,7 +3995,9 @@ void FileManager::memory_cleanup() {
   }
 
   /* DESTROY INVALID generate_location_to_file_id_ */
-  if (true) {
+  if (full) {
+    generate_location_to_file_id_.clear();
+  } else {
     auto it = generate_location_to_file_id_.begin();
     while (it != generate_location_to_file_id_.end()) {
       auto is_invalid = false;
@@ -4009,7 +4023,9 @@ void FileManager::memory_cleanup() {
   }
 
   /* DESTROY INVALID remote_location_info_ */
-  if (true) {
+  if (full) {
+    remote_location_info_.clear();
+  } else {
     remote_location_info_.lock_access_mutex();
 
     std::unordered_map<int32, RemoteInfo> old_remote_info = {};
@@ -4049,7 +4065,9 @@ void FileManager::memory_cleanup() {
   }
 
   /* DESTROY NULL file_id_info_ */
-  if (true) {
+  if (full) {
+    file_id_info_.clear();
+  } else {
     auto it = file_id_info_.begin();
     while (it != file_id_info_.end()) {
       auto is_invalid = false;
@@ -4072,9 +4090,11 @@ void FileManager::memory_cleanup() {
     }
   }
 
-  file_nodes_.rehash(file_nodes_.size() + 1);
-  file_hash_to_file_id_.rehash(file_hash_to_file_id_.size() + 1);
-  file_id_info_.rehash(file_id_info_.size() + 1);
+  if (!full) {
+    file_nodes_.rehash(file_nodes_.size() + 1);
+    file_hash_to_file_id_.rehash(file_hash_to_file_id_.size() + 1);
+    file_id_info_.rehash(file_id_info_.size() + 1);
+  }
 
   LOG(ERROR) << "Final registered ids: " << file_id_info_.size() << " registered nodes: " << file_nodes_.size();
 }
@@ -4091,6 +4111,8 @@ void FileManager::memory_stats(vector<string> &output) {
 }
 
 void FileManager::tear_down() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
   parent_.reset();
 }
 }  // namespace td

@@ -43,6 +43,10 @@ class PollManager : public Actor {
   PollManager &operator=(PollManager &&) = delete;
   ~PollManager() override;
 
+  void memory_cleanup();
+
+  void memory_stats(vector<string> &output);
+
   static bool is_local_poll_id(PollId poll_id);
 
   PollId create_poll(string &&question, vector<string> &&options, bool is_anonymous, bool allow_multiple_answers,
@@ -140,6 +144,8 @@ class PollManager : public Actor {
 
   void start_up() override;
   void tear_down() override;
+
+  void memory_cleanup(bool full);
 
   static void on_update_poll_timeout_callback(void *poll_manager_ptr, int64 poll_id_int);
 

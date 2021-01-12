@@ -5924,6 +5924,10 @@ vector<int32> MessagesManager::get_scheduled_server_message_ids(const vector<Mes
 }
 
 void MessagesManager::memory_cleanup() {
+  memory_cleanup(false);
+}
+
+void MessagesManager::memory_cleanup(bool full) {
   /* CLEAR DELETED MESSAGES CACHE */
   {
     auto it = dialogs_.begin();
@@ -5945,6 +5949,9 @@ void MessagesManager::memory_cleanup() {
   found_on_server_dialogs_.rehash(0);
   full_message_id_to_file_source_id_.clear();
   full_message_id_to_file_source_id_.rehash(0);
+  if (full) {
+    dialogs_.clear();
+  }
 }
 
 void MessagesManager::memory_stats(vector<string> &output) {
@@ -11987,6 +11994,8 @@ class MessagesManager::DialogFiltersLogEvent {
 };
 
 void MessagesManager::tear_down() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
   parent_.reset();
 }
 

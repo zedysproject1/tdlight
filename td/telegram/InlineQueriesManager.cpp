@@ -165,6 +165,8 @@ InlineQueriesManager::InlineQueriesManager(Td *td, ActorShared<> parent) : td_(t
 }
 
 void InlineQueriesManager::tear_down() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
   parent_.reset();
 }
 
@@ -1844,6 +1846,30 @@ void InlineQueriesManager::remove_recent_inline_bot(UserId bot_user_id, Promise<
     save_recently_used_bots();
   }
   promise.set_value(Unit());
+}
+
+void InlineQueriesManager::memory_cleanup() {
+  memory_cleanup(false);
+}
+
+void InlineQueriesManager::memory_cleanup(bool full) {
+  recently_used_bot_user_ids_.clear();
+  inline_query_results_.clear();
+  inline_query_results_.rehash(0);
+  inline_message_contents_.clear();
+  inline_message_contents_.rehash(0);
+  query_id_to_bot_user_id_.clear();
+  query_id_to_bot_user_id_.rehash(0);
+}
+
+void InlineQueriesManager::memory_stats(vector<string> &output) {
+  output.push_back("\"recently_used_bot_user_ids_\":"); output.push_back(std::to_string(recently_used_bot_user_ids_.size()));
+  output.push_back(",");
+  output.push_back("\"inline_query_results_\":"); output.push_back(std::to_string(inline_query_results_.size()));
+  output.push_back(",");
+  output.push_back("\"inline_message_contents_\":"); output.push_back(std::to_string(inline_message_contents_.size()));
+  output.push_back(",");
+  output.push_back("\"query_id_to_bot_user_id_\":"); output.push_back(std::to_string(query_id_to_bot_user_id_.size()));
 }
 
 }  // namespace td

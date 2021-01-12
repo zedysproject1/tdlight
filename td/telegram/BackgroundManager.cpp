@@ -1121,4 +1121,36 @@ void BackgroundManager::get_current_state(vector<td_api::object_ptr<td_api::Upda
   updates.push_back(get_update_selected_background_object(true));
 }
 
+void BackgroundManager::memory_cleanup() {
+  memory_cleanup(false);
+}
+
+void BackgroundManager::memory_cleanup(bool full) {
+  backgrounds_.clear();
+  backgrounds_.rehash(0);
+  background_id_to_file_source_id_.clear();
+  background_id_to_file_source_id_.rehash(0);
+  name_to_background_id_.clear();
+  name_to_background_id_.rehash(0);
+  file_id_to_background_id_.clear();
+  file_id_to_background_id_.rehash(0);
+  loaded_from_database_backgrounds_.clear();
+  loaded_from_database_backgrounds_.rehash(0);
+  installed_background_ids_.clear();
+}
+
+void BackgroundManager::memory_stats(vector<string> &output) {
+  output.push_back("\"backgrounds_\":"); output.push_back(std::to_string(backgrounds_.size()));
+  output.push_back(",");
+  output.push_back("\"background_id_to_file_source_id_\":"); output.push_back(std::to_string(background_id_to_file_source_id_.size()));
+  output.push_back(",");
+  output.push_back("\"name_to_background_id_\":"); output.push_back(std::to_string(name_to_background_id_.size()));
+  output.push_back(",");
+  output.push_back("\"file_id_to_background_id_\":"); output.push_back(std::to_string(file_id_to_background_id_.size()));
+  output.push_back(",");
+  output.push_back("\"loaded_from_database_backgrounds_\":"); output.push_back(std::to_string(loaded_from_database_backgrounds_.size()));
+  output.push_back(",");
+  output.push_back("\"installed_background_ids_\":"); output.push_back(std::to_string(installed_background_ids_.size()));
+}
+
 }  // namespace td

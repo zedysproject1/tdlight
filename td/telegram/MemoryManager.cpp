@@ -28,6 +28,9 @@
 #include "td/telegram/AudiosManager.h"
 #include "td/telegram/AnimationsManager.h"
 #include "td/telegram/GroupCallManager.h"
+#include "td/telegram/BackgroundManager.h"
+#include "td/telegram/PollManager.h"
+#include "td/telegram/InlineQueriesManager.h"
 #include "td/telegram/files/FileType.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/LanguagePackManager.h"
@@ -163,6 +166,25 @@ void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) co
   td_->group_call_manager_->memory_stats(output);
   output.push_back("}");
 
+  output.push_back(",");
+
+  output.push_back("\"background_manager_\":{");
+  td_->background_manager_->memory_stats(output);
+  output.push_back("}");
+
+  output.push_back(",");
+
+  output.push_back("\"inline_queries_manager_\":{");
+  td_->inline_queries_manager_->memory_stats(output);
+  output.push_back("}");
+
+
+  output.push_back(",");
+
+  output.push_back("\"poll_manager_\":{");
+  td_->poll_manager_->memory_stats(output);
+  output.push_back("}");
+
   output.push_back("}}");
 
   string s;
@@ -190,6 +212,9 @@ void MemoryManager::clean_memory(bool full, Promise<Unit> promise) const {
   td_->file_manager_->memory_cleanup();
   td_->file_reference_manager_->memory_cleanup();
   td_->group_call_manager_->memory_cleanup();
+  td_->background_manager_->memory_cleanup();
+  td_->inline_queries_manager_->memory_cleanup();
+  td_->poll_manager_->memory_cleanup();
 
   #ifdef __linux__
     #if defined(__GLIBC__) && !defined(__UCLIBC__) && !defined(__MUSL__)

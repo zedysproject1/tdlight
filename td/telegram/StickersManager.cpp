@@ -1320,6 +1320,8 @@ void StickersManager::on_load_special_sticker_set(const SpecialStickerSetType &t
 }
 
 void StickersManager::tear_down() {
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup();
   parent_.reset();
 }
 

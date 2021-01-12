@@ -1067,6 +1067,8 @@ class ContactsManager : public Actor {
 
   static const CSlice INVITE_LINK_URLS[3];
 
+  void memory_cleanup(bool full);
+
   static bool have_input_peer_user(const User *u, AccessRights access_rights);
   static bool have_input_peer_chat(const Chat *c, AccessRights access_rights);
   bool have_input_peer_channel(const Channel *c, ChannelId channel_id, AccessRights access_rights,

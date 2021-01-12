@@ -118,6 +118,8 @@ class AnimationsManager : public Actor {
     bool is_changed = true;
   };
 
+  void memory_cleanup(bool full);
+
   const Animation *get_animation(FileId file_id) const;
 
   FileId on_get_animation(unique_ptr<Animation> new_animation, bool replace);

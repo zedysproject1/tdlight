@@ -39,6 +39,10 @@ class InlineQueriesManager : public Actor {
  public:
   InlineQueriesManager(Td *td, ActorShared<> parent);
 
+  void memory_cleanup();
+
+  void memory_stats(vector<string> &output);
+
   void after_get_difference();
 
   void answer_inline_query(int64 inline_query_id, bool is_personal,
@@ -111,6 +115,8 @@ class InlineQueriesManager : public Actor {
   void loop() override;
 
   void tear_down() override;
+
+  void memory_cleanup(bool full);
 
   int32 recently_used_bots_loaded_ = 0;  // 0 - not loaded, 1 - load request was sent, 2 - loaded
   MultiPromiseActor resolve_recent_inline_bots_multipromise_{"ResolveRecentInlineBotsMultiPromiseActor"};
