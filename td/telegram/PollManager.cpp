@@ -496,10 +496,13 @@ vector<int32> PollManager::get_vote_percentage(const vector<int32> &voter_counts
 td_api::object_ptr<td_api::poll> PollManager::get_poll_object(PollId poll_id) const {
   auto poll = get_poll(poll_id);
   if (!(poll != nullptr)) {
-    vector<td_api::object_ptr<td_api::pollOption>> opts;
-    vector<int32> votes;
+    vector<td_api::object_ptr<td_api::pollOption>> poll_options = [];
+    poll_options.push_back(td_api::make_object<td_api::pollOption>(
+        "empty", 0, 0, false,
+        false));
+    vector<int32> votes = [];
     return td_api::make_object<td_api::poll>(
-        poll_id.get(), poll->question, std::move(opts), 0,
+        poll_id.get(), poll->question, std::move(poll_options), 0,
         std::move(votes), true,
         td_api::make_object<td_api::pollTypeRegular>(false),
         1, G()->unix_time() - 1, poll->is_closed);
