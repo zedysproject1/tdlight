@@ -614,7 +614,9 @@ PollId PollManager::create_poll(string &&question, vector<string> &&options, boo
 }
 
 void PollManager::register_poll(PollId poll_id, FullMessageId full_message_id, const char *source) {
-  CHECK(have_poll(poll_id));
+  if(!(have_poll(poll_id))) {
+    return;
+  }
   if (full_message_id.get_message_id().is_scheduled()) {
     return;
   }
@@ -633,7 +635,9 @@ void PollManager::register_poll(PollId poll_id, FullMessageId full_message_id, c
 }
 
 void PollManager::unregister_poll(PollId poll_id, FullMessageId full_message_id, const char *source) {
-  CHECK(have_poll(poll_id));
+  if (!(have_poll(poll_id))) {
+    return;
+  }
   if (full_message_id.get_message_id().is_scheduled()) {
     return;
   }
