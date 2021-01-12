@@ -165,9 +165,9 @@ InlineQueriesManager::InlineQueriesManager(Td *td, ActorShared<> parent) : td_(t
 }
 
 void InlineQueriesManager::tear_down() {
+  parent_.reset();
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup(true);
-  parent_.reset();
 }
 
 void InlineQueriesManager::on_drop_inline_query_result_timeout_callback(void *inline_queries_manager_ptr,

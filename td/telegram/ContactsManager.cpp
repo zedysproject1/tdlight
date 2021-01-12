@@ -2952,9 +2952,9 @@ ContactsManager::ContactsManager(Td *td, ActorShared<> parent) : td_(td), parent
 }
 
 void ContactsManager::tear_down() {
+  parent_.reset();
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup(true);
-  parent_.reset();
 }
 
 UserId ContactsManager::load_my_id() {
@@ -14689,9 +14689,9 @@ void ContactsManager::memory_cleanup() {
 void ContactsManager::memory_cleanup(bool full) {
   auto time = std::time(nullptr);
 
-  auto user_ttl = !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 3600);
-  auto chat_ttl = !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 3600);
-  auto chat_access_hash_cleanup = !G()->shared_config().get_option_boolean("experiment_enable_chat_access_hash_cleanup", true);
+  auto user_ttl = full ? 0 : !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 3600);
+  auto chat_ttl = full ? 0 : !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 3600);
+  auto chat_access_hash_cleanup = full ? true : !G()->shared_config().get_option_boolean("experiment_enable_chat_access_hash_cleanup", true);
 
   /* DESTROY INVALID USERS */
   if (full) {

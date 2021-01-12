@@ -3799,11 +3799,13 @@ void FileManager::memory_cleanup() {
 }
 
 void FileManager::memory_cleanup(bool full) {
-  LOG(ERROR) << "Initial registered ids: " << file_id_info_.size() << " registered nodes: " << file_nodes_.size();
+  if (!full) {
+    LOG(INFO) << "Initial registered ids: " << file_id_info_.size() << " registered nodes: " << file_nodes_.size();
+  }
 
   std::unordered_set<int32> file_to_be_deleted = {};
 
-  auto file_ttl = !G()->shared_config().get_option_integer("delete_file_reference_after_seconds", 30);
+  auto file_ttl = full ? 0 : !G()->shared_config().get_option_integer("delete_file_reference_after_seconds", 30);
 
   /* DESTROY OLD file_id_info_ */
   if (full) {
@@ -3837,10 +3839,10 @@ void FileManager::memory_cleanup(bool full) {
           }
 
           if (can_reset) {
-            node->main_file_id_.reset_time(); // delete last access time of FileId
+            node->main_file_id_.reset_time();  // delete last access time of FileId
 
             for (auto &file_id : node->file_ids_) {
-              file_id.reset_time(); // delete last access time of FileId
+              file_id.reset_time();  // delete last access time of FileId
 
               /* DESTROY ASSOCIATED QUERIES */
               destroy_query(file_id.get());
@@ -4090,13 +4092,19 @@ void FileManager::memory_cleanup(bool full) {
     }
   }
 
-  if (!full) {
+  if (full) {
+    file_nodes_.rehash(0);
+    file_hash_to_file_id_.rehash(0);
+    file_id_info_.rehash(0);
+  } else {
     file_nodes_.rehash(file_nodes_.size() + 1);
     file_hash_to_file_id_.rehash(file_hash_to_file_id_.size() + 1);
     file_id_info_.rehash(file_id_info_.size() + 1);
   }
 
-  LOG(ERROR) << "Final registered ids: " << file_id_info_.size() << " registered nodes: " << file_nodes_.size();
+  if (!full) {
+    LOG(INFO) << "Final registered ids: " << file_id_info_.size() << " registered nodes: " << file_nodes_.size();
+  }
 }
 void FileManager::memory_stats(vector<string> &output) {
   output.push_back("\"file_id_info_\":"); output.push_back(std::to_string(file_id_info_.size()));
@@ -4111,8 +4119,8 @@ void FileManager::memory_stats(vector<string> &output) {
 }
 
 void FileManager::tear_down() {
+  parent_.reset();
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup(true);
-  parent_.reset();
 }
 }  // namespace td

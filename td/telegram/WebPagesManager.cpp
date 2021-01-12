@@ -405,9 +405,9 @@ WebPagesManager::WebPagesManager(Td *td, ActorShared<> parent) : td_(td), parent
 }
 
 void WebPagesManager::tear_down() {
+  parent_.reset();
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup();
-  parent_.reset();
 }
 
 WebPagesManager::~WebPagesManager() = default;

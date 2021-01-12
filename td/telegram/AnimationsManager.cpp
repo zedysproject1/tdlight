@@ -145,10 +145,9 @@ AnimationsManager::AnimationsManager(Td *td, ActorShared<> parent) : td_(td), pa
 }
 
 void AnimationsManager::tear_down() {
+  parent_.reset();
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup(true);
-
-  parent_.reset();
 }
 
 int32 AnimationsManager::get_animation_duration(FileId file_id) const {

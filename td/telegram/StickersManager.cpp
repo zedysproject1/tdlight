@@ -1320,9 +1320,9 @@ void StickersManager::on_load_special_sticker_set(const SpecialStickerSetType &t
 }
 
 void StickersManager::tear_down() {
+  parent_.reset();
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup();
-  parent_.reset();
 }
 
 tl_object_ptr<td_api::MaskPoint> StickersManager::get_mask_point_object(int32 point) {

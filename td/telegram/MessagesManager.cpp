@@ -5929,7 +5929,10 @@ void MessagesManager::memory_cleanup() {
 
 void MessagesManager::memory_cleanup(bool full) {
   /* CLEAR DELETED MESSAGES CACHE */
-  {
+  if (full) {
+    dialogs_.clear();
+    dialogs_.rehash(0);
+  } else {
     auto it = dialogs_.begin();
     while (it != dialogs_.end()) {
       auto &dialog = it->second;
@@ -5942,16 +5945,18 @@ void MessagesManager::memory_cleanup(bool full) {
       it++;
     }
   }
-  clear_recently_found_dialogs();
+  if (full) {
+    recently_found_dialogs_loaded_ = 2;
+    recently_found_dialog_ids_.clear();
+  } else {
+    clear_recently_found_dialogs();
+  }
   found_public_dialogs_.clear();
   found_public_dialogs_.rehash(0);
   found_on_server_dialogs_.clear();
   found_on_server_dialogs_.rehash(0);
   full_message_id_to_file_source_id_.clear();
   full_message_id_to_file_source_id_.rehash(0);
-  if (full) {
-    dialogs_.clear();
-  }
 }
 
 void MessagesManager::memory_stats(vector<string> &output) {
@@ -11994,9 +11999,9 @@ class MessagesManager::DialogFiltersLogEvent {
 };
 
 void MessagesManager::tear_down() {
+  parent_.reset();
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup(true);
-  parent_.reset();
 }
 
 void MessagesManager::start_up() {

@@ -265,6 +265,8 @@ void PollManager::start_up() {
 
 void PollManager::tear_down() {
   parent_.reset();
+  // Completely clear memory when closing, to avoid memory leaks
+  memory_cleanup(true);
 }
 
 PollManager::~PollManager() = default;
@@ -496,6 +498,7 @@ vector<int32> PollManager::get_vote_percentage(const vector<int32> &voter_counts
 td_api::object_ptr<td_api::poll> PollManager::get_poll_object(PollId poll_id) const {
   auto poll = get_poll(poll_id);
   if (!(poll != nullptr)) {
+    //todo: find better alternative, rather than just creating a fake poll to avoid crashes...
     vector<td_api::object_ptr<td_api::pollOption>> poll_options;
     poll_options.push_back(td_api::make_object<td_api::pollOption>(
         "empty", 0, 0, false,
@@ -1711,8 +1714,6 @@ void PollManager::on_binlog_events(vector<BinlogEvent> &&events) {
 }
 
 void PollManager::memory_cleanup() {
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup(true);
   memory_cleanup(false);
 }
 
