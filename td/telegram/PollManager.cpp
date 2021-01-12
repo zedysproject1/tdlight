@@ -337,7 +337,7 @@ void PollManager::save_poll(const Poll *poll, PollId poll_id) {
   }
 
   LOG(INFO) << "Save " << poll_id << " to database";
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return;
   G()->td_db()->get_sqlite_pmc()->set(get_poll_database_key(poll_id), log_event_store(*poll).as_slice().str(), Auto());
 }
 
@@ -625,7 +625,7 @@ void PollManager::register_poll(PollId poll_id, FullMessageId full_message_id, c
   bool is_inserted = poll_messages_[poll_id].insert(full_message_id).second;
   LOG_CHECK(is_inserted) << source << " " << poll_id << " " << full_message_id;
   auto poll = get_poll(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return;
   if (!td_->auth_manager_->is_bot() && !is_local_poll_id(poll_id) &&
       !(poll->is_closed && poll->is_updated_after_close)) {
     update_poll_timeout_.add_timeout_in(poll_id.get(), 0);
@@ -683,7 +683,7 @@ void PollManager::set_poll_answer(PollId poll_id, FullMessageId full_message_id,
   }
 
   auto poll = get_poll(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return promise.set_error(Status::Error(400, "Poll can't be answered"));
   if (poll->is_closed) {
     return promise.set_error(Status::Error(400, "Can't answer closed poll"));
   }
@@ -932,7 +932,7 @@ void PollManager::get_poll_voters(PollId poll_id, FullMessageId full_message_id,
   }
 
   auto poll = get_poll(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return promise.set_error(Status::Error(400, "Poll results can't be received"));
   if (option_id < 0 || static_cast<size_t>(option_id) >= poll->options.size()) {
     return promise.set_error(Status::Error(400, "Invalid option ID specified"));
   }
@@ -982,7 +982,7 @@ void PollManager::get_poll_voters(PollId poll_id, FullMessageId full_message_id,
 void PollManager::on_get_poll_voters(PollId poll_id, int32 option_id, string offset, int32 limit,
                                      Result<tl_object_ptr<telegram_api::messages_votesList>> &&result) {
   auto poll = get_poll(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return;
   if (option_id < 0 || static_cast<size_t>(option_id) >= poll->options.size()) {
     LOG(ERROR) << "Can't process voters for option " << option_id << " in " << poll_id << ", because it has only "
                << poll->options.size() << " options";
@@ -1076,7 +1076,10 @@ void PollManager::stop_poll(PollId poll_id, FullMessageId full_message_id, uniqu
     return;
   }
   auto poll = get_poll_editable(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) {
+    promise.set_value(Unit());
+    return;
+  }
   if (poll->is_closed) {
     promise.set_value(Unit());
     return;
@@ -1129,7 +1132,7 @@ void PollManager::do_stop_poll(PollId poll_id, FullMessageId full_message_id, un
 void PollManager::stop_local_poll(PollId poll_id) {
   CHECK(is_local_poll_id(poll_id));
   auto poll = get_poll_editable(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return;
   if (poll->is_closed) {
     return;
   }
@@ -1151,7 +1154,7 @@ void PollManager::on_update_poll_timeout(PollId poll_id) {
     return;
   }
   auto poll = get_poll(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return;
   if (poll->is_closed && poll->is_updated_after_close) {
     return;
   }
@@ -1182,7 +1185,7 @@ void PollManager::on_close_poll_timeout(PollId poll_id) {
   }
 
   auto poll = get_poll_editable(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return;
   if (poll->is_closed || poll->close_date == 0) {
     return;
   }
@@ -1206,7 +1209,7 @@ void PollManager::on_close_poll_timeout(PollId poll_id) {
 void PollManager::on_get_poll_results(PollId poll_id, uint64 generation,
                                       Result<tl_object_ptr<telegram_api::Updates>> result) {
   auto poll = get_poll(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return;
   if (result.is_error()) {
     if (!(poll->is_closed && poll->is_updated_after_close) && !G()->close_flag() && !td_->auth_manager_->is_bot()) {
       auto timeout = get_polling_timeout();
@@ -1246,7 +1249,7 @@ void PollManager::on_online() {
 
 bool PollManager::has_input_media(PollId poll_id) const {
   auto poll = get_poll(poll_id);
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return false;
   return !poll->is_quiz || poll->correct_option_id >= 0;
 }
 
@@ -1355,7 +1358,7 @@ PollId PollManager::on_get_poll(PollId poll_id, tl_object_ptr<telegram_api::poll
     bool is_inserted = polls_.emplace(poll_id, std::move(p)).second;
     CHECK(is_inserted);
   }
-  CHECK(poll != nullptr);
+  if (!(poll != nullptr)) return PollId();
 
   bool poll_server_is_closed = false;
   if (poll_server != nullptr) {

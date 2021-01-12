@@ -665,7 +665,7 @@ void BackgroundManager::save_background_id(bool for_dark_theme) const {
   auto background_id = set_background_id_[for_dark_theme];
   if (background_id.is_valid()) {
     const Background *background = get_background(background_id);
-    CHECK(background != nullptr);
+    if (!(background != nullptr)) return;
     BackgroundLogEvent log_event{*background, set_background_type_[for_dark_theme]};
     G()->td_db()->get_binlog_pmc()->set(key, log_event_store(log_event).as_slice().str());
   } else {
@@ -754,7 +754,7 @@ void BackgroundManager::do_upload_background_file(FileId file_id, const Backgrou
 void BackgroundManager::on_uploaded_background_file(FileId file_id, const BackgroundType &type, bool for_dark_theme,
                                                     telegram_api::object_ptr<telegram_api::WallPaper> wallpaper,
                                                     Promise<Unit> &&promise) {
-  CHECK(wallpaper != nullptr);
+  if (!(wallpaper != nullptr)) promise.set_error(Status::Error(500, "Error"));
 
   BackgroundId background_id = on_get_background(BackgroundId(), string(), std::move(wallpaper));
   if (!background_id.is_valid()) {
@@ -763,7 +763,7 @@ void BackgroundManager::on_uploaded_background_file(FileId file_id, const Backgr
   }
 
   auto background = get_background(background_id);
-  CHECK(background != nullptr);
+  if (!(background != nullptr)) return promise.set_error(Status::Error(500, "Error"));
   if (!background->file_id.is_valid()) {
     td_->file_manager_->cancel_upload(file_id);
     return promise.set_error(Status::Error(500, "Receive wrong uploaded background without file"));
@@ -927,7 +927,7 @@ string BackgroundManager::get_background_name_database_key(const string &name) {
 BackgroundId BackgroundManager::on_get_background(BackgroundId expected_background_id,
                                                   const string &expected_background_name,
                                                   telegram_api::object_ptr<telegram_api::WallPaper> wallpaper_ptr) {
-  CHECK(wallpaper_ptr != nullptr);
+  if (!(wallpaper_ptr != nullptr)) return BackgroundId();
 
   if (wallpaper_ptr->get_id() == telegram_api::wallPaperNoFile::ID) {
     auto wallpaper = move_tl_object_as<telegram_api::wallPaperNoFile>(wallpaper_ptr);
