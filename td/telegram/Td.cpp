@@ -3926,9 +3926,20 @@ void Td::dec_actor_refcnt() {
       close_flag_ = 4;
     } else if (close_flag_ == 4) {
       on_closed();
+#ifdef __linux__
+  #if defined(__GLIBC__) && !defined(__UCLIBC__) && !defined(__MUSL__)
+      malloc_trim(0);
+  #endif
+#endif
     } else {
       UNREACHABLE();
     }
+  } else {
+#ifdef __linux__
+  #if defined(__GLIBC__) && !defined(__UCLIBC__) && !defined(__MUSL__)
+    malloc_trim(0);
+  #endif
+#endif
   }
 }
 
@@ -4188,6 +4199,13 @@ void Td::complete_pending_preauthentication_requests(const T &func) {
 Status Td::init(DbKey key) {
   auto current_scheduler_id = Scheduler::instance()->sched_id();
   auto scheduler_count = Scheduler::instance()->sched_count();
+#ifdef __linux__
+#if defined(__GLIBC__) && !defined(__UCLIBC__) && !defined(__MUSL__)
+  mallopt(M_ARENA_MAX, 1);
+  // Force mmap to be able to free the memory after an instance has been closed
+  mallopt(M_MMAP_THRESHOLD, 0);
+#endif
+#endif
 
   VLOG(td_init) << "Begin to init database";
   TdDb::Events events;
