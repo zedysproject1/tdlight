@@ -15,6 +15,7 @@
 #include "td/telegram/VideosManager.h"
 
 #include "td/utils/algorithm.h"
+#include "Document.hpp"
 
 namespace td {
 
@@ -36,24 +37,26 @@ void Document::append_file_ids(const Td *td, vector<FileId> &file_ids) const {
 
   file_ids.push_back(file_id);
 
-  FileId thumbnail_file_id = [&] {
-    switch (type) {
-      case Type::Animation:
-        return td->animations_manager_->get_animation_thumbnail_file_id(file_id);
-      case Type::Audio:
-        return td->audios_manager_->get_audio_thumbnail_file_id(file_id);
-      case Type::General:
-        return td->documents_manager_->get_document_thumbnail_file_id(file_id);
-      case Type::Video:
-        return td->videos_manager_->get_video_thumbnail_file_id(file_id);
-      case Type::VideoNote:
-        return td->video_notes_manager_->get_video_note_thumbnail_file_id(file_id);
-      default:
-        return FileId();
+  if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    FileId thumbnail_file_id = [&] {
+      switch (type) {
+        case Type::Animation:
+          return td->animations_manager_->get_animation_thumbnail_file_id(file_id);
+        case Type::Audio:
+          return td->audios_manager_->get_audio_thumbnail_file_id(file_id);
+        case Type::General:
+          return td->documents_manager_->get_document_thumbnail_file_id(file_id);
+        case Type::Video:
+          return td->videos_manager_->get_video_thumbnail_file_id(file_id);
+        case Type::VideoNote:
+          return td->video_notes_manager_->get_video_note_thumbnail_file_id(file_id);
+        default:
+          return FileId();
+      }
+    }();
+    if (thumbnail_file_id.is_valid()) {
+      file_ids.push_back(thumbnail_file_id);
     }
-  }();
-  if (thumbnail_file_id.is_valid()) {
-    file_ids.push_back(thumbnail_file_id);
   }
 
   FileId animated_thumbnail_file_id = [&] {

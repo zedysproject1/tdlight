@@ -4943,34 +4943,36 @@ void update_message_content_file_id_remote(MessageContent *content, FileId file_
 }
 
 FileId get_message_content_thumbnail_file_id(const MessageContent *content, const Td *td) {
-  switch (content->get_type()) {
-    case MessageContentType::Animation:
-      return td->animations_manager_->get_animation_thumbnail_file_id(
-          static_cast<const MessageAnimation *>(content)->file_id);
-    case MessageContentType::Audio:
-      return td->audios_manager_->get_audio_thumbnail_file_id(static_cast<const MessageAudio *>(content)->file_id);
-    case MessageContentType::Document:
-      return td->documents_manager_->get_document_thumbnail_file_id(
-          static_cast<const MessageDocument *>(content)->file_id);
-    case MessageContentType::Photo:
-      for (auto &size : static_cast<const MessagePhoto *>(content)->photo.photos) {
-        if (size.type == 't') {
-          return size.file_id;
+  if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    switch (content->get_type()) {
+      case MessageContentType::Animation:
+        return td->animations_manager_->get_animation_thumbnail_file_id(
+            static_cast<const MessageAnimation *>(content)->file_id);
+      case MessageContentType::Audio:
+        return td->audios_manager_->get_audio_thumbnail_file_id(static_cast<const MessageAudio *>(content)->file_id);
+      case MessageContentType::Document:
+        return td->documents_manager_->get_document_thumbnail_file_id(
+            static_cast<const MessageDocument *>(content)->file_id);
+      case MessageContentType::Photo:
+        for (auto &size : static_cast<const MessagePhoto *>(content)->photo.photos) {
+          if (size.type == 't') {
+            return size.file_id;
+          }
         }
-      }
-      break;
-    case MessageContentType::Sticker:
-      return td->stickers_manager_->get_sticker_thumbnail_file_id(
-          static_cast<const MessageSticker *>(content)->file_id);
-    case MessageContentType::Video:
-      return td->videos_manager_->get_video_thumbnail_file_id(static_cast<const MessageVideo *>(content)->file_id);
-    case MessageContentType::VideoNote:
-      return td->video_notes_manager_->get_video_note_thumbnail_file_id(
-          static_cast<const MessageVideoNote *>(content)->file_id);
-    case MessageContentType::VoiceNote:
-      return FileId();
-    default:
-      break;
+        break;
+      case MessageContentType::Sticker:
+        return td->stickers_manager_->get_sticker_thumbnail_file_id(
+            static_cast<const MessageSticker *>(content)->file_id);
+      case MessageContentType::Video:
+        return td->videos_manager_->get_video_thumbnail_file_id(static_cast<const MessageVideo *>(content)->file_id);
+      case MessageContentType::VideoNote:
+        return td->video_notes_manager_->get_video_note_thumbnail_file_id(
+            static_cast<const MessageVideoNote *>(content)->file_id);
+      case MessageContentType::VoiceNote:
+        return FileId();
+      default:
+        break;
+    }
   }
   return FileId();
 }
