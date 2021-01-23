@@ -736,7 +736,7 @@ class GetGroupFullInfoRequest : public RequestActor<> {
   ChatId chat_id_;
 
   void do_run(Promise<Unit> &&promise) override {
-    td->contacts_manager_->load_chat_full(chat_id_, get_tries() < 2, std::move(promise));
+    td->contacts_manager_->load_chat_full(chat_id_, get_tries() < 2, std::move(promise), "getBasicGroupFullInfo");
   }
 
   void do_send_result() override {
@@ -4289,10 +4289,10 @@ Status Td::init(DbKey key) {
   }
 
   if (is_online_) {
-    if (auth_manager_->is_bot()) {
-      send_closure(G()->state_manager(), &StateManager::on_online, false);
-    }
     on_online_updated(true, true);
+  }
+  if (auth_manager_->is_bot()) {
+    send_closure(G()->state_manager(), &StateManager::on_online, true);
   }
 
   // Send binlog events to managers
