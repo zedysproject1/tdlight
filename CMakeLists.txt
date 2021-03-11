@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.2 FATAL_ERROR)
 
-project(TDLib VERSION 1.7.0 LANGUAGES CXX C)
+project(TDLib VERSION 1.7.2 LANGUAGES CXX C)
 
 if (NOT DEFINED CMAKE_MODULE_PATH)
   set(CMAKE_MODULE_PATH "")
@@ -201,7 +201,6 @@ endif()
 
 get_directory_property(HAS_PARENT PARENT_DIRECTORY)
 if (HAS_PARENT)
-  set(TL_TD_API_TLO ${TL_TD_API_TLO} PARENT_SCOPE) # was used in standalone binding generators
   set(TL_TD_JSON_AUTO ${TL_TD_JSON_AUTO_SOURCE} PARENT_SCOPE) # used in tdbot
   set(TD_TEST_SOURCE ${TD_TEST_SOURCE} PARENT_SCOPE) # used to build tests
 endif()
@@ -295,6 +294,7 @@ set(TDLIB_SOURCE
   td/telegram/DialogDb.cpp
   td/telegram/DialogFilter.cpp
   td/telegram/DialogId.cpp
+  td/telegram/DialogInviteLink.cpp
   td/telegram/DialogLocation.cpp
   td/telegram/DialogParticipant.cpp
   td/telegram/DialogSource.cpp
@@ -343,6 +343,7 @@ set(TDLIB_SOURCE
   td/telegram/MessagesDb.cpp
   td/telegram/MessageSearchFilter.cpp
   td/telegram/MessagesManager.cpp
+  td/telegram/MessageTtlSetting.cpp
   td/telegram/misc.cpp
   td/telegram/net/AuthDataShared.cpp
   td/telegram/net/ConnectionCreator.cpp
@@ -374,6 +375,7 @@ set(TDLIB_SOURCE
   td/telegram/PollManager.cpp
   td/telegram/QueryCombiner.cpp
   td/telegram/ReplyMarkup.cpp
+  td/telegram/ReportReason.cpp
   td/telegram/RestrictionReason.cpp
   td/telegram/SecretChatActor.cpp
   td/telegram/SecretChatDb.cpp
@@ -461,6 +463,7 @@ set(TDLIB_SOURCE
   td/telegram/DialogFilter.h
   td/telegram/DialogFilterId.h
   td/telegram/DialogId.h
+  td/telegram/DialogInviteLink.h
   td/telegram/DialogListId.h
   td/telegram/DialogLocation.h
   td/telegram/DialogParticipant.h
@@ -523,6 +526,7 @@ set(TDLIB_SOURCE
   td/telegram/MessagesDb.h
   td/telegram/MessageSearchFilter.h
   td/telegram/MessagesManager.h
+  td/telegram/MessageTtlSetting.h
   td/telegram/misc.h
   td/telegram/net/AuthDataShared.h
   td/telegram/net/ConnectionCreator.h
@@ -567,6 +571,7 @@ set(TDLIB_SOURCE
   td/telegram/PublicDialogType.h
   td/telegram/QueryCombiner.h
   td/telegram/ReplyMarkup.h
+  td/telegram/ReportReason.h
   td/telegram/RequestActor.h
   td/telegram/RestrictionReason.h
   td/telegram/ScheduledServerMessageId.h

@@ -134,6 +134,8 @@ class Td final : public NetQueryCallback {
 
   bool is_online() const;
 
+  void set_is_bot_online(bool is_bot_online);
+
   template <class ActorT, class... ArgsT>
   ActorId<ActorT> create_net_actor(ArgsT &&... args) {
     auto slot_id = request_actors_.create(ActorOwn<>(), RequestActorIdType);
@@ -247,7 +249,7 @@ class Td final : public NetQueryCallback {
   static td_api::object_ptr<td_api::Object> static_request(td_api::object_ptr<td_api::Function> function);
 
  private:
-  static constexpr const char *TDLIB_VERSION = "1.7.0";
+  static constexpr const char *TDLIB_VERSION = "1.7.2";
   static constexpr int64 ONLINE_ALARM_ID = 0;
   static constexpr int64 PING_SERVER_ALARM_ID = -1;
   static constexpr int32 PING_SERVER_TIMEOUT = 300;
@@ -299,6 +301,7 @@ class Td final : public NetQueryCallback {
   Container<ActorOwn<Actor>> request_actors_;
 
   bool is_online_ = false;
+  bool is_bot_online_ = false;
   NetQueryRef update_status_query_;
 
   int64 alarm_id_ = 1;
@@ -590,9 +593,13 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, const td_api::openMessageContent &request);
 
+  void on_request(uint64 id, td_api::getExternalLink &request);
+
   void on_request(uint64 id, const td_api::getChatHistory &request);
 
   void on_request(uint64 id, const td_api::deleteChatHistory &request);
+
+  void on_request(uint64 id, const td_api::deleteChat &request);
 
   void on_request(uint64 id, const td_api::getMessageThreadHistory &request);
 
@@ -603,6 +610,8 @@ class Td final : public NetQueryCallback {
   void on_request(uint64 id, td_api::searchMessages &request);
 
   void on_request(uint64 id, td_api::searchCallMessages &request);
+
+  void on_request(uint64 id, const td_api::deleteAllCallMessages &request);
 
   void on_request(uint64 id, const td_api::searchChatRecentLocationMessages &request);
 
@@ -633,8 +642,6 @@ class Td final : public NetQueryCallback {
   void on_request(uint64 id, td_api::sendBotStartMessage &request);
 
   void on_request(uint64 id, td_api::sendInlineQueryResultMessage &request);
-
-  void on_request(uint64 id, const td_api::sendChatSetTtlMessage &request);
 
   void on_request(uint64 id, td_api::addLocalMessage &request);
 
@@ -722,6 +729,8 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, const td_api::toggleGroupCallParticipantIsMuted &request);
 
+  void on_request(uint64 id, const td_api::setGroupCallParticipantVolumeLevel &request);
+
   void on_request(uint64 id, const td_api::loadGroupCallParticipants &request);
 
   void on_request(uint64 id, const td_api::leaveGroupCall &request);
@@ -749,6 +758,8 @@ class Td final : public NetQueryCallback {
   void on_request(uint64 id, td_api::setChatTitle &request);
 
   void on_request(uint64 id, const td_api::setChatPhoto &request);
+
+  void on_request(uint64 id, const td_api::setChatMessageTtlSetting &request);
 
   void on_request(uint64 id, const td_api::setChatPermissions &request);
 
@@ -790,6 +801,8 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, td_api::setChatMemberStatus &request);
 
+  void on_request(uint64 id, const td_api::banChatMember &request);
+
   void on_request(uint64 id, const td_api::canTransferOwnership &request);
 
   void on_request(uint64 id, td_api::transferChatOwnership &request);
@@ -800,7 +813,25 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, td_api::getChatAdministrators &request);
 
-  void on_request(uint64 id, const td_api::generateChatInviteLink &request);
+  void on_request(uint64 id, const td_api::replacePrimaryChatInviteLink &request);
+
+  void on_request(uint64 id, const td_api::createChatInviteLink &request);
+
+  void on_request(uint64 id, td_api::editChatInviteLink &request);
+
+  void on_request(uint64 id, td_api::getChatInviteLink &request);
+
+  void on_request(uint64 id, const td_api::getChatInviteLinkCounts &request);
+
+  void on_request(uint64 id, td_api::getChatInviteLinks &request);
+
+  void on_request(uint64 id, td_api::getChatInviteLinkMembers &request);
+
+  void on_request(uint64 id, td_api::revokeChatInviteLink &request);
+
+  void on_request(uint64 id, td_api::deleteRevokedChatInviteLink &request);
+
+  void on_request(uint64 id, const td_api::deleteAllRevokedChatInviteLinks &request);
 
   void on_request(uint64 id, td_api::checkChatInviteLink &request);
 
@@ -829,6 +860,12 @@ class Td final : public NetQueryCallback {
   void on_request(uint64 id, const td_api::readFilePart &request);
 
   void on_request(uint64 id, const td_api::deleteFile &request);
+
+  void on_request(uint64 id, td_api::getMessageFileType &request);
+
+  void on_request(uint64 id, const td_api::getMessageImportConfirmationText &request);
+
+  void on_request(uint64 id, const td_api::importMessages &request);
 
   void on_request(uint64 id, const td_api::blockMessageSenderFromReplies &request);
 
@@ -878,11 +915,11 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, const td_api::toggleSupergroupIsAllHistoryAvailable &request);
 
+  void on_request(uint64 id, const td_api::toggleSupergroupIsBroadcastGroup &request);
+
   void on_request(uint64 id, const td_api::reportSupergroupSpam &request);
 
   void on_request(uint64 id, td_api::getSupergroupMembers &request);
-
-  void on_request(uint64 id, const td_api::deleteSupergroup &request);
 
   void on_request(uint64 id, td_api::closeSecretChat &request);
 
@@ -963,6 +1000,8 @@ class Td final : public NetQueryCallback {
   void on_request(uint64 id, const td_api::removeChatActionBar &request);
 
   void on_request(uint64 id, td_api::reportChat &request);
+
+  void on_request(uint64 id, td_api::reportChatPhoto &request);
 
   void on_request(uint64 id, td_api::getChatStatisticsUrl &request);
 

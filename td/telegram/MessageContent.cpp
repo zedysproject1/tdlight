@@ -1583,8 +1583,8 @@ static Result<InputMessageContent> create_input_message_content(
   string mime_type;
   if (file_id.is_valid()) {
     file_view = td->file_manager_->get_file_view(file_id);
-    auto suggested_name = file_view.suggested_name();
-    const PathView path_view(suggested_name);
+    auto suggested_path = file_view.suggested_path();
+    const PathView path_view(suggested_path);
     file_name = path_view.file_name().str();
     mime_type = MimeType::from_extension(path_view.extension());
   }
@@ -1621,7 +1621,7 @@ static Result<InputMessageContent> create_input_message_content(
       td->animations_manager_->create_animation(
           file_id, string(), thumbnail, AnimationSize(), has_stickers, std::move(sticker_file_ids),
           std::move(file_name), std::move(mime_type), input_animation->duration_,
-          get_dimensions(input_animation->width_, input_animation->height_), false);
+          get_dimensions(input_animation->width_, input_animation->height_, "inputMessageAnimation"), false);
 
       content = make_unique<MessageAnimation>(file_id, std::move(caption));
       break;
@@ -1690,7 +1690,7 @@ static Result<InputMessageContent> create_input_message_content(
 
       PhotoSize s;
       s.type = type;
-      s.dimensions = get_dimensions(input_photo->width_, input_photo->height_);
+      s.dimensions = get_dimensions(input_photo->width_, input_photo->height_, "inputMessagePhoto");
       s.size = static_cast<int32>(file_view.size());
       s.file_id = file_id;
 
@@ -1713,9 +1713,10 @@ static Result<InputMessageContent> create_input_message_content(
 
       emoji = std::move(input_sticker->emoji_);
 
-      td->stickers_manager_->create_sticker(file_id, string(), thumbnail,
-                                            get_dimensions(input_sticker->width_, input_sticker->height_), nullptr,
-                                            false, nullptr);
+      td->stickers_manager_->create_sticker(
+          file_id, string(), thumbnail,
+          get_dimensions(input_sticker->width_, input_sticker->height_, "inputMessageSticker"), nullptr, false,
+          nullptr);
 
       content = make_unique<MessageSticker>(file_id);
       break;
@@ -1726,10 +1727,11 @@ static Result<InputMessageContent> create_input_message_content(
       ttl = input_video->ttl_;
 
       bool has_stickers = !sticker_file_ids.empty();
-      td->videos_manager_->create_video(
-          file_id, string(), thumbnail, AnimationSize(), has_stickers, std::move(sticker_file_ids),
-          std::move(file_name), std::move(mime_type), input_video->duration_,
-          get_dimensions(input_video->width_, input_video->height_), input_video->supports_streaming_, false);
+      td->videos_manager_->create_video(file_id, string(), thumbnail, AnimationSize(), has_stickers,
+                                        std::move(sticker_file_ids), std::move(file_name), std::move(mime_type),
+                                        input_video->duration_,
+                                        get_dimensions(input_video->width_, input_video->height_, "inputMessageVideo"),
+                                        input_video->supports_streaming_, false);
 
       content = make_unique<MessageVideo>(file_id, std::move(caption));
       break;
@@ -1743,7 +1745,7 @@ static Result<InputMessageContent> create_input_message_content(
       }
 
       td->video_notes_manager_->create_video_note(file_id, string(), thumbnail, input_video_note->duration_,
-                                                  get_dimensions(length, length), false);
+                                                  get_dimensions(length, length, "inputMessageVideoNote"), false);
 
       content = make_unique<MessageVideoNote>(file_id, false);
       break;
@@ -1834,7 +1836,8 @@ static Result<InputMessageContent> create_input_message_content(
 
           PhotoSize s;
           s.type = 'n';
-          s.dimensions = get_dimensions(input_invoice->photo_width_, input_invoice->photo_height_);
+          s.dimensions =
+              get_dimensions(input_invoice->photo_width_, input_invoice->photo_height_, "inputMessageInvoice");
           s.size = input_invoice->photo_size_;  // TODO use invoice_file_id size
           s.file_id = invoice_file_id;
 
@@ -2075,7 +2078,7 @@ Result<InputMessageContent> get_input_message_content(
       LOG(WARNING) << "Ignore thumbnail file: " << r_thumbnail_file_id.error().message();
     } else {
       thumbnail.type = 't';
-      thumbnail.dimensions = get_dimensions(input_thumbnail->width_, input_thumbnail->height_);
+      thumbnail.dimensions = get_dimensions(input_thumbnail->width_, input_thumbnail->height_, "inputThumbnail");
       thumbnail.file_id = r_thumbnail_file_id.ok();
       CHECK(thumbnail.file_id.is_valid());
 
@@ -2491,6 +2494,42 @@ tl_object_ptr<telegram_api::InputMedia> get_input_media(const MessageContent *co
     LOG(ERROR) << "File " << file_id << " has invalid file reference, but we forced to use it";
   }
   return input_media;
+}
+
+tl_object_ptr<telegram_api::InputMedia> get_fake_input_media(Td *td, tl_object_ptr<telegram_api::InputFile> input_file,
+                                                             FileId file_id) {
+  FileView file_view = td->file_manager_->get_file_view(file_id);
+  auto file_type = file_view.get_type();
+  switch (file_type) {
+    case FileType::Animation:
+    case FileType::Audio:
+    case FileType::Document:
+    case FileType::Sticker:
+    case FileType::Video:
+    case FileType::VoiceNote: {
+      vector<tl_object_ptr<telegram_api::DocumentAttribute>> attributes;
+      auto file_path = file_view.suggested_path();
+      const PathView path_view(file_path);
+      Slice file_name = path_view.file_name();
+      if (!file_name.empty()) {
+        attributes.push_back(make_tl_object<telegram_api::documentAttributeFilename>(file_name.str()));
+      }
+      string mime_type = MimeType::from_extension(path_view.extension());
+      int32 flags = 0;
+      if (file_type == FileType::Video) {
+        flags |= telegram_api::inputMediaUploadedDocument::NOSOUND_VIDEO_MASK;
+      }
+      return make_tl_object<telegram_api::inputMediaUploadedDocument>(
+          flags, false /*ignored*/, false /*ignored*/, std::move(input_file), nullptr, mime_type, std::move(attributes),
+          vector<tl_object_ptr<telegram_api::InputDocument>>(), 0);
+    }
+    case FileType::Photo:
+      return make_tl_object<telegram_api::inputMediaUploadedPhoto>(
+          0, std::move(input_file), vector<tl_object_ptr<telegram_api::InputDocument>>(), 0);
+    default:
+      UNREACHABLE();
+  }
+  return nullptr;
 }
 
 void delete_message_content_thumbnail(MessageContent *content, Td *td) {
@@ -4146,7 +4185,7 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
     if (to_secret && !file_view.is_encrypted_secret()) {
       auto download_file_id = file_manager->dup_file_id(file_id);
       file_id = file_manager
-                    ->register_generate(FileType::Encrypted, FileLocationSource::FromServer, file_view.suggested_name(),
+                    ->register_generate(FileType::Encrypted, FileLocationSource::FromServer, file_view.suggested_path(),
                                         PSTRING() << "#file_id#" << download_file_id.get(), dialog_id, file_view.size())
                     .ok();
     }
@@ -4486,6 +4525,10 @@ unique_ptr<MessageContent> get_action_message_content(Td *td, tl_object_ptr<tele
       auto duration =
           (phone_call->flags_ & telegram_api::messageActionPhoneCall::DURATION_MASK) != 0 ? phone_call->duration_ : 0;
       auto is_video = (phone_call->flags_ & telegram_api::messageActionPhoneCall::VIDEO_MASK) != 0;
+      if (duration < 0) {
+        LOG(ERROR) << "Receive invalid " << oneline(to_string(phone_call));
+        break;
+      }
       return make_unique<MessageCall>(phone_call->call_id_, duration, get_call_discard_reason(phone_call->reason_),
                                       is_video);
     }
@@ -4582,6 +4625,14 @@ unique_ptr<MessageContent> get_action_message_content(Td *td, tl_object_ptr<tele
 
       return td::make_unique<MessageInviteToGroupCall>(InputGroupCallId(invite_to_group_call->call_),
                                                        std::move(user_ids));
+    }
+    case telegram_api::messageActionSetMessagesTTL::ID: {
+      auto set_messages_ttl = move_tl_object_as<telegram_api::messageActionSetMessagesTTL>(action);
+      if (set_messages_ttl->period_ < 0) {
+        LOG(ERROR) << "Receive wrong TTL = " << set_messages_ttl->period_;
+        break;
+      }
+      return td::make_unique<MessageChatSetTtl>(set_messages_ttl->period_);
     }
     default:
       UNREACHABLE();

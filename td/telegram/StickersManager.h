@@ -94,7 +94,7 @@ class StickersManager : public Actor {
 
   vector<StickerSetId> get_installed_sticker_sets(bool is_masks, Promise<Unit> &&promise);
 
-  bool has_webp_thumbnail(const tl_object_ptr<telegram_api::documentAttributeSticker> &sticker);
+  static bool has_webp_thumbnail(const vector<tl_object_ptr<telegram_api::PhotoSize>> &thumbnails);
 
   StickerSetId get_sticker_set_id(const tl_object_ptr<telegram_api::InputStickerSet> &set_ptr);
 
@@ -398,7 +398,9 @@ class StickersManager : public Actor {
 
   class UploadStickerFileCallback;
 
-  static vector<td_api::object_ptr<td_api::closedVectorPath>> get_sticker_minithumbnail(CSlice path);
+  static vector<td_api::object_ptr<td_api::closedVectorPath>> get_sticker_minithumbnail(CSlice path,
+                                                                                        StickerSetId sticker_set_id,
+                                                                                        int64 document_id);
 
   static tl_object_ptr<td_api::MaskPoint> get_mask_point_object(int32 point);
 

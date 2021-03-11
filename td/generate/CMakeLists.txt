@@ -6,147 +6,92 @@ endif()
 
 file(MAKE_DIRECTORY auto/td/telegram)
 file(MAKE_DIRECTORY auto/td/mtproto)
+file(MAKE_DIRECTORY auto/tlo)
 
 set(TL_TD_AUTO_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/auto PARENT_SCOPE)
 
 set(TD_AUTO_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/auto/td)
 
 set(TL_TD_AUTO_SOURCE
-  ${TD_AUTO_INCLUDE_DIR}/mtproto/mtproto_api.cpp
-  ${TD_AUTO_INCLUDE_DIR}/mtproto/mtproto_api.h
-  ${TD_AUTO_INCLUDE_DIR}/mtproto/mtproto_api.hpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/telegram_api.cpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/telegram_api.h
-  ${TD_AUTO_INCLUDE_DIR}/telegram/telegram_api.hpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/secret_api.cpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/secret_api.h
-  ${TD_AUTO_INCLUDE_DIR}/telegram/secret_api.hpp
-  PARENT_SCOPE
-)
+        ${TD_AUTO_INCLUDE_DIR}/mtproto/mtproto_api.cpp
+        ${TD_AUTO_INCLUDE_DIR}/mtproto/mtproto_api.h
+        ${TD_AUTO_INCLUDE_DIR}/mtproto/mtproto_api.hpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/telegram_api.cpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/telegram_api.h
+        ${TD_AUTO_INCLUDE_DIR}/telegram/telegram_api.hpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/secret_api.cpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/secret_api.h
+        ${TD_AUTO_INCLUDE_DIR}/telegram/secret_api.hpp
+        PARENT_SCOPE
+        )
 
 set(TL_TD_API_AUTO_SOURCE
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_api.cpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_api.h
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_api.hpp
-  PARENT_SCOPE
-)
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_api.cpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_api.h
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_api.hpp
+        PARENT_SCOPE
+        )
 
 set(TL_TD_JSON_AUTO_SOURCE
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_api_json.cpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_api_json.h
-  PARENT_SCOPE
-)
-
-set(TL_TD_API_TLO ${CMAKE_CURRENT_SOURCE_DIR}/scheme/td_api.tlo)
-set(TL_TD_API_TLO ${TL_TD_API_TLO} PARENT_SCOPE)
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_api_json.cpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_api_json.h
+        PARENT_SCOPE
+        )
 
 set(TL_C_AUTO_SOURCE
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_tdc_api.cpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_tdc_api.h
-  ${TD_AUTO_INCLUDE_DIR}/telegram/td_tdc_api_inner.h
-  PARENT_SCOPE
-)
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_tdc_api.cpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_tdc_api.h
+        ${TD_AUTO_INCLUDE_DIR}/telegram/td_tdc_api_inner.h
+        PARENT_SCOPE
+        )
 
 set(TL_DOTNET_AUTO_SOURCE
-  ${TD_AUTO_INCLUDE_DIR}/telegram/TdDotNetApi.cpp
-  ${TD_AUTO_INCLUDE_DIR}/telegram/TdDotNetApi.h
-  PARENT_SCOPE
-)
+        ${TD_AUTO_INCLUDE_DIR}/telegram/TdDotNetApi.cpp
+        ${TD_AUTO_INCLUDE_DIR}/telegram/TdDotNetApi.h
+        PARENT_SCOPE
+        )
 
 set(TL_GENERATE_COMMON_SOURCE
-  generate_common.cpp
+        generate_common.cpp
 
-  tl_writer_cpp.cpp
-  tl_writer_h.cpp
-  tl_writer_hpp.cpp
-  tl_writer_jni_cpp.cpp
-  tl_writer_jni_h.cpp
-  tl_writer_td.cpp
+        tl_writer_cpp.cpp
+        tl_writer_h.cpp
+        tl_writer_hpp.cpp
+        tl_writer_jni_cpp.cpp
+        tl_writer_jni_h.cpp
+        tl_writer_td.cpp
 
-  tl_writer_cpp.h
-  tl_writer_h.h
-  tl_writer_hpp.h
-  tl_writer_jni_cpp.h
-  tl_writer_jni_h.h
-  tl_writer_td.h
-)
+        tl_writer_cpp.h
+        tl_writer_h.h
+        tl_writer_hpp.h
+        tl_writer_jni_cpp.h
+        tl_writer_jni_h.h
+        tl_writer_td.h
+        )
 
 set(TL_GENERATE_C_SOURCE
-  generate_c.cpp
+        generate_c.cpp
 
-  tl_writer_c.h
-)
+        tl_writer_c.h
+        )
 
 set(TL_GENERATE_JAVA_SOURCE
-  generate_java.cpp
+        generate_java.cpp
 
-  tl_writer_java.cpp
+        tl_writer_java.cpp
 
-  tl_writer_java.h
-)
+        tl_writer_java.h
+        )
 
 set(TL_GENERATE_JSON_SOURCE
-  generate_json.cpp
+        generate_json.cpp
 
-  tl_json_converter.cpp
+        tl_json_converter.cpp
 
-  tl_json_converter.h
-)
+        tl_json_converter.h
+        )
 
 if (NOT CMAKE_CROSSCOMPILING)
-  # Start of .tlo update
-  add_custom_target(prepare_tl_parser ALL
-          COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/tl-parser/build)
-  add_custom_target(configure_tl_parser
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tl-parser/build
-          COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Release ../
-          COMMENT "Configure tl-parser"
-          DEPENDS scheme/mtproto_api.tl scheme/telegram_api.tl scheme/secret_api.tl scheme/td_api.tl
-          )
-  add_dependencies(configure_tl_parser prepare_tl_parser)
-
-  add_custom_target(build_tl_parser
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tl-parser/build
-          COMMAND ${CMAKE_COMMAND} --build .
-          COMMENT "Build tl-parser"
-          DEPENDS scheme/mtproto_api.tl scheme/telegram_api.tl scheme/secret_api.tl scheme/td_api.tl
-          )
-  add_dependencies(build_tl_parser configure_tl_parser)
-  set(TL_PARSER_BIN ./tl-parser/build/tl-parser)
-
-  add_custom_target(generate_mtproto_api_tlo
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          COMMAND ${TL_PARSER_BIN} -v -e scheme/mtproto_api.tlo scheme/mtproto_api.tl
-          COMMENT "Build tl-parser"
-          DEPENDS scheme/mtproto_api.tl
-          )
-  add_dependencies(generate_mtproto_api_tlo build_tl_parser)
-
-  add_custom_target(generate_secret_api_tlo
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          COMMAND ${TL_PARSER_BIN} -v -e scheme/secret_api.tlo scheme/secret_api.tl
-          COMMENT "Build tl-parser"
-          DEPENDS scheme/secret_api.tl
-          )
-  add_dependencies(generate_secret_api_tlo build_tl_parser)
-
-  add_custom_target(generate_telegram_api_tlo
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          COMMAND ${TL_PARSER_BIN} -v -e scheme/telegram_api.tlo scheme/telegram_api.tl
-          COMMENT "Build tl-parser"
-          DEPENDS scheme/telegram_api.tl
-          )
-  add_dependencies(generate_telegram_api_tlo build_tl_parser)
-
-  add_custom_target(generate_td_api_tlo
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          COMMAND ${TL_PARSER_BIN} -v -e scheme/td_api.tlo scheme/td_api.tl
-          COMMENT "Build tl-parser"
-          DEPENDS scheme/td_api.tl
-          )
-  add_dependencies(generate_td_api_tlo build_tl_parser)
-   # End of .tlo update
-
   find_program(PHP_EXECUTABLE php)
 
   if ((CMAKE_SYSTEM_NAME MATCHES "FreeBSD") AND (CMAKE_SYSTEM_VERSION MATCHES "HBSD"))
@@ -159,14 +104,27 @@ if (NOT CMAKE_CROSSCOMPILING)
     set(GENERATE_COMMON_CMD generate_common)
   endif()
 
+  add_subdirectory(tl-parser)
+
+  set(TLO_AUTO_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/auto/tlo)
+
+  add_custom_target(tl_generate_tlo
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          COMMAND tl-parser -e auto/tlo/mtproto_api.tlo scheme/mtproto_api.tl
+          COMMAND tl-parser -e auto/tlo/secret_api.tlo scheme/secret_api.tl
+          COMMAND tl-parser -e auto/tlo/td_api.tlo scheme/td_api.tl
+          COMMAND tl-parser -e auto/tlo/telegram_api.tlo scheme/telegram_api.tl
+          COMMENT "Generate TLO files"
+          DEPENDS tl-parser ${CMAKE_CURRENT_SOURCE_DIR}/scheme/mtproto_api.tl ${CMAKE_CURRENT_SOURCE_DIR}/scheme/secret_api.tl ${CMAKE_CURRENT_SOURCE_DIR}/scheme/td_api.tl ${CMAKE_CURRENT_SOURCE_DIR}/scheme/telegram_api.tl
+          )
+
   add_executable(generate_common ${TL_GENERATE_COMMON_SOURCE})
-  add_dependencies(generate_common generate_mtproto_api_tlo generate_secret_api_tlo generate_telegram_api_tlo generate_td_api_tlo)
   target_link_libraries(generate_common PRIVATE tdtl)
   add_custom_target(tl_generate_common
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
           COMMAND ${GENERATE_COMMON_CMD}
-          COMMENT "Generate common tl source files"
-          DEPENDS generate_common DoxygenTlDocumentationGenerator.php
+          COMMENT "Generate common TL source files"
+          DEPENDS generate_common tl_generate_tlo ${TLO_AUTO_INCLUDE_DIR}/mtproto_api.tlo ${TLO_AUTO_INCLUDE_DIR}/secret_api.tlo ${TLO_AUTO_INCLUDE_DIR}/td_api.tlo ${TLO_AUTO_INCLUDE_DIR}/telegram_api.tlo ${CMAKE_CURRENT_SOURCE_DIR}/scheme/td_api.tl ${CMAKE_CURRENT_SOURCE_DIR}/DoxygenTlDocumentationGenerator.php
           )
   if (TD_ENABLE_JNI)
     target_compile_definitions(generate_common PRIVATE TD_ENABLE_JNI=1)
@@ -178,12 +136,11 @@ if (NOT CMAKE_CROSSCOMPILING)
   add_executable(generate_c ${TL_GENERATE_C_SOURCE})
   target_link_libraries(generate_c PRIVATE tdtl)
   add_custom_target(tl_generate_c
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMAND generate_c
-    COMMENT "Generate C tl source files"
-    DEPENDS generate_c generate_td_api_tlo
-  )
-  add_dependencies(tl_generate_c generate_td_api_tlo)
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          COMMAND generate_c
+          COMMENT "Generate C TL source files"
+          DEPENDS generate_c tl_generate_tlo ${TLO_AUTO_INCLUDE_DIR}/td_api.tlo ${CMAKE_CURRENT_SOURCE_DIR}/scheme/td_api.tl
+          )
 
   add_executable(td_generate_java_api ${TL_GENERATE_JAVA_SOURCE})
   target_link_libraries(td_generate_java_api PRIVATE tdtl)
@@ -191,34 +148,33 @@ if (NOT CMAKE_CROSSCOMPILING)
   add_executable(generate_json ${TL_GENERATE_JSON_SOURCE})
   target_link_libraries(generate_json PRIVATE tdtl tdutils)
   add_custom_target(tl_generate_json
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMAND generate_json
-    COMMENT "Generate JSON tl source files"
-    DEPENDS generate_json generate_td_api_tlo
-  )
-  add_dependencies(tl_generate_json generate_td_api_tlo)
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          COMMAND generate_json
+          COMMENT "Generate JSON TL source files"
+          DEPENDS generate_json tl_generate_tlo ${TLO_AUTO_INCLUDE_DIR}/td_api.tlo ${CMAKE_CURRENT_SOURCE_DIR}/scheme/td_api.tl
+          )
 
   if (TD_ENABLE_JNI)
     install(TARGETS td_generate_java_api RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     install(FILES JavadocTlDocumentationGenerator.php TlDocumentationGenerator.php DESTINATION "${CMAKE_INSTALL_BINDIR}/td/generate")
-    install(FILES scheme/td_api.tlo scheme/td_api.tl DESTINATION "${CMAKE_INSTALL_BINDIR}/td/generate/scheme")
+    install(FILES ${TLO_AUTO_INCLUDE_DIR}/td_api.tlo scheme/td_api.tl DESTINATION "${CMAKE_INSTALL_BINDIR}/td/generate/scheme")
   endif()
 
   if (TD_ENABLE_DOTNET)
     if (PHP_EXECUTABLE)
-      set(GENERATE_DOTNET_API_CMD td_generate_dotnet_api ${TL_TD_API_TLO} && ${PHP_EXECUTABLE} DotnetTlDocumentationGenerator.php scheme/td_api.tl auto/td/telegram/TdDotNetApi.h)
+      set(GENERATE_DOTNET_API_CMD td_generate_dotnet_api ${TLO_AUTO_INCLUDE_DIR}/td_api.tlo && ${PHP_EXECUTABLE} DotnetTlDocumentationGenerator.php scheme/td_api.tl auto/td/telegram/TdDotNetApi.h)
     else()
-      set(GENERATE_DOTNET_API_CMD td_generate_dotnet_api ${TL_TD_API_TLO})
+      set(GENERATE_DOTNET_API_CMD td_generate_dotnet_api ${TLO_AUTO_INCLUDE_DIR}/td_api.tlo)
     endif()
 
     add_executable(td_generate_dotnet_api generate_dotnet.cpp tl_writer_dotnet.h)
     target_link_libraries(td_generate_dotnet_api PRIVATE tdtl)
     add_custom_target(generate_dotnet_api
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-      COMMAND ${GENERATE_DOTNET_API_CMD} ${TL_TD_API_TLO}
-      COMMENT "Generate .NET API files"
-      DEPENDS td_generate_dotnet_api generate_td_api_tlo DotnetTlDocumentationGenerator.php
-    )
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMAND ${GENERATE_DOTNET_API_CMD}
+            COMMENT "Generate .NET API files"
+            DEPENDS td_generate_dotnet_api tl_generate_tlo ${TLO_AUTO_INCLUDE_DIR}/td_api.tlo ${CMAKE_CURRENT_SOURCE_DIR}/scheme/td_api.tl ${CMAKE_CURRENT_SOURCE_DIR}/DotnetTlDocumentationGenerator.php
+            )
   endif()
 
   add_executable(remove_documentation remove_documentation.cpp)

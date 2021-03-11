@@ -120,7 +120,7 @@ class FileNode {
   void on_pmc_flushed();
   void on_info_flushed();
 
-  string suggested_name() const;
+  string suggested_path() const;
   bool empty = false;
 
  private:
@@ -158,6 +158,7 @@ class FileNode {
   double last_successful_force_reupload_time_ = -1e10;
 
   FileId upload_pause_;
+
   int8 upload_priority_ = 0;
   int8 download_priority_ = 0;
   int8 generate_priority_ = 0;
@@ -184,6 +185,8 @@ class FileNode {
 
   bool upload_was_update_file_reference_{false};
   bool download_was_update_file_reference_{false};
+
+  bool upload_prefer_small_{false};
 
   void init_ready_size();
 
@@ -259,7 +262,7 @@ class FileView {
 
   const string &remote_name() const;
 
-  string suggested_name() const;
+  string suggested_path() const;
 
   DialogId owner_dialog_id() const;
 
@@ -454,7 +457,7 @@ class FileManager : public FileLoadManager::Callback {
                 int64 limit);
   void upload(FileId file_id, std::shared_ptr<UploadCallback> callback, int32 new_priority, uint64 upload_order);
   void resume_upload(FileId file_id, std::vector<int> bad_parts, std::shared_ptr<UploadCallback> callback,
-                     int32 new_priority, uint64 upload_order, bool force = false);
+                     int32 new_priority, uint64 upload_order, bool force = false, bool prefer_small = false);
   void cancel_upload(FileId file_id);
   bool delete_partial_remote_location(FileId file_id);
   void delete_file_reference(FileId file_id, std::string file_reference);
@@ -484,6 +487,8 @@ class FileManager : public FileLoadManager::Callback {
   Result<FileId> get_map_thumbnail_file_id(Location location, int32 zoom, int32 width, int32 height, int32 scale,
                                            DialogId owner_dialog_id) TD_WARN_UNUSED_RESULT;
 
+  FileType guess_file_type(const tl_object_ptr<td_api::InputFile> &file);
+
   vector<tl_object_ptr<telegram_api::InputDocument>> get_input_documents(const vector<FileId> &file_ids);
 
   static bool extract_was_uploaded(const tl_object_ptr<telegram_api::InputMedia> &input_media);
@@ -505,7 +510,7 @@ class FileManager : public FileLoadManager::Callback {
 
  private:
   void destroy_query(int32 file_id);
-  
+
   void memory_cleanup(bool full);
 
   Result<FileId> check_input_file_id(FileType type, Result<FileId> result, bool is_encrypted, bool allow_zero,

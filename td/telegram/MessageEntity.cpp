@@ -677,9 +677,7 @@ static vector<Slice> match_urls(Slice str) {
           url_begin_ptr = url_begin_ptr - 7;
         } else if (ends_with(protocol, "https")) {
           url_begin_ptr = url_begin_ptr - 8;
-        } else if (ends_with(protocol, "sftp")) {
-          url_begin_ptr = url_begin_ptr - 7;
-        } else if (ends_with(protocol, "ftp") && protocol != "tftp") {
+        } else if (ends_with(protocol, "ftp") && protocol != "tftp" && protocol != "sftp") {
           url_begin_ptr = url_begin_ptr - 6;
         } else {
           is_bad = true;
@@ -983,8 +981,7 @@ Slice fix_url(Slice str) {
 
   bool has_protocol = false;
   auto str_begin = to_lower(str.substr(0, 8));
-  if (begins_with(str_begin, "http://") || begins_with(str_begin, "https://") || begins_with(str_begin, "sftp://") ||
-      begins_with(str_begin, "ftp://")) {
+  if (begins_with(str_begin, "http://") || begins_with(str_begin, "https://") || begins_with(str_begin, "ftp://")) {
     auto pos = str.find(':');
     str = str.substr(pos + 3);
     has_protocol = true;
@@ -3032,6 +3029,7 @@ Result<vector<MessageEntity>> get_message_entities(const ContactsManager *contac
                                                    vector<tl_object_ptr<td_api::textEntity>> &&input_entities,
                                                    bool allow_all) {
   vector<MessageEntity> entities;
+  entities.reserve(input_entities.size());
   for (auto &entity : input_entities) {
     if (entity == nullptr || entity->type_ == nullptr) {
       continue;
@@ -3756,23 +3754,32 @@ static void merge_new_entities(vector<MessageEntity> &entities, vector<MessageEn
 
 Status fix_formatted_text(string &text, vector<MessageEntity> &entities, bool allow_empty, bool skip_new_entities,
                           bool skip_bot_commands, bool for_draft) {
-  if (!check_utf8(text)) {
-    return Status::Error(400, "Strings must be encoded in UTF-8");
-  }
-
-  for (auto &entity : entities) {
-    if (entity.offset < 0 || entity.offset > 1000000) {
-      return Status::Error(400, PSLICE() << "Receive an entity with incorrect offset " << entity.offset);
+  string result;
+  if (entities.empty()) {
+    // fast path
+    if (!clean_input_string(text)) {
+      return Status::Error(400, "Strings must be encoded in UTF-8");
     }
-    if (entity.length < 0 || entity.length > 1000000) {
-      return Status::Error(400, PSLICE() << "Receive an entity with incorrect length " << entity.length);
+    result = std::move(text);
+  } else {
+    if (!check_utf8(text)) {
+      return Status::Error(400, "Strings must be encoded in UTF-8");
     }
+
+    for (auto &entity : entities) {
+      if (entity.offset < 0 || entity.offset > 1000000) {
+        return Status::Error(400, PSLICE() << "Receive an entity with incorrect offset " << entity.offset);
+      }
+      if (entity.length < 0 || entity.length > 1000000) {
+        return Status::Error(400, PSLICE() << "Receive an entity with incorrect length " << entity.length);
+      }
+    }
+    td::remove_if(entities, [](const MessageEntity &entity) { return entity.length == 0; });
+
+    fix_entities(entities);
+
+    TRY_RESULT_ASSIGN(result, clean_input_string_with_entities(text, entities));
   }
-  td::remove_if(entities, [](const MessageEntity &entity) { return entity.length == 0; });
-
-  fix_entities(entities);
-
-  TRY_RESULT(result, clean_input_string_with_entities(text, entities));
 
   // now entities are still sorted by offset and length, but not type,
   // because some characters could be deleted and after that some entities begin to share a common end

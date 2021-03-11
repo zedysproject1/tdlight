@@ -30,18 +30,18 @@
 
 namespace td {
 
-static uint16 get_dimension(int32 size) {
+static uint16 get_dimension(int32 size, const char *source) {
   if (size < 0 || size > 65535) {
-    LOG(ERROR) << "Wrong image dimension = " << size;
+    LOG(ERROR) << "Wrong image dimension = " << size << " from " << source;
     return 0;
   }
   return narrow_cast<uint16>(size);
 }
 
-Dimensions get_dimensions(int32 width, int32 height) {
+Dimensions get_dimensions(int32 width, int32 height, const char *source) {
   Dimensions result;
-  result.width = get_dimension(width);
-  result.height = get_dimension(height);
+  result.width = get_dimension(width, source);
+  result.height = get_dimension(height, source);
   if (result.width == 0 || result.height == 0) {
     result.width = 0;
     result.height = 0;
@@ -339,7 +339,7 @@ PhotoSize get_secret_thumbnail_photo_size(FileManager *file_manager, BufferSlice
   }
   PhotoSize res;
   res.type = 't';
-  res.dimensions = get_dimensions(width, height);
+  res.dimensions = get_dimensions(width, height, "get_secret_thumbnail_photo_size");
   res.size = narrow_cast<int32>(bytes.size());
 
   // generate some random remote location to save
@@ -360,7 +360,7 @@ PhotoSize get_secret_thumbnail_photo_size(FileManager *file_manager, BufferSlice
 Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSource source, int64 id,
                                           int64 access_hash, std::string file_reference, DcId dc_id,
                                           DialogId owner_dialog_id, tl_object_ptr<telegram_api::PhotoSize> &&size_ptr,
-                                          PhotoFormat format, bool expect_jpeg_minithumbnail) {
+                                          PhotoFormat format) {
   CHECK(size_ptr != nullptr);
 
   tl_object_ptr<telegram_api::fileLocationToBeDeprecated> location;
@@ -375,7 +375,7 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
 
       type = std::move(size->type_);
       location = std::move(size->location_);
-      res.dimensions = get_dimensions(size->w_, size->h_);
+      res.dimensions = get_dimensions(size->w_, size->h_, "photoSize");
       res.size = size->size_;
 
       break;
@@ -386,7 +386,7 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
       type = std::move(size->type_);
       location = std::move(size->location_);
       CHECK(size->bytes_.size() <= static_cast<size_t>(std::numeric_limits<int32>::max()));
-      res.dimensions = get_dimensions(size->w_, size->h_);
+      res.dimensions = get_dimensions(size->w_, size->h_, "photoCachedSize");
       res.size = static_cast<int32>(size->bytes_.size());
 
       content = std::move(size->bytes_);
@@ -395,11 +395,11 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
     }
     case telegram_api::photoStrippedSize::ID: {
       auto size = move_tl_object_as<telegram_api::photoStrippedSize>(size_ptr);
-      if (!expect_jpeg_minithumbnail) {
+      if (format != PhotoFormat::Jpeg) {
         if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
           LOG(DEBUG) << "Receive unexpected JPEG minithumbnail";
         } else {
-          LOG(ERROR) << "Receive unexpected JPEG minithumbnail";
+          LOG(ERROR) << "Receive unexpected JPEG minithumbnail in photo of format " << format;
         }
         return std::move(res);
       }
@@ -416,7 +416,7 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
 
       type = std::move(size->type_);
       location = std::move(size->location_);
-      res.dimensions = get_dimensions(size->w_, size->h_);
+      res.dimensions = get_dimensions(size->w_, size->h_, "photoSizeProgressive");
       res.size = size->sizes_.back();
       size->sizes_.pop_back();
       res.progressive_sizes = std::move(size->sizes_);
@@ -425,8 +425,8 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
     }
     case telegram_api::photoPathSize::ID: {
       auto size = move_tl_object_as<telegram_api::photoPathSize>(size_ptr);
-      if (expect_jpeg_minithumbnail) {
-        LOG(ERROR) << "Receive unexpected SVG minithumbnail";
+      if (format != PhotoFormat::Tgs && format != PhotoFormat::Webp) {
+        LOG(ERROR) << "Receive unexpected SVG minithumbnail in photo of format " << format;
         return std::move(res);
       }
       return size->bytes_.as_slice().str();
@@ -468,7 +468,7 @@ AnimationSize get_animation_size(FileManager *file_manager, PhotoSizeSource sour
     LOG(ERROR) << "Wrong videoSize \"" << size->type_ << "\" in " << to_string(size);
   }
   res.type = static_cast<uint8>(size->type_[0]);
-  res.dimensions = get_dimensions(size->w_, size->h_);
+  res.dimensions = get_dimensions(size->w_, size->h_, "get_animation_size");
   res.size = size->size_;
   if ((size->flags_ & telegram_api::videoSize::VIDEO_START_TS_MASK) != 0) {
     res.main_frame_timestamp = size->video_start_ts_;
@@ -542,7 +542,7 @@ PhotoSize get_web_document_photo_size(FileManager *file_manager, FileType file_t
     switch (attribute->get_id()) {
       case telegram_api::documentAttributeImageSize::ID: {
         auto image_size = move_tl_object_as<telegram_api::documentAttributeImageSize>(attribute);
-        dimensions = get_dimensions(image_size->w_, image_size->h_);
+        dimensions = get_dimensions(image_size->w_, image_size->h_, "web documentAttributeImageSize");
         break;
       }
       case telegram_api::documentAttributeAnimated::ID:
@@ -692,7 +692,7 @@ Photo get_encrypted_file_photo(FileManager *file_manager, tl_object_ptr<telegram
 
   PhotoSize s;
   s.type = 'i';
-  s.dimensions = get_dimensions(photo->w_, photo->h_);
+  s.dimensions = get_dimensions(photo->w_, photo->h_, "get_encrypted_file_photo");
   s.size = photo->size_;
   s.file_id = file_id;
   res.photos.push_back(s);
@@ -725,7 +725,7 @@ Photo get_photo(FileManager *file_manager, tl_object_ptr<telegram_api::photo> &&
   for (auto &size_ptr : photo->sizes_) {
     auto photo_size = get_photo_size(file_manager, {FileType::Photo, 0}, photo->id_, photo->access_hash_,
                                      photo->file_reference_.as_slice().str(), dc_id, owner_dialog_id,
-                                     std::move(size_ptr), PhotoFormat::Jpeg, true);
+                                     std::move(size_ptr), PhotoFormat::Jpeg);
     if (photo_size.get_offset() == 0) {
       PhotoSize &size = photo_size.get<0>();
       if (size.type == 0 || size.type == 't' || size.type == 'i' || size.type == 'u' || size.type == 'v') {
@@ -842,7 +842,7 @@ tl_object_ptr<telegram_api::InputMedia> photo_get_input_media(FileManager *file_
       if (ttl != 0) {
         flags |= telegram_api::inputMediaPhotoExternal::TTL_SECONDS_MASK;
       }
-      LOG(INFO) << "Create inputMediaPhotoExternal with a URL " << file_view.url() << " and ttl " << ttl;
+      LOG(INFO) << "Create inputMediaPhotoExternal with a URL " << file_view.url() << " and TTL " << ttl;
       return make_tl_object<telegram_api::inputMediaPhotoExternal>(flags, file_view.url(), ttl);
     }
     if (input_file == nullptr) {
