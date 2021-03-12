@@ -1039,14 +1039,8 @@ bool FileManager::try_fix_partial_local_location(FileNodePtr node) {
 }
 
 FileManager::FileIdInfo *FileManager::get_file_id_info(FileId file_id) {
-  if (use_standard_algorithm_) {
-    LOG_CHECK(0 <= file_id.get() && file_id.get() < static_cast<int32>(file_id_info_.size()))
-        << file_id << " " << file_id_info_.size();
-    return &file_id_info_[file_id.get()];
-  } else {
-    file_id.set_time(); // update last access time of FileId
-    return &file_id_info_.at(file_id.get());
-  }
+  file_id.set_time(); // update last access time of FileId
+  return &file_id_info_.at(file_id.get());
 }
 
 FileId FileManager::dup_file_id(FileId file_id) {
