@@ -26,6 +26,7 @@
 #include "td/telegram/InputGroupCallId.h"
 #include "td/telegram/logevent/LogEvent.h"
 #include "td/telegram/logevent/LogEventHelper.h"
+#include "td/telegram/MemoryManager.h"
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/MessageTtlSetting.h"
 #include "td/telegram/misc.h"
@@ -3450,8 +3451,10 @@ ContactsManager::~ContactsManager() = default;
 
 void ContactsManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup(true);
+  if (td_->memory_manager_->can_manage_memory()) {
+    // Completely clear memory when closing, to avoid memory leaks
+    memory_cleanup(true);
+  }
 }
 
 UserId ContactsManager::load_my_id() {

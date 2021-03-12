@@ -85,7 +85,13 @@ void MemoryManager::tear_down() {
 }
 
 bool MemoryManager::can_manage_memory() const {
-  return td_->auth_manager_->is_authorized() && !G()->close_flag();
+  if (!(td_->auth_manager_->is_authorized() && !G()->close_flag())) {
+    return false;
+  }
+  if (G()->parameters().use_message_db || G()->parameters().use_chat_info_db || G()->parameters().use_file_db) {
+    return false;
+  }
+  return true;
 }
 
 void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) const {

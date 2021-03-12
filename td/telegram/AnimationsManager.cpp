@@ -11,6 +11,7 @@
 #include "td/telegram/DialogId.h"
 #include "td/telegram/Document.h"
 #include "td/telegram/DocumentsManager.h"
+#include "td/telegram/MemoryManager.h"
 #include "td/telegram/FileReferenceManager.h"
 #include "td/telegram/files/FileManager.h"
 #include "td/telegram/files/FileType.h"
@@ -146,8 +147,10 @@ AnimationsManager::AnimationsManager(Td *td, ActorShared<> parent) : td_(td), pa
 
 void AnimationsManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup(true);
+  if (td_->memory_manager_->can_manage_memory()) {
+    // Completely clear memory when closing, to avoid memory leaks
+    memory_cleanup(true);
+  }
 }
 
 int32 AnimationsManager::get_animation_duration(FileId file_id) const {

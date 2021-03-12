@@ -15,6 +15,7 @@
 #include "td/telegram/files/FileLoaderUtils.h"
 #include "td/telegram/files/FileLocation.h"
 #include "td/telegram/files/FileLocation.hpp"
+#include "td/telegram/MemoryManager.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/logevent/LogEvent.h"
 #include "td/telegram/misc.h"
@@ -4196,8 +4197,10 @@ void FileManager::memory_stats(vector<string> &output) {
 
 void FileManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup(true);
+  if (G()->memory_manager().get_actor_unsafe()->can_manage_memory()) {
+    // Completely clear memory when closing, to avoid memory leaks
+    memory_cleanup(true);
+  }
 }
 
 }  // namespace td

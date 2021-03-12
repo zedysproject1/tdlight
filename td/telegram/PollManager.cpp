@@ -14,6 +14,7 @@
 #include "td/telegram/Global.h"
 #include "td/telegram/logevent/LogEvent.h"
 #include "td/telegram/logevent/LogEventHelper.h"
+#include "td/telegram/MemoryManager.h"
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/misc.h"
 #include "td/telegram/net/NetActor.h"
@@ -265,8 +266,10 @@ void PollManager::start_up() {
 
 void PollManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup(true);
+  if (td_->memory_manager_->can_manage_memory()) {
+    // Completely clear memory when closing, to avoid memory leaks
+    memory_cleanup(true);
+  }
 }
 
 PollManager::~PollManager() = default;

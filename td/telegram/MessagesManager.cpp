@@ -29,6 +29,7 @@
 #include "td/telegram/InputMessageText.h"
 #include "td/telegram/Location.h"
 #include "td/telegram/logevent/LogEvent.h"
+#include "td/telegram/MemoryManager.h"
 #include "td/telegram/MessageContent.h"
 #include "td/telegram/MessageEntity.h"
 #include "td/telegram/MessageEntity.hpp"
@@ -12441,8 +12442,10 @@ class MessagesManager::DialogFiltersLogEvent {
 
 void MessagesManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup(true);
+  if (td_->memory_manager_->can_manage_memory()) {
+    // Completely clear memory when closing, to avoid memory leaks
+    memory_cleanup(true);
+  }
 }
 
 void MessagesManager::start_up() {

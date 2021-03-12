@@ -13,6 +13,7 @@
 #include "td/telegram/ContactsManager.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/MessageId.h"
+#include "td/telegram/MemoryManager.h"
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/misc.h"
 #include "td/telegram/net/NetQuery.h"
@@ -478,8 +479,10 @@ GroupCallManager::~GroupCallManager() = default;
 
 void GroupCallManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup(true);
+  if (td_->memory_manager_->can_manage_memory()) {
+    // Completely clear memory when closing, to avoid memory leaks
+    memory_cleanup(true);
+  }
 }
 
 void GroupCallManager::memory_cleanup() {
