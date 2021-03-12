@@ -65,9 +65,9 @@
 #elif defined(__WINDOWS__)
 
 #	include <winsock2.h>
-#   ifdef __MINGW32__
+#ifdef __MINGW32__
 #	include <sys/param.h>
-#   endif
+#endif
 
 #	if BYTE_ORDER == LITTLE_ENDIAN
 
