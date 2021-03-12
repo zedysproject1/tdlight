@@ -800,9 +800,17 @@ void prepare_path_for_pmc(FileType file_type, string &path) {
 FileManager::FileManager(unique_ptr<Context> context) : context_(std::move(context)) {
   if (G()->parameters().use_file_db) {
     file_db_ = G()->td_db()->get_file_db_shared();
+    use_standard_algorithm_ = true;
+  } else {
+    use_standard_algorithm_ = false;
   }
 
   parent_ = context_->create_reference();
+  // only the original tdlib algorithm requires a next_file_id() call at startup
+  if (use_standard_algorithm_) {
+    next_file_id();
+    next_file_node_id();
+  }
 
   std::unordered_set<string> dir_paths;
   for (int32 i = 0; i < MAX_FILE_TYPE; i++) {
@@ -1031,8 +1039,14 @@ bool FileManager::try_fix_partial_local_location(FileNodePtr node) {
 }
 
 FileManager::FileIdInfo *FileManager::get_file_id_info(FileId file_id) {
-  file_id.set_time(); // update last access time of FileId
-  return &file_id_info_.at(file_id.get());
+  if (use_standard_algorithm_) {
+    LOG_CHECK(0 <= file_id.get() && file_id.get() < static_cast<int32>(file_id_info_.size()))
+        << file_id << " " << file_id_info_.size();
+    return &file_id_info_[file_id.get()];
+  } else {
+    file_id.set_time(); // update last access time of FileId
+    return &file_id_info_.at(file_id.get());
+  }
 }
 
 FileId FileManager::dup_file_id(FileId file_id) {
@@ -1067,12 +1081,16 @@ void FileManager::try_forget_file_id(FileId file_id) {
   bool is_removed = td::remove(file_node->file_ids_, file_id);
   CHECK(is_removed);
   *info = FileIdInfo();
-  file_id_info_.erase(file_id.get());
-  // Start custom-patches
-  file_id.reset_time(); // delete last access time of FileId
-  destroy_query(file_id.get());
-  context_->destroy_file_source(file_id);
-  // End custom-patches
+  if (use_standard_algorithm_) {
+    file_id_info_.erase(file_id.get());
+  } else {
+    file_id_info_.erase(file_id.get());
+    // Start custom-patches
+    file_id.reset_time();  // delete last access time of FileId
+    destroy_query(file_id.get());
+    context_->destroy_file_source(file_id);
+    // End custom-patches
+  }
 }
 
 FileId FileManager::register_empty(FileType type) {
@@ -1087,8 +1105,12 @@ void FileManager::on_file_unlink(const FullLocalFileLocation &location) {
   }
   auto file_id = it->second;
   auto file_node = get_sync_file_node(file_id);
-  if (!file_node) {
+  if (use_standard_algorithm_) {
+    CHECK(file_node);
+  } else {
+    if (!file_node) {
       return;
+    }
   }
   file_node->drop_local_location();
   try_flush_node_info(file_node, "on_file_unlink");
@@ -3334,7 +3356,7 @@ FileId FileManager::next_file_id() {
   auto id = file_id_seqno++;
   FileId res(static_cast<int32>(id), 0);
   file_id_info_[id] = {};
-  res.set_time(); // update last access time of FileId
+  res.set_time();  // update last access time of FileId
   return res;
 }
 
@@ -3862,6 +3884,9 @@ void FileManager::hangup() {
 }
 
 void FileManager::destroy_query(int32 file_id) {
+  if (use_standard_algorithm_) {
+    return;
+  }
   for (auto &query_id : queries_container_.ids()) {
     auto query = queries_container_.get(query_id);
     if (query != nullptr && file_id == query->file_id_.get()) {
@@ -3876,6 +3901,9 @@ void FileManager::memory_cleanup() {
 }
 
 void FileManager::memory_cleanup(bool full) {
+  if (use_standard_algorithm_) {
+    return;
+  }
   if (!full) {
     LOG(INFO) << "Initial registered ids: " << file_id_info_.size() << " registered nodes: " << file_nodes_.size();
   }

@@ -564,6 +564,7 @@ class FileManager : public FileLoadManager::Callback {
   ActorShared<> parent_;
   unique_ptr<Context> context_;
   std::shared_ptr<FileDbInterface> file_db_;
+  bool use_standard_algorithm_;
 
   FileIdInfo *get_file_id_info(FileId file_id);
 
