@@ -117,7 +117,7 @@ Document DocumentsManager::on_get_document(RemoteDocument remote_document, Dialo
     auto video_dimensions = get_dimensions(video->w_, video->h_, "documentAttributeVideo");
     if (dimensions.width == 0 || (video_dimensions.width != 0 && video_dimensions != dimensions)) {
       if (dimensions.width != 0) {
-        LOG(ERROR) << "Receive ambiguous video dimensions " << dimensions << " and " << video_dimensions;
+        LOG(INFO) << "Receive ambiguous video dimensions " << dimensions << " and " << video_dimensions;
       }
       dimensions = video_dimensions;
     }
