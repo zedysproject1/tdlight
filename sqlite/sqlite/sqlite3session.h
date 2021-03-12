@@ -199,7 +199,7 @@ int sqlite3session_attach(
 ** The second argument (xFilter) is the "filter callback". For changes to rows 
 ** in tables that are not attached to the Session object, the filter is called
 ** to determine whether changes to the table's rows should be tracked or not. 
-** If xFilter returns 0, changes are not tracked. Note that once a table is
+** If xFilter returns 0, changes are not tracked. Note that once a table is 
 ** attached, xFilter will not be called again.
 */
 void sqlite3session_table_filter(
