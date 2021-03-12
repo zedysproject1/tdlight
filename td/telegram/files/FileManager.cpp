@@ -4199,4 +4199,5 @@ void FileManager::tear_down() {
   // Completely clear memory when closing, to avoid memory leaks
   memory_cleanup(true);
 }
+
 }  // namespace td

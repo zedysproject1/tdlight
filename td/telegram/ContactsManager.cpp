@@ -15973,8 +15973,6 @@ void ContactsManager::memory_cleanup(bool full) {
     secret_chats_with_user_.clear();
     secret_chats_with_user_.rehash(0);
   }
-  dialog_invite_links_.clear();
-  dialog_invite_links_.rehash(0);
   invite_link_infos_.clear();
   invite_link_infos_.rehash(0);
   dialog_access_by_invite_link_.clear();
@@ -16013,8 +16011,6 @@ void ContactsManager::memory_cleanup(bool full) {
   imported_contacts_.rehash(0);
   received_channel_participant_.clear();
   received_channel_participant_.rehash(0);
-  received_channel_participants_.clear();
-  received_channel_participants_.rehash(0);
   cached_channel_participants_.clear();
   cached_channel_participants_.rehash(0);
   load_contacts_queries_.clear();
@@ -16076,8 +16072,6 @@ void ContactsManager::memory_stats(vector<string> &output) {
   output.push_back(",");
   output.push_back("\"secret_chats_with_user_\":"); output.push_back(std::to_string(secret_chats_with_user_.size()));
   output.push_back(",");
-  output.push_back("\"dialog_invite_links_\":"); output.push_back(std::to_string(dialog_invite_links_.size()));
-  output.push_back(",");
   output.push_back("\"invite_link_infos_\":"); output.push_back(std::to_string(invite_link_infos_.size()));
   output.push_back(",");
   output.push_back("\"dialog_access_by_invite_link_\":"); output.push_back(std::to_string(dialog_access_by_invite_link_.size()));
@@ -16113,8 +16107,6 @@ void ContactsManager::memory_stats(vector<string> &output) {
   output.push_back("\"imported_contacts_\":"); output.push_back(std::to_string(imported_contacts_.size()));
   output.push_back(",");
   output.push_back("\"received_channel_participant_\":"); output.push_back(std::to_string(received_channel_participant_.size()));
-  output.push_back(",");
-  output.push_back("\"received_channel_participants_\":"); output.push_back(std::to_string(received_channel_participants_.size()));
   output.push_back(",");
   output.push_back("\"cached_channel_participants_\":"); output.push_back(std::to_string(cached_channel_participants_.size()));
   output.push_back(",");

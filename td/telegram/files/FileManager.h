@@ -153,6 +153,7 @@ class FileNode {
   FileEncryptionKey encryption_key_;
   FileDbId pmc_id_;
   std::vector<FileId> file_ids_;
+
   FileId main_file_id_ = {};
 
   double last_successful_force_reupload_time_ = -1e10;

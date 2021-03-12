@@ -329,16 +329,17 @@ Status TdDb::init_sqlite(int32 scheduler_id, const TdParameters &parameters, DbK
 
   // init DialogDb
   bool dialog_db_was_created = false;
-
   if (use_dialog_db) {
     TRY_STATUS(init_dialog_db(db, user_version, binlog_pmc, dialog_db_was_created));
+  } else {
+    TRY_STATUS(drop_dialog_db(db, user_version));
   }
 
   // init MessagesDb
-  TRY_STATUS(drop_messages_db(db, user_version));
-
   if (use_message_db) {
     TRY_STATUS(init_messages_db(db, user_version));
+  } else {
+    TRY_STATUS(drop_messages_db(db, user_version));
   }
 
   // init filesDb
@@ -526,6 +527,8 @@ Result<string> TdDb::get_stats() {
                               << mask << "'",
                      PSLICE() << table << ":" << mask);
   };
+  TRY_STATUS(run_query("SELECT 0, SUM(length(data)), COUNT(*) FROM messages WHERE 1", "messages"));
+  TRY_STATUS(run_query("SELECT 0, SUM(length(data)), COUNT(*) FROM dialogs WHERE 1", "dialogs"));
   TRY_STATUS(run_kv_query("%", "common"));
   TRY_STATUS(run_kv_query("%", "files"));
   TRY_STATUS(run_kv_query("wp%"));

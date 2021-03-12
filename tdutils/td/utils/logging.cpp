@@ -17,7 +17,6 @@
 #include <cstdlib>
 #include <limits>
 #include <mutex>
-#include <csignal>
 
 #if TD_ANDROID
 #include <android/log.h>

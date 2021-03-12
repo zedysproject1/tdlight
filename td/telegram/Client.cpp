@@ -504,7 +504,7 @@ class ClientManager::Impl final {
     if (response.request_id == 0 && response.object != nullptr &&
         response.object->get_id() == td_api::updateAuthorizationState::ID &&
         static_cast<const td_api::updateAuthorizationState *>(response.object.get())->authorization_state_->get_id() ==
-        td_api::authorizationStateClosed::ID) {
+            td_api::authorizationStateClosed::ID) {
       auto lock = impls_mutex_.lock_write().move_as_ok();
       close_impl(response.client_id);
 
