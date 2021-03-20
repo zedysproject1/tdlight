@@ -1646,8 +1646,8 @@ class MessagesManager : public Actor {
   static constexpr int32 MAX_SEARCH_MESSAGES = 100;                // server side limit
   static constexpr int32 MIN_SEARCH_PUBLIC_DIALOG_PREFIX_LEN = 4;  // server side limit
   static constexpr int32 MIN_CHANNEL_DIFFERENCE = 10;
-  static constexpr int32 MAX_CHANNEL_DIFFERENCE = 100;
-  static constexpr int32 MAX_BOT_CHANNEL_DIFFERENCE = 100000;   // server side limit
+  static constexpr int32 MAX_BOT_CHANNEL_DIFFERENCE = 1000000;   // server side limit
+  static constexpr int32 MAX_CHANNEL_DIFFERENCE = MAX_BOT_CHANNEL_DIFFERENCE;
   static constexpr int32 MAX_RECENTLY_FOUND_DIALOGS = 30;       // some reasonable value
   static constexpr size_t MAX_TITLE_LENGTH = 128;               // server side limit for chat title
   static constexpr size_t MAX_DESCRIPTION_LENGTH = 255;         // server side limit for chat description
@@ -2773,6 +2773,8 @@ class MessagesManager : public Actor {
   bool running_get_channel_difference(DialogId dialog_id) const;
 
   void on_channel_get_difference_timeout(DialogId dialog_id);
+
+  void get_channel_difference_delayed(DialogId dialog_id, int32 pts, bool force, double timeout, const char *source);
 
   void get_channel_difference(DialogId dialog_id, int32 pts, bool force, const char *source);
 

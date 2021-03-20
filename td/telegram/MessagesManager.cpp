@@ -35641,6 +35641,23 @@ class MessagesManager::GetChannelDifferenceLogEvent {
   }
 };
 
+void MessagesManager::get_channel_difference_delayed(DialogId dialog_id, int32 pts,
+                                             bool force, double delay_seconds, const char *source) {
+  if (delay_seconds <= 0.0) {
+    // Execute get_channel_difference immediatly
+    get_channel_difference(dialog_id,pts, force, "on_get_channel_difference");
+  } else {
+    // Schedule get_channel_difference
+    create_actor<SleepActor>(
+        "GetChannelDifferenceDelayedActor", delay_seconds,
+        PromiseCreator::lambda([actor_id = actor_id(this), dialog_id, pts, force](Result<Unit> result) {
+          send_closure(actor_id, &MessagesManager::get_channel_difference, dialog_id, pts, force,
+                       "on_get_channel_difference");
+        }))
+        .release();
+  }
+}
+
 void MessagesManager::get_channel_difference(DialogId dialog_id, int32 pts, bool force, const char *source) {
   if (channel_get_difference_retry_timeout_.has_timeout(dialog_id.get())) {
     LOG(INFO) << "Skip running channels.getDifference for " << dialog_id << " from " << source
@@ -36057,7 +36074,9 @@ void MessagesManager::on_get_channel_difference(
 
   if (!is_final) {
     LOG_IF(ERROR, timeout > 0) << "Have timeout in not final ChannelDifference in " << dialog_id;
-    get_channel_difference(dialog_id, d->pts, true, "on_get_channel_difference");
+    auto delay_seconds = static_cast<double>(G()->shared_config()
+                                  .get_option_integer("get_channel_difference_delay_milliseconds", 0)) / 1000.0;
+    get_channel_difference_delayed(dialog_id, d->pts, true, delay_seconds, "on_get_channel_difference");
     return;
   }
 

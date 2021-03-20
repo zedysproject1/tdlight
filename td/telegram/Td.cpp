@@ -7462,6 +7462,11 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
         return;
       }
       break;
+    case 'g':
+      if (set_integer_option("get_channel_difference_delay_milliseconds")) {
+        return;
+      }
+      break;
     case 'i':
       if (set_boolean_option("ignore_background_updates")) {
         return;
