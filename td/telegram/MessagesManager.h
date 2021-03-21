@@ -151,6 +151,8 @@ class MessagesManager : public Actor {
 
   td_api::object_ptr<td_api::MessageSender> get_message_sender_object(UserId user_id, DialogId dialog_id);
 
+  td_api::object_ptr<td_api::MessageSender> get_message_sender_object_const(DialogId dialog_id) const;
+
   td_api::object_ptr<td_api::MessageSender> get_message_sender_object(DialogId dialog_id);
 
   static vector<MessageId> get_message_ids(const vector<int64> &input_message_ids);
@@ -290,9 +292,12 @@ class MessagesManager : public Actor {
   void on_update_dialog_folder_id(DialogId dialog_id, FolderId folder_id);
 
   void on_update_dialog_group_call(DialogId dialog_id, bool has_active_group_call, bool is_group_call_empty,
-                                   const char *source);
+                                   const char *source, bool force = false);
 
   void on_update_dialog_group_call_id(DialogId dialog_id, InputGroupCallId input_group_call_id);
+
+  void on_update_dialog_default_join_group_call_as_dialog_id(DialogId dialog_id, DialogId default_join_as_dialog_id,
+                                                             bool force);
 
   void on_update_dialog_message_ttl_setting(DialogId dialog_id, MessageTtlSetting message_ttl_setting);
 
@@ -338,8 +343,9 @@ class MessagesManager : public Actor {
 
   void on_update_delete_scheduled_messages(DialogId dialog_id, vector<ScheduledServerMessageId> &&server_message_ids);
 
-  void on_user_dialog_action(DialogId dialog_id, MessageId top_thread_message_id, UserId user_id, DialogAction action,
-                             int32 date, MessageContentType message_content_type = MessageContentType::None);
+  void on_user_dialog_action(DialogId dialog_id, MessageId top_thread_message_id, DialogId typing_dialog_id,
+                             DialogAction action, int32 date,
+                             MessageContentType message_content_type = MessageContentType::None);
 
   void read_history_inbox(DialogId dialog_id, MessageId max_message_id, int32 unread_count, const char *source);
 
@@ -501,6 +507,11 @@ class MessagesManager : public Actor {
 
   bool have_dialog(DialogId dialog_id) const;
   bool have_dialog_force(DialogId dialog_id);
+
+  bool have_dialog_info(DialogId dialog_id) const;
+  bool have_dialog_info_force(DialogId dialog_id) const;
+
+  void reload_dialog_info_full(DialogId dialog_id);
 
   bool load_dialog(DialogId dialog_id, int left_tries, Promise<Unit> &&promise);
 
@@ -799,6 +810,11 @@ class MessagesManager : public Actor {
   void get_login_url(DialogId dialog_id, MessageId message_id, int32 button_id, bool allow_write_access,
                      Promise<td_api::object_ptr<td_api::httpUrl>> &&promise);
 
+  void get_link_login_url_info(const string &url, Promise<td_api::object_ptr<td_api::LoginUrlInfo>> &&promise);
+
+  void get_link_login_url(const string &url, bool allow_write_access,
+                          Promise<td_api::object_ptr<td_api::httpUrl>> &&promise);
+
   void on_authorization_success();
 
   void before_get_difference();
@@ -1084,7 +1100,7 @@ class MessagesManager : public Actor {
 
     int32 ttl_period = 0;       // counted from message send date
     int32 ttl = 0;              // counted from message content view date
-    double ttl_expires_at = 0;  // only for ttl
+    double ttl_expires_at = 0;  // only for TTL
 
     int64 media_album_id = 0;
 
@@ -1165,6 +1181,7 @@ class MessagesManager : public Actor {
     std::unordered_set<MessageId, MessageIdHash> updated_read_history_message_ids;
     LogEventIdWithGeneration set_folder_id_log_event_id;
     InputGroupCallId active_group_call_id;
+    DialogId default_join_group_call_as_dialog_id;
 
     FolderId folder_id;
     vector<DialogListId> dialog_list_ids;  // TODO replace with mask
@@ -1953,7 +1970,7 @@ class MessagesManager : public Actor {
                                                                                          const Message *m) const;
 
   bool update_message_interaction_info(DialogId dialog_id, Message *m, int32 view_count, int32 forward_count,
-                                       bool has_reply_info, MessageReplyInfo &&reply_info);
+                                       bool has_reply_info, MessageReplyInfo &&reply_info, const char *source);
 
   bool update_message_contains_unread_mention(Dialog *d, Message *m, bool contains_unread_mention, const char *source);
 
@@ -2403,7 +2420,7 @@ class MessagesManager : public Actor {
 
   void fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_database_message, MessageId last_database_message_id,
                       int64 order, int32 last_clear_history_date, MessageId last_clear_history_message_id,
-                      bool is_loaded_from_database);
+                      DialogId default_join_group_call_as_dialog_id, bool is_loaded_from_database);
 
   void add_dialog_last_database_message(Dialog *d, unique_ptr<Message> &&last_database_message);
 
@@ -2414,10 +2431,9 @@ class MessagesManager : public Actor {
   td_api::object_ptr<td_api::ChatActionBar> get_chat_action_bar_object(const Dialog *d,
                                                                        bool hide_unarchive = false) const;
 
-  td_api::object_ptr<td_api::chat> get_chat_object(const Dialog *d) const;
+  td_api::object_ptr<td_api::voiceChat> get_voice_chat_object(const Dialog *d) const;
 
-  bool have_dialog_info(DialogId dialog_id) const;
-  bool have_dialog_info_force(DialogId dialog_id) const;
+  td_api::object_ptr<td_api::chat> get_chat_object(const Dialog *d) const;
 
   Dialog *get_dialog(DialogId dialog_id);
   const Dialog *get_dialog(DialogId dialog_id) const;
@@ -2432,8 +2448,6 @@ class MessagesManager : public Actor {
   void send_get_dialog_query(DialogId dialog_id, Promise<Unit> &&promise, uint64 log_event_id, const char *source);
 
   void send_search_public_dialogs_query(const string &query, Promise<Unit> &&promise);
-
-  void reload_dialog_info_full(DialogId dialog_id);
 
   vector<DialogId> get_pinned_dialog_ids(DialogListId dialog_list_id) const;
 
@@ -3291,6 +3305,9 @@ class MessagesManager : public Actor {
       pending_add_dialog_last_database_message_dependent_dialogs_;
   std::unordered_map<DialogId, std::pair<int32, unique_ptr<Message>>, DialogIdHash>
       pending_add_dialog_last_database_message_;  // dialog -> dependency counter + message
+
+  std::unordered_map<DialogId, vector<DialogId>, DialogIdHash>
+      pending_add_default_join_group_call_as_dialog_id_;  // dialog_id -> dependent dialogs
 
   struct CallsDbState {
     std::array<MessageId, 2> first_calls_database_message_id_by_index;

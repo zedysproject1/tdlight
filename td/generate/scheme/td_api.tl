@@ -455,7 +455,7 @@ chatMemberStatusCreator custom_title:string is_anonymous:Bool is_member:Bool = C
 //@description The user is a member of a chat and has some additional privileges. In basic groups, administrators can edit and delete messages sent by others, add new members, ban unprivileged members, and manage voice chats. In supergroups and channels, there are more detailed options for administrator privileges
 //@custom_title A custom title of the administrator; 0-16 characters without emojis; applicable to supergroups only
 //@can_be_edited True, if the current user can edit the administrator privileges for the called user
-//@can_manage_chat True, if the administrator can get chat event log, get chat statistics, get message statistics in channels, get channel members, see anonymous administrators in supergoups and ignore slow mode. Implied by any other privilege; applicable to supergroups and channels only
+//@can_manage_chat True, if the administrator can get chat event log, get chat statistics, get message statistics in channels, get channel members, see anonymous administrators in supergroups and ignore slow mode. Implied by any other privilege; applicable to supergroups and channels only
 //@can_change_info True, if the administrator can change the chat title, photo, and other settings
 //@can_post_messages True, if the administrator can create channel posts; applicable to channels only
 //@can_edit_messages True, if the administrator can edit messages of other users and pin messages; applicable to channels only
@@ -464,7 +464,7 @@ chatMemberStatusCreator custom_title:string is_anonymous:Bool is_member:Bool = C
 //@can_restrict_members True, if the administrator can restrict, ban, or unban chat members
 //@can_pin_messages True, if the administrator can pin messages; applicable to basic groups and supergroups only
 //@can_promote_members True, if the administrator can add new administrators with a subset of their own privileges or demote administrators that were directly or indirectly promoted by them
-//@can_manage_voice_chats True, if the administrator can manage voice chats; applicable to basic groups and supergroups only
+//@can_manage_voice_chats True, if the administrator can manage voice chats
 //@is_anonymous True, if the administrator isn't shown in the chat member list and sends messages anonymously; applicable to supergroups only
 chatMemberStatusAdministrator custom_title:string can_be_edited:Bool can_manage_chat:Bool can_change_info:Bool can_post_messages:Bool can_edit_messages:Bool can_delete_messages:Bool can_invite_users:Bool can_restrict_members:Bool can_pin_messages:Bool can_promote_members:Bool can_manage_voice_chats:Bool is_anonymous:Bool = ChatMemberStatus;
 
@@ -891,6 +891,13 @@ chatSourcePublicServiceAnnouncement type:string text:string = ChatSource;
 chatPosition list:ChatList order:int64 is_pinned:Bool source:ChatSource = ChatPosition;
 
 
+//@description Describes a voice chat
+//@group_call_id Group call identifier of an active voice chat; 0 if none. Full informationa about the voice chat can be received through the method getGroupCall
+//@has_participants True, if the voice chat has participants
+//@default_participant_alias Default group call participant identifier to join the voice chat; may be null
+voiceChat group_call_id:int32 has_participants:Bool default_participant_alias:MessageSender = VoiceChat;
+
+
 //@description A chat. (Can be a private chat, basic group, supergroup, or secret chat)
 //@id Chat unique identifier
 //@type Type of the chat
@@ -913,12 +920,11 @@ chatPosition list:ChatList order:int64 is_pinned:Bool source:ChatSource = ChatPo
 //@notification_settings Notification settings for this chat
 //@message_ttl_setting Current message Time To Live setting (self-destruct timer) for the chat; 0 if not defined. TTL is counted from the time message or its content is viewed in secret chats and from the send date in other chats
 //@action_bar Describes actions which should be possible to do through a chat action bar; may be null
-//@voice_chat_group_call_id Group call identifier of an active voice chat; 0 if none or unknown. The voice chat can be received through the method getGroupCall
-//@is_voice_chat_empty True, if an active voice chat is empty
+//@voice_chat Contains information about voice chat of the chat
 //@reply_markup_message_id Identifier of the message from which reply markup needs to be used; 0 if there is no default custom reply markup in the chat
 //@draft_message A draft of a message in the chat; may be null
 //@client_data Contains application-specific data associated with the chat. (For example, the chat scroll position or local chat notification settings can be stored here.) Persistent if the message database is used
-chat id:int53 type:ChatType title:string photo:chatPhotoInfo permissions:chatPermissions last_message:message positions:vector<chatPosition> is_marked_as_unread:Bool is_blocked:Bool has_scheduled_messages:Bool can_be_deleted_only_for_self:Bool can_be_deleted_for_all_users:Bool can_be_reported:Bool default_disable_notification:Bool unread_count:int32 last_read_inbox_message_id:int53 last_read_outbox_message_id:int53 unread_mention_count:int32 notification_settings:chatNotificationSettings message_ttl_setting:int32 action_bar:ChatActionBar voice_chat_group_call_id:int32 is_voice_chat_empty:Bool reply_markup_message_id:int53 draft_message:draftMessage client_data:string = Chat;
+chat id:int53 type:ChatType title:string photo:chatPhotoInfo permissions:chatPermissions last_message:message positions:vector<chatPosition> is_marked_as_unread:Bool is_blocked:Bool has_scheduled_messages:Bool can_be_deleted_only_for_self:Bool can_be_deleted_for_all_users:Bool can_be_reported:Bool default_disable_notification:Bool unread_count:int32 last_read_inbox_message_id:int53 last_read_outbox_message_id:int53 unread_mention_count:int32 notification_settings:chatNotificationSettings message_ttl_setting:int32 action_bar:ChatActionBar voice_chat:voiceChat reply_markup_message_id:int53 draft_message:draftMessage client_data:string = Chat;
 
 //@description Represents a list of chats @total_count Approximate total count of chats found @chat_ids List of chat identifiers
 chats total_count:int32 chat_ids:vector<int53> = Chats;
@@ -2101,11 +2107,12 @@ callStateDiscarded reason:CallDiscardReason need_rating:Bool need_debug_informat
 callStateError error:error = CallState;
 
 
-//@description Describes a recently speaking user in a group call @user_id User identifier @is_speaking True, is the user has spoken recently
-groupCallRecentSpeaker user_id:int32 is_speaking:Bool = GroupCallRecentSpeaker;
+//@description Describes a recently speaking participant in a group call @speaker Speaking participantt @is_speaking True, is the user has spoken recently
+groupCallRecentSpeaker speaker:MessageSender is_speaking:Bool = GroupCallRecentSpeaker;
 
 //@description Describes a group call
 //@id Group call identifier
+//@title Group call title
 //@is_active True, if the call is active
 //@is_joined True, if the call is joined
 //@need_rejoin True, if user was kicked from the call because of network loss and the call needs to be rejoined
@@ -2116,8 +2123,9 @@ groupCallRecentSpeaker user_id:int32 is_speaking:Bool = GroupCallRecentSpeaker;
 //@recent_speakers Recently speaking users in the group call
 //@mute_new_participants True, if only group call administrators can unmute new participants
 //@can_change_mute_new_participants True, if the current user can enable or disable mute_new_participants setting
+//@record_duration Duration of the ongoing group call recording, in seconds; 0 if none. An updateGroupCall update is not triggered when value of this field changes, but the same recording goes on
 //@duration Call duration; for ended calls only
-groupCall id:int32 is_active:Bool is_joined:Bool need_rejoin:Bool can_unmute_self:Bool can_be_managed:Bool participant_count:int32 loaded_all_participants:Bool recent_speakers:vector<groupCallRecentSpeaker> mute_new_participants:Bool can_change_mute_new_participants:Bool duration:int32 = GroupCall;
+groupCall id:int32 title:string is_active:Bool is_joined:Bool need_rejoin:Bool can_unmute_self:Bool can_be_managed:Bool participant_count:int32 loaded_all_participants:Bool recent_speakers:vector<groupCallRecentSpeaker> mute_new_participants:Bool can_change_mute_new_participants:Bool record_duration:int32 duration:int32 = GroupCall;
 
 //@description Describes a payload fingerprint for interaction with tgcalls @hash Value of the field hash @setup Value of the field setup @fingerprint Value of the field fingerprint
 groupCallPayloadFingerprint hash:string setup:string fingerprint:string = GroupCallPayloadFingerprint;
@@ -2130,13 +2138,22 @@ groupCallPayload ufrag:string pwd:string fingerprints:vector<groupCallPayloadFin
 //@ip Value of the field ip @type Value of the field type @tcp_type Value of the field tcp_type @rel_addr Value of the field rel_addr @rel_port Value of the field rel_port
 groupCallJoinResponseCandidate port:string protocol:string network:string generation:string id:string component:string foundation:string priority:string ip:string type:string tcp_type:string rel_addr:string rel_port:string = GroupCallJoinResponseCandidate;
 
-//@description Describes a join response for interaction with tgcalls @payload Join response payload to pass to tgcalls @candidates Join response candidates to pass to tgcalls
-groupCallJoinResponse payload:groupCallPayload candidates:vector<groupCallJoinResponseCandidate> = GroupCallJoinResponse;
+
+//@class GroupCallJoinResponse @description Describes a group call join response
+
+//@description Contains data needed to join the group call with WebRTC @payload Group call payload to pass to tgcalls @candidates Join response candidates to pass to tgcalls
+groupCallJoinResponseWebrtc payload:groupCallPayload candidates:vector<groupCallJoinResponseCandidate> = GroupCallJoinResponse;
+
+//@description Describes that group call needs to be joined as a stream
+groupCallJoinResponseStream = GroupCallJoinResponse;
+
 
 //@description Represents a group call participant
-//@user_id Identifier of the user
+//@participant Identifier of the group call participant
 //@source User's synchronization source
+//@bio The participant user's bio or the participant chat's description
 //@is_speaking True, if the participant is speaking as set by setGroupCallParticipantIsSpeaking
+//@is_hand_raised True, if the participant hand is raised
 //@can_be_muted_for_all_users True, if the current user can mute the participant for all other group call participants
 //@can_be_unmuted_for_all_users True, if the current user can allow the participant to unmute themself or unmute the participant (if the participant is the current user)
 //@can_be_muted_for_current_user True, if the current user can mute the participant only for self
@@ -2145,8 +2162,8 @@ groupCallJoinResponse payload:groupCallPayload candidates:vector<groupCallJoinRe
 //@is_muted_for_current_user True, if the participant is muted for the current user
 //@can_unmute_self True, if the participant is muted for all users, but can unmute themself
 //@volume_level Participant's volume level; 1-20000 in hundreds of percents
-//@order User's order in the group call participant list. The bigger is order, the higher is user in the list. If order is 0, the user must be removed from the participant list
-groupCallParticipant user_id:int32 source:int32 is_speaking:Bool can_be_muted_for_all_users:Bool can_be_unmuted_for_all_users:Bool can_be_muted_for_current_user:Bool can_be_unmuted_for_current_user:Bool is_muted_for_all_users:Bool is_muted_for_current_user:Bool can_unmute_self:Bool volume_level:int32 order:int64 = GroupCallParticipant;
+//@order User's order in the group call participant list. Orders must be compared lexicographically. The bigger is order, the higher is user in the list. If order is empty, the user must be removed from the participant list
+groupCallParticipant participant:MessageSender source:int32 bio:string is_speaking:Bool is_hand_raised:Bool can_be_muted_for_all_users:Bool can_be_unmuted_for_all_users:Bool can_be_muted_for_current_user:Bool can_be_unmuted_for_current_user:Bool is_muted_for_all_users:Bool is_muted_for_current_user:Bool can_unmute_self:Bool volume_level:int32 order:string = GroupCallParticipant;
 
 
 //@class CallProblem @description Describes the exact type of a problem with a call
@@ -2453,11 +2470,11 @@ chatEventVoiceChatCreated group_call_id:int32 = ChatEventAction;
 //@description A voice chat was discarded @group_call_id Identifier of the voice chat. The voice chat can be received through the method getGroupCall
 chatEventVoiceChatDiscarded group_call_id:int32 = ChatEventAction;
 
-//@description A voice chat participant was muted or unmuted @user_id Identifier of the affected user @is_muted New value of is_muted
-chatEventVoiceChatParticipantIsMutedToggled user_id:int32 is_muted:Bool = ChatEventAction;
+//@description A voice chat participant was muted or unmuted @participant Identifier of the affected group call participant @is_muted New value of is_muted
+chatEventVoiceChatParticipantIsMutedToggled participant:MessageSender is_muted:Bool = ChatEventAction;
 
-//@description A voice chat participant volume level was changed @user_id Identifier of the affected user @volume_level New value of volume_level; 1-20000 in hundreds of percents
-chatEventVoiceChatParticipantVolumeLevelChanged user_id:int32 volume_level:int32 = ChatEventAction;
+//@description A voice chat participant volume level was changed @participant Identifier of the affected group call participant @volume_level New value of volume_level; 1-20000 in hundreds of percents
+chatEventVoiceChatParticipantVolumeLevelChanged participant:MessageSender volume_level:int32 = ChatEventAction;
 
 //@description The mute_new_participants setting of a voice chat was toggled @mute_new_participants New value of the mute_new_participants setting
 chatEventVoiceChatMuteNewParticipantsToggled mute_new_participants:Bool = ChatEventAction;
@@ -3388,8 +3405,8 @@ updateChatIsBlocked chat_id:int53 is_blocked:Bool = Update;
 //@description A chat's has_scheduled_messages field has changed @chat_id Chat identifier @has_scheduled_messages New value of has_scheduled_messages
 updateChatHasScheduledMessages chat_id:int53 has_scheduled_messages:Bool = Update;
 
-//@description A chat voice chat state has changed @chat_id Chat identifier @voice_chat_group_call_id New value of voice_chat_group_call_id @is_voice_chat_empty New value of is_voice_chat_empty
-updateChatVoiceChat chat_id:int53 voice_chat_group_call_id:int32 is_voice_chat_empty:Bool = Update;
+//@description A chat voice chat state has changed @chat_id Chat identifier @voice_chat New value of voice_chat
+updateChatVoiceChat chat_id:int53 voice_chat:voiceChat = Update;
 
 //@description The value of the default disable_notification parameter, used when a message is sent to the chat, was changed @chat_id Chat identifier @default_disable_notification The new default_disable_notification value
 updateChatDefaultDisableNotification chat_id:int53 default_disable_notification:Bool = Update;
@@ -3906,7 +3923,7 @@ searchChatMessages chat_id:int53 query:string sender:MessageSender from_message_
 
 //@description Searches for messages in all chats except secret chats. Returns the results in reverse chronological order (i.e., in order of decreasing (date, chat_id, message_id)).
 //-For optimal performance the number of returned messages is chosen by the library
-//@chat_list Chat list in which to search messages; pass null to search in all chats regardless of their chat list
+//@chat_list Chat list in which to search messages; pass null to search in all chats regardless of their chat list. Only Main and Archive chat lists are supported
 //@query Query to search for
 //@offset_date The date of the message starting from which the results should be fetched. Use 0 or any date in the future to get results from the last message
 //@offset_chat_id The chat identifier of the last found message, or 0 for the first request
@@ -4215,8 +4232,12 @@ viewMessages chat_id:int53 message_thread_id:int53 message_ids:vector<int53> for
 //@description Informs TDLib that the message content has been opened (e.g., the user has opened a photo, video, document, location or venue, or has listened to an audio file or voice note message). An updateMessageContentOpened update will be generated if something has changed @chat_id Chat identifier of the message @message_id Identifier of the message with the opened content
 openMessageContent chat_id:int53 message_id:int53 = Ok;
 
-//@description Returns an HTTP URL to open when user clicks on a given HTTP link. This method can be used to automatically login user on a Telegram site @link The HTTP link
-getExternalLink link:string = HttpUrl;
+//@description Returns information about an action to be done when the current user clicks an HTTP link. This method can be used to automatically authorize the current user on a website @link The HTTP link
+getExternalLinkInfo link:string = LoginUrlInfo;
+
+//@description Returns an HTTP URL which can be used to automatically authorize the current user on a website after clicking an HTTP link. Use the method getExternalLinkInfo to find whether a prior user confirmation is needed
+//@link The HTTP link @allow_write_access True, if the current user allowed the bot, returned in getExternalLinkInfo, to send them messages
+getExternalLink link:string allow_write_access:Bool = HttpUrl;
 
 
 //@description Marks all mentions in a chat as read @chat_id Chat identifier
@@ -4548,34 +4569,65 @@ sendCallRating call_id:int32 rating:int32 comment:string problems:vector<CallPro
 sendCallDebugInformation call_id:int32 debug_information:string = Ok;
 
 
-//@description Creates a voice chat (a group call bound to a chat). Available only for basic groups and supergroups; requires can_manage_voice_chats rights @chat_id Chat identifier
+//@description Returns list of user and chat, which can be used as aliases to join a voice chat in the chat @chat_id Chat identifier
+getAvailableVoiceChatAliases chat_id:int53 = MessageSenders;
+
+//@description Creates a voice chat (a group call bound to a chat). Available only for basic groups, supergroups and channels; requires can_manage_voice_chats rights @chat_id Chat identifier
 createVoiceChat chat_id:int53 = GroupCallId;
 
 //@description Returns information about a group call @group_call_id Group call identifier
 getGroupCall group_call_id:int32 = GroupCall;
 
-//@description Joins a group call @group_call_id Group call identifier @payload Group join payload, received from tgcalls. Use null to cancel previous joinGroupCall request @source Caller synchronization source identifier; received from tgcalls @is_muted True, if the user's microphone is muted
-joinGroupCall group_call_id:int32 payload:groupCallPayload source:int32 is_muted:Bool = GroupCallJoinResponse;
+//@description Joins a group call
+//@group_call_id Group call identifier
+//@participant_alias Identifier of the group call participant, which will be used to join the call; voice chats only
+//@payload Group join payload; received from tgcalls
+//@source Caller synchronization source identifier; received from tgcalls
+//@is_muted True, if the user's microphone is muted
+//@invite_hash If non-empty, invite hash to be used to join the group call without being muted by administrators
+joinGroupCall group_call_id:int32 participant_alias:MessageSender payload:groupCallPayload source:int32 is_muted:Bool invite_hash:string = GroupCallJoinResponse;
+
+//@description Sets group call title. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier @title New group call title; 1-64 characters
+setGroupCallTitle group_call_id:int32 title:string = Ok;
 
 //@description Toggles whether new participants of a group call can be unmuted only by administrators of the group call. Requires groupCall.can_change_mute_new_participants group call flag
 //@group_call_id Group call identifier @mute_new_participants New value of the mute_new_participants setting
 toggleGroupCallMuteNewParticipants group_call_id:int32 mute_new_participants:Bool = Ok;
 
+//@description Revokes invite link for a group call. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier
+revokeGroupCallInviteLink group_call_id:int32 = Ok;
+
 //@description Invites users to a group call. Sends a service message of type messageInviteToGroupCall for voice chats
 //@group_call_id Group call identifier @user_ids User identifiers. At most 10 users can be invited simultaneously
 inviteGroupCallParticipants group_call_id:int32 user_ids:vector<int32> = Ok;
+
+//@description Returns invite link to a voice chat in a public chat
+//@group_call_id Group call identifier
+//@can_self_unmute Pass true if the invite_link should contain an invite hash, passing which to joinGroupCall would allow the invited user to unmute themself. Requires groupCall.can_be_managed group call flag
+getGroupCallInviteLink group_call_id:int32 can_self_unmute:Bool = HttpUrl;
+
+//@description Starts recording of a group call. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier @title Group call recording title; 0-64 characters
+startGroupCallRecording group_call_id:int32 title:string = Ok;
+
+//@description Ends recording of a group call. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier
+endGroupCallRecording group_call_id:int32 = Ok;
 
 //@description Informs TDLib that a group call participant speaking state has changed @group_call_id Group call identifier
 //@source Group call participant's synchronization source identifier, or 0 for the current user @is_speaking True, if the user is speaking
 setGroupCallParticipantIsSpeaking group_call_id:int32 source:int32 is_speaking:Bool = Ok;
 
 //@description Toggles whether a group call participant is muted, unmuted, or allowed to unmute themself
-//@group_call_id Group call identifier @user_id User identifier @is_muted Pass true if the user must be muted and false otherwise
-toggleGroupCallParticipantIsMuted group_call_id:int32 user_id:int32 is_muted:Bool = Ok;
+//@group_call_id Group call identifier @participant Participant identifier @is_muted Pass true if the user must be muted and false otherwise
+toggleGroupCallParticipantIsMuted group_call_id:int32 participant:MessageSender is_muted:Bool = Ok;
 
 //@description Changes a group call participant's volume level. If the current user can manage the group call, then the participant's volume level will be changed for all users with default volume level
-//@group_call_id Group call identifier @user_id User identifier @volume_level New participant's volume level; 1-20000 in hundreds of percents
-setGroupCallParticipantVolumeLevel group_call_id:int32 user_id:int32 volume_level:int32 = Ok;
+//@group_call_id Group call identifier @participant Participant identifier @volume_level New participant's volume level; 1-20000 in hundreds of percents
+setGroupCallParticipantVolumeLevel group_call_id:int32 participant:MessageSender volume_level:int32 = Ok;
+
+//@description Toggles whether a group call participant hand is rased
+//@group_call_id Group call identifier @participant Participant identifier
+//@is_hand_raised Pass true if the user's hand should be raised. Only self hand can be raised. Requires groupCall.can_be_managed group call flag to lower other's hand
+toggleGroupCallParticipantIsHandRaised group_call_id:int32 participant:MessageSender is_hand_raised:Bool = Ok;
 
 //@description Loads more group call participants. The loaded participants will be received through updates. Use the field groupCall.loaded_all_participants to check whether all participants has already been loaded
 //@group_call_id Group call identifier. The group call must be previously received through getGroupCall and must be joined or being joined
@@ -4587,6 +4639,12 @@ leaveGroupCall group_call_id:int32 = Ok;
 
 //@description Discards a group call. Requires groupCall.can_be_managed @group_call_id Group call identifier
 discardGroupCall group_call_id:int32 = Ok;
+
+//@description Returns a file with a segment of a group call stream in a modified OGG format
+//@group_call_id Group call identifier
+//@time_offset Point in time when the stream segment begins; Unix timestamp in milliseconds
+//@scale Segment duration scale; 0-1. Segment's duration is 1000/(2**scale) milliseconds
+getGroupCallStreamSegment group_call_id:int32 time_offset:int53 scale:int32 = FilePart;
 
 
 //@description Changes the block state of a message sender. Currently, only users and supergroup chats can be blocked @sender Message Sender @is_blocked New value of is_blocked

@@ -1447,7 +1447,8 @@ Result<FileId> FileManager::merge(FileId x_file_id, FileId y_file_id, bool no_sy
   }
   FileNodePtr x_node = no_sync ? get_file_node(x_file_id) : get_sync_file_node(x_file_id);
   if (!x_node) {
-    return Status::Error(PSLICE() << "Can't merge files. First id is invalid: " << x_file_id << " and " << y_file_id);
+    return Status::Error(PSLICE() << "Can't merge files. First identifier is invalid: " << x_file_id << " and "
+                                  << y_file_id);
   }
 
   if (!y_file_id.is_valid()) {
@@ -1456,7 +1457,8 @@ Result<FileId> FileManager::merge(FileId x_file_id, FileId y_file_id, bool no_sy
   }
   FileNodePtr y_node = get_file_node(y_file_id);
   if (!y_node) {
-    return Status::Error(PSLICE() << "Can't merge files. Second id is invalid: " << x_file_id << " and " << y_file_id);
+    return Status::Error(PSLICE() << "Can't merge files. Second identifier is invalid: " << x_file_id << " and "
+                                  << y_file_id);
   }
 
   if (x_file_id == x_node->upload_pause_) {
@@ -3201,8 +3203,8 @@ Result<FileId> FileManager::get_map_thumbnail_file_id(Location location, int32 z
   x = clamp(x, 0, size - 1);  // just in case
   y = clamp(y, 0, size - 1);  // just in case
 
-  string conversion = PSTRING() << "#map#" << zoom << "#" << x << "#" << y << "#" << width << "#" << height << "#"
-                                << scale << "#";
+  string conversion = PSTRING() << "#map#" << zoom << '#' << x << '#' << y << '#' << width << '#' << height << '#'
+                                << scale << '#';
   return register_generate(
       owner_dialog_id.get_type() == DialogType::SecretChat ? FileType::EncryptedThumbnail : FileType::Thumbnail,
       FileLocationSource::FromUser, string(), std::move(conversion), owner_dialog_id, 0);
