@@ -32718,14 +32718,18 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
           auto next_message = *it;
           if (next_message != nullptr) {
             if (next_message->message_id.is_server()) {
+              if (G()->shared_config().get_option_integer("get_channel_difference_delay_milliseconds", 0) <= 0) {
               LOG(ERROR) << "Attach " << message_id << " from " << source << " before " << next_message->message_id
                          << " and after " << previous_message_id << " in " << dialog_id;
               dump_debug_message_op(d);
+              }
             }
           } else {
+            if (G()->shared_config().get_option_integer("get_channel_difference_delay_milliseconds", 0) <= 0) {
             LOG(ERROR) << "Have_next is true, but there is no next message after " << previous_message_id << " from "
                        << source << " in " << dialog_id;
             dump_debug_message_op(d);
+            }
           }
         }
 
