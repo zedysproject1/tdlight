@@ -11,8 +11,8 @@ TDLib developers strongly advise against the use of this feature, since it is no
 ### Memory cleanup
 TDLight can clean itself and release some ram to the OS if you want. Look at **TdApi.OptimizeMemory** in "Modified features" paragraph to see how.
 
-### (Almost) constant memory usage
-TDLight if used with care doesn't grow in memory usage with time. Look at **TdApi.OptimizeMemory** in "Modified features" paragraph to see how
+### Constant memory usage without restarting
+TDLight, if used with care, doesn't grow in memory usage with time. Look at **TdApi.OptimizeMemory** in "Modified features" paragraph to see how
 
 ![memory usage](info/memory-usage.jpg)
 
@@ -38,7 +38,10 @@ We added some options:
 This method is used to optimize the memory usage, but it must be used carefully.
 It removes almost all cached values and releases the memory back to the OS.
 
-Removing cached values can cause problems if you don't take the following precautions:
+You can call TdApi.OptimizeMemory normally, but removing cached values
+can cause problems if you don't take some precautions.
+
+If you want to avoid receiving data with missing fields during cleanup:
   1. Before calling *TdApi.OptimizeMemory* you must:
       1. Read all the pending updates to empty the pending updates queue.
       2. Disable internet connection using *TdApi.SetNetworkType(TdApi.NetworkTypeNone)*
@@ -51,12 +54,6 @@ Removing cached values can cause problems if you don't take the following precau
 This method is used to read the size of all the biggest data maps inside tdlib implementation.
 The output contains a string that can be parsed as a JSON.
 
-## Removed features
-### Local databases encryption
-Local databases are no longer encrypted and deleted data is no longer overwritten with zeroes. This reduces IOPS and helps TDLight preserving SSDs life.
-### Local text indicization
-TDLight removed completely local text indicization, so if you search for some text it will search it through telegram servers.
-
 ## Other reccomended options
 * Options:
     * ignore_inline_thumbnails: true
@@ -64,6 +61,8 @@ TDLight removed completely local text indicization, so if you search for some te
     * ignore_platform_restrictions: true
     * ignore_sensitive_content_restrictions: true
 * Disable all the databases (messages_db, users_db, files_db)
+  
+    ⚠️ If you use the databases, TDLight memory cleanup feature will be automatically disabled, because databases will lose some data when cleaning up the memory. 
 
 
 -----
