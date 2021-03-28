@@ -6,6 +6,10 @@
 //
 #include "data.h"
 
+#if TD_EXPERIMENTAL_WATCH_OS
+#include "td/net/DarwinHttp.h"
+#endif
+
 #include "td/net/HttpChunkedByteFlow.h"
 #include "td/net/HttpHeaderCreator.h"
 #include "td/net/HttpQuery.h"
@@ -37,6 +41,9 @@
 
 #include <algorithm>
 #include <limits>
+
+#include <condition_variable>
+#include <mutex>
 
 REGISTER_TESTS(http)
 
@@ -239,7 +246,6 @@ TEST(Http, gzip_bomb) {
 }
 
 TEST(Http, gzip) {
-  return;
   auto gzip_str = gzdecode(base64url_decode(Slice(gzip, gzip_size)).ok()).as_slice().str();
 
   td::ChainBufferWriter input_writer;
@@ -462,3 +468,39 @@ TEST(Http, gzip_bomb_with_limit) {
   }
   ASSERT_TRUE(ok);
 }
+
+#if TD_EXPERIMENTAL_WATCH_OS
+struct Baton {
+  std::mutex mutex;
+  std::condition_variable cond;
+  bool is_ready{false};
+
+  void wait() {
+    std::unique_lock<std::mutex> lock(mutex);
+    cond.wait(lock, [&] { return is_ready; });
+  }
+
+  void post() {
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      is_ready = true;
+    }
+    cond.notify_all();
+  }
+
+  void reset() {
+    is_ready = false;
+  }
+};
+
+TEST(Http, Darwin) {
+  Baton baton;
+  //LOG(ERROR) << "???";
+  td::DarwinHttp::get("http://example.com", [&](td::BufferSlice data) {
+    //LOG(ERROR) << data.as_slice();
+    baton.post();
+  });
+  //LOG(ERROR) << "!!!";
+  baton.wait();
+}
+#endif

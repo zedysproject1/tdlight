@@ -655,6 +655,7 @@ struct GroupCallManager::GroupCall {
   DialogId as_dialog_id;
 
   int32 version = -1;
+  int32 leave_version = -1;
   int32 title_version = -1;
   int32 mute_version = -1;
   int32 stream_dc_id_version = -1;
@@ -1445,10 +1446,12 @@ void GroupCallManager::on_update_group_call_participants(
         continue;
       }
       if (participant.joined_date == 0) {
-        diff--;
+        if (version > group_call->leave_version) {
+          diff--;
+        }
         remove_recent_group_call_speaker(input_group_call_id, participant.dialog_id);
       } else {
-        if (participant.is_just_joined) {
+        if (participant.is_just_joined && version >= group_call->leave_version) {
           diff++;
         }
         on_participant_speaking_in_group_call(input_group_call_id, participant);
@@ -1521,7 +1524,7 @@ void GroupCallManager::on_update_group_call_participants(
     }
     auto dialog_id = participant.dialog_id;
     if (dialog_id.get_type() != DialogType::User && participant.joined_date != 0) {
-      td_->messages_manager_->force_create_dialog(dialog_id, "on_update_group_call_participants 2");
+      td_->messages_manager_->force_create_dialog(dialog_id, "on_update_group_call_participants 2", true);
     }
 
     if (GroupCallParticipant::is_versioned_update(group_call_participant)) {
@@ -1718,7 +1721,7 @@ void GroupCallManager::process_group_call_participants(
         continue;
       }
       if (participant.dialog_id.get_type() != DialogType::User) {
-        td_->messages_manager_->force_create_dialog(participant.dialog_id, "process_group_call_participants");
+        td_->messages_manager_->force_create_dialog(participant.dialog_id, "process_group_call_participants", true);
       }
 
       on_participant_speaking_in_group_call(input_group_call_id, participant);
@@ -1752,7 +1755,7 @@ void GroupCallManager::process_group_call_participants(
       continue;
     }
     if (participant.dialog_id.get_type() != DialogType::User) {
-      td_->messages_manager_->force_create_dialog(participant.dialog_id, "process_group_call_participants");
+      td_->messages_manager_->force_create_dialog(participant.dialog_id, "process_group_call_participants", true);
     }
 
     if (is_load) {
@@ -3326,6 +3329,7 @@ void GroupCallManager::try_clear_group_call_participants(InputGroupCallId input_
     group_call->loaded_all_participants = false;
     send_update_group_call(group_call, "try_clear_group_call_participants");
   }
+  group_call->leave_version = group_call->version;
   group_call->version = -1;
 
   for (auto &participant : participants->participants) {
@@ -3627,7 +3631,7 @@ void GroupCallManager::on_user_speaking_in_group_call(GroupCallId group_call_id,
   for (size_t i = 0; i <= recent_speakers->users.size(); i++) {
     if (i == recent_speakers->users.size() || recent_speakers->users[i].second <= date) {
       if (dialog_id.get_type() != DialogType::User) {
-        td_->messages_manager_->force_create_dialog(dialog_id, "on_user_speaking_in_group_call");
+        td_->messages_manager_->force_create_dialog(dialog_id, "on_user_speaking_in_group_call", true);
       }
       recent_speakers->users.insert(recent_speakers->users.begin() + i, {dialog_id, date});
       break;

@@ -2293,7 +2293,7 @@ class InviteToChannelQuery : public Td::ResultHandler {
 
     auto ptr = result_ptr.move_as_ok();
     LOG(INFO) << "Receive result for InviteToChannelQuery: " << to_string(ptr);
-    td->contacts_manager_->invalidate_channel_full(channel_id_, false, false);
+    td->contacts_manager_->invalidate_channel_full(channel_id_, false);
     td->updates_manager_->on_get_updates(std::move(ptr), std::move(promise_));
   }
 
@@ -2328,7 +2328,7 @@ class EditChannelAdminQuery : public Td::ResultHandler {
 
     auto ptr = result_ptr.move_as_ok();
     LOG(INFO) << "Receive result for EditChannelAdminQuery: " << to_string(ptr);
-    td->contacts_manager_->invalidate_channel_full(channel_id_, false, false);
+    td->contacts_manager_->invalidate_channel_full(channel_id_, false);
     td->updates_manager_->on_get_updates(std::move(ptr), std::move(promise_));
   }
 
@@ -2363,7 +2363,7 @@ class EditChannelBannedQuery : public Td::ResultHandler {
 
     auto ptr = result_ptr.move_as_ok();
     LOG(INFO) << "Receive result for EditChannelBannedQuery: " << to_string(ptr);
-    td->contacts_manager_->invalidate_channel_full(channel_id_, false, false);
+    td->contacts_manager_->invalidate_channel_full(channel_id_, false);
     td->updates_manager_->on_get_updates(std::move(ptr), std::move(promise_));
   }
 
@@ -2469,7 +2469,7 @@ class EditChannelCreatorQuery : public Td::ResultHandler {
 
     auto ptr = result_ptr.move_as_ok();
     LOG(INFO) << "Receive result for EditChannelCreatorQuery: " << to_string(ptr);
-    td->contacts_manager_->invalidate_channel_full(channel_id_, false, false);
+    td->contacts_manager_->invalidate_channel_full(channel_id_, false);
     td->updates_manager_->on_get_updates(std::move(ptr), std::move(promise_));
   }
 
@@ -3523,7 +3523,7 @@ void ContactsManager::on_channel_unban_timeout(ChannelId channel_id) {
 
   LOG(INFO) << "Update " << channel_id << " status";
   c->is_status_changed = true;
-  invalidate_channel_full(channel_id, false, !c->is_slow_mode_enabled);
+  invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
   update_channel(c, channel_id);  // always call, because in case of failure we need to reactivate timeout
 }
 
@@ -7140,8 +7140,7 @@ Status ContactsManager::can_manage_dialog_invite_links(DialogId dialog_id, bool 
       if (!c->is_active) {
         return Status::Error(3, "Chat is deactivated");
       }
-      auto status = get_chat_status(c);
-      bool have_rights = creator_only ? status.is_creator() : status.is_administrator() && status.can_invite_users();
+      bool have_rights = creator_only ? c->status.is_creator() : c->status.can_manage_invite_links();
       if (!have_rights) {
         return Status::Error(3, "Not enough rights to manage chat invite link");
       }
@@ -7152,8 +7151,7 @@ Status ContactsManager::can_manage_dialog_invite_links(DialogId dialog_id, bool 
       if (c == nullptr) {
         return Status::Error(3, "Chat info not found");
       }
-      auto status = get_channel_status(c);
-      bool have_rights = creator_only ? status.is_creator() : status.is_administrator() && status.can_invite_users();
+      bool have_rights = creator_only ? c->status.is_creator() : c->status.can_manage_invite_links();
       if (!have_rights) {
         return Status::Error(3, "Not enough rights to manage chat invite link");
       }
@@ -9433,11 +9431,16 @@ void ContactsManager::on_load_chat_full_from_database(ChatId chat_id, string val
   Chat *c = get_chat(chat_id);
   CHECK(c != nullptr);
 
-  // ignore ChatFull without invite link
-  if (c->is_active && c->status.is_administrator() && c->status.can_invite_users() &&
-      !chat_full->invite_link.is_valid()) {
-    chats_full_.erase(chat_id);
-    return;
+  bool need_invite_link = c->is_active && c->status.can_manage_invite_links();
+  bool have_invite_link = chat_full->invite_link.is_valid();
+  if (need_invite_link != have_invite_link) {
+    if (need_invite_link) {
+      // ignore ChatFull without invite link
+      chats_full_.erase(chat_id);
+      return;
+    } else {
+      chat_full->invite_link = DialogInviteLink();
+    }
   }
 
   if (td_->file_manager_->get_file_view(c->photo.small_file_id).get_unique_file_id() !=
@@ -9532,10 +9535,16 @@ void ContactsManager::on_load_channel_full_from_database(ChannelId channel_id, s
   Channel *c = get_channel(channel_id);
   CHECK(c != nullptr);
 
-  // ignore ChannelFull without invite link
-  if (c->status.is_administrator() && c->status.can_invite_users() && !channel_full->invite_link.is_valid()) {
-    channels_full_.erase(channel_id);
-    return;
+  bool need_invite_link = c->status.can_manage_invite_links();
+  bool have_invite_link = channel_full->invite_link.is_valid();
+  if (need_invite_link != have_invite_link) {
+    if (need_invite_link) {
+      // ignore ChannelFull without invite link
+      channels_full_.erase(channel_id);
+      return;
+    } else {
+      channel_full->invite_link = DialogInviteLink();
+    }
   }
 
   if (td_->file_manager_->get_file_view(c->photo.small_file_id).get_unique_file_id() !=
@@ -11525,7 +11534,7 @@ bool ContactsManager::on_get_channel_error(ChannelId channel_id, const Status &s
 
       remove_dialog_access_by_invite_link(DialogId(channel_id));
     }
-    invalidate_channel_full(channel_id, false, !c->is_slow_mode_enabled);
+    invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
     LOG_IF(ERROR, have_input_peer_channel(c, channel_id, AccessRights::Read))
         << "Have read access to channel after receiving CHANNEL_PRIVATE. Channel state: "
         << oneline(to_string(get_supergroup_object(channel_id, c)))
@@ -11775,7 +11784,7 @@ void ContactsManager::speculative_add_channel_participants(ChannelId channel_id,
                                                            bool by_me) {
   if (by_me) {
     // Currently ignore all changes made by the current user, because they may be already counted
-    invalidate_channel_full(channel_id, false, false);  // just in case
+    invalidate_channel_full(channel_id, false);  // just in case
     return;
   }
 
@@ -11926,16 +11935,12 @@ void ContactsManager::drop_channel_photos(ChannelId channel_id, bool is_empty, b
   }
 }
 
-void ContactsManager::invalidate_channel_full(ChannelId channel_id, bool need_drop_invite_link,
-                                              bool need_drop_slow_mode_delay) {
+void ContactsManager::invalidate_channel_full(ChannelId channel_id, bool need_drop_slow_mode_delay) {
   LOG(INFO) << "Invalidate supergroup full for " << channel_id;
   // drop channel full cache
   auto channel_full = get_channel_full_force(channel_id, "invalidate_channel_full");
   if (channel_full != nullptr) {
     channel_full->expires_at = 0.0;
-    if (need_drop_invite_link) {
-      on_update_channel_full_invite_link(channel_full, nullptr);
-    }
     if (need_drop_slow_mode_delay && channel_full->slow_mode_delay != 0) {
       channel_full->slow_mode_delay = 0;
       channel_full->slow_mode_next_send_date = 0;
@@ -11943,9 +11948,6 @@ void ContactsManager::invalidate_channel_full(ChannelId channel_id, bool need_dr
       channel_full->is_changed = true;
     }
     update_channel_full(channel_full, channel_id);
-  }
-  if (need_drop_invite_link) {
-    remove_dialog_access_by_invite_link(DialogId(channel_id));
   }
 }
 
@@ -12591,6 +12593,7 @@ void ContactsManager::on_update_chat_status(Chat *c, ChatId chat_id, DialogParti
   if (c->status != status) {
     LOG(INFO) << "Update " << chat_id << " status from " << c->status << " to " << status;
     bool need_reload_group_call = c->status.can_manage_calls() != status.can_manage_calls();
+    bool need_drop_invite_link = c->status.can_manage_invite_links() && !status.can_manage_invite_links();
 
     c->status = status;
 
@@ -12601,6 +12604,12 @@ void ContactsManager::on_update_chat_status(Chat *c, ChatId chat_id, DialogParti
       c->pinned_message_version = -1;
 
       drop_chat_full(chat_id);
+    } else if (need_drop_invite_link) {
+      ChatFull *chat_full = get_chat_full_force(chat_id, "on_update_chat_status");
+      if (chat_full != nullptr) {
+        on_update_chat_full_invite_link(chat_full, nullptr);
+        update_chat_full(chat_full, chat_id);
+      }
     }
     if (need_reload_group_call) {
       send_closure_later(G()->messages_manager(), &MessagesManager::on_update_dialog_group_call_rights,
@@ -12927,10 +12936,17 @@ void ContactsManager::on_channel_status_changed(Channel *c, ChannelId channel_id
                                                 const DialogParticipantStatus &new_status) {
   CHECK(c->is_update_supergroup_sent);
 
-  bool need_drop_invite_link = old_status.is_administrator() != new_status.is_administrator() ||
-                               old_status.is_member() != new_status.is_member();
   bool need_reload_group_call = old_status.can_manage_calls() != new_status.can_manage_calls();
-  invalidate_channel_full(channel_id, need_drop_invite_link, !c->is_slow_mode_enabled);
+  if (old_status.can_manage_invite_links() && !new_status.can_manage_invite_links()) {
+    auto channel_full = get_channel_full_force(channel_id, "on_channel_status_changed");
+    if (channel_full != nullptr) {
+      on_update_channel_full_invite_link(channel_full, nullptr);
+      invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
+      update_channel_full(channel_full, channel_id);
+    }
+  } else {
+    invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
+  }
 
   if (old_status.is_creator() != new_status.is_creator()) {
     for (size_t i = 0; i < 2; i++) {
@@ -12941,6 +12957,10 @@ void ContactsManager::on_channel_status_changed(Channel *c, ChannelId channel_id
     send_get_channel_full_query(nullptr, channel_id, Auto(), "update channel owner");
     reload_dialog_administrators(DialogId(channel_id), 0, Auto());
     remove_dialog_suggested_action(SuggestedAction{SuggestedAction::Type::ConvertToGigagroup, DialogId(channel_id)});
+  }
+
+  if (old_status.is_member() != new_status.is_member() || new_status.is_banned()) {
+    remove_dialog_access_by_invite_link(DialogId(channel_id));
   }
   if (need_reload_group_call) {
     send_closure_later(G()->messages_manager(), &MessagesManager::on_update_dialog_group_call_rights,
@@ -12991,7 +13011,7 @@ void ContactsManager::on_channel_username_changed(Channel *c, ChannelId channel_
                                                   const string &new_username) {
   if (old_username.empty() || new_username.empty()) {
     // moving channel from private to public can change availability of chat members
-    invalidate_channel_full(channel_id, true, !c->is_slow_mode_enabled);
+    invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
   }
 }
 
@@ -13841,8 +13861,7 @@ bool ContactsManager::is_chat_full_outdated(const ChatFull *chat_full, const Cha
     }
   }
 
-  if (c->is_active && c->status.is_administrator() && c->status.can_invite_users() &&
-      !chat_full->invite_link.is_valid()) {
+  if (c->is_active && c->status.can_manage_invite_links() && !chat_full->invite_link.is_valid()) {
     LOG(INFO) << "Have outdated invite link in " << chat_id;
     return true;
   }
@@ -15254,7 +15273,7 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
         c->is_gigagroup = is_gigagroup;
 
         c->is_changed = true;
-        invalidate_channel_full(channel_id, false, !c->is_slow_mode_enabled);
+        invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
       }
       if (c->is_verified != is_verified || c->sign_messages != sign_messages) {
         c->is_verified = is_verified;
@@ -15345,7 +15364,7 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
   }
 
   if (need_invalidate_channel_full) {
-    invalidate_channel_full(channel_id, false, !c->is_slow_mode_enabled);
+    invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
   }
 
   bool has_active_group_call = (channel.flags_ & CHANNEL_FLAG_HAS_ACTIVE_GROUP_CALL) != 0;
@@ -15454,7 +15473,7 @@ void ContactsManager::on_chat_update(telegram_api::channelForbidden &channel, co
     }
   }
   if (need_invalidate_channel_full) {
-    invalidate_channel_full(channel_id, false, !c->is_slow_mode_enabled);
+    invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
   }
 }
 

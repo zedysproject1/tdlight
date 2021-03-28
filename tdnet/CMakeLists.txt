@@ -46,6 +46,15 @@ set(TDNET_SOURCE
   td/net/Wget.h
 )
 
+if (TD_EXPERIMENTAL_WATCH_OS)
+  set(TDNET_SOURCE
+    ${TDNET_SOURCE}
+    td/net/DarwinHttp.mm
+    td/net/DarwinHttp.h
+  )
+  set_source_files_properties(td/net/DarwinHttp.mm PROPERTIES COMPILE_FLAGS -fobjc-arc)
+endif()
+
 #RULES
 #LIBRARIES
 
@@ -64,6 +73,11 @@ if (WIN32)
   else()
     target_link_libraries(tdnet PRIVATE ws2_32 Mswsock Crypt32)
   endif()
+endif()
+
+if (TD_EXPERIMENTAL_WATCH_OS)
+  find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+  target_link_libraries(tdnet PRIVATE ${FOUNDATION_LIBRARY})
 endif()
 
 install(TARGETS tdnet EXPORT TdTargets
