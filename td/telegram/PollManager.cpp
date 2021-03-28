@@ -1177,8 +1177,12 @@ void PollManager::on_update_poll_timeout(PollId poll_id) {
   if (G()->close_flag()) {
     return;
   }
+
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) return;
+  if (poll == nullptr) {
+    return;
+  }
+
   if (poll->is_closed && poll->is_updated_after_close) {
     return;
   }
@@ -1192,7 +1196,13 @@ void PollManager::on_update_poll_timeout(PollId poll_id) {
     return;
   }
 
-  auto full_message_id = *it->second.begin();
+  auto full_message_id_set = std::move(it->second);
+  if (full_message_id_set.empty()) {
+    return;
+  }
+
+  auto full_message_id = *full_message_id_set.begin();
+
   LOG(INFO) << "Fetching results of " << poll_id << " from " << full_message_id;
   auto query_promise = PromiseCreator::lambda([poll_id, generation = current_generation_, actor_id = actor_id(this)](
                                                   Result<tl_object_ptr<telegram_api::Updates>> &&result) {
