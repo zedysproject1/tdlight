@@ -1439,7 +1439,13 @@ void GroupCallManager::on_update_group_call_participants(
     int32 diff = 0;
     bool need_update = false;
     auto group_call = get_group_call(input_group_call_id);
+    if (group_call == nullptr) {
+      return;
+    }
     for (auto &group_call_participant : participants) {
+      if (group_call_participant == nullptr) {
+        continue;
+      }
       GroupCallParticipant participant(group_call_participant, version);
       if (!participant.is_valid()) {
         LOG(ERROR) << "Receive invalid " << to_string(group_call_participant);
