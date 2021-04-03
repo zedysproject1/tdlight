@@ -5177,6 +5177,18 @@ void Td::on_request(uint64 id, const td_api::getFile &request) {
   send_closure(actor_id(this), &Td::send_result, id, file_manager_->get_file_object(FileId(request.file_id_, 0)));
 }
 
+void Td::on_request(uint64 id, const td_api::getChannelDifference &request) {
+  auto result = messages_manager_->run_get_channel_difference_request(request.channel_difference_id_);
+  if (result) {
+    send_closure(actor_id(this), &Td::send_result, id,
+                 td_api::make_object<td_api::ok>());
+  } else {
+    send_closure(actor_id(this), &Td::send_result, id,
+                 td_api::make_object<td_api::error>(
+                     400, "Channel diffence identifier already executed or nonexistent"));
+  }
+}
+
 void Td::on_request(uint64 id, td_api::getRemoteFile &request) {
   CLEAN_INPUT_STRING(request.remote_file_id_);
   auto file_type = request.file_type_ == nullptr ? FileType::Temp : get_file_type(*request.file_type_);
@@ -7540,9 +7552,7 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
       if (set_boolean_option("experiment_old_postponed_pts_updates_behavior")) {
         return;
       }
-      break;
-    case 'g':
-      if (set_integer_option("get_channel_difference_delay_milliseconds")) {
+      if (set_boolean_option("enable_pull_based_backpressure")) {
         return;
       }
       break;

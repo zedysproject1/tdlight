@@ -3346,6 +3346,9 @@ updateAuthorizationState authorization_state:AuthorizationState = Update;
 //@description A new message was received; can also be an outgoing message @message The new message
 updateNewMessage message:message = Update;
 
+//@description A new channel difference part was received @channel_difference_id The channel difference id
+updateNewChannelDifferencePart channel_difference_id:int64 = Update;
+
 //@description A request to send a message has reached the Telegram server. This doesn't mean that the message will be sent successfully or even that the send message request will be processed. This update will be sent only if the option "use_quick_ack" is set to true. This update may be sent multiple times for the same message
 //@chat_id The chat identifier of the sent message @message_id A temporary message identifier
 updateMessageSendAcknowledged chat_id:int53 message_id:int53 = Update;
@@ -3822,6 +3825,9 @@ getMessageThread chat_id:int53 message_id:int53 = MessageThreadInfo;
 
 //@description Returns information about a file; this is an offline request @file_id Identifier of the file to get
 getFile file_id:int32 = File;
+
+//@description Execute a channel difference @channel_difference_id Identifier of the channel difference to execute
+getChannelDifference channel_difference_id:int64 = Ok;
 
 //@description Returns information about a file by its remote ID; this is an offline request. Can be used to register a URL as a file for further uploading, or sending as a message. Even the request succeeds, the file can be used only if it is still accessible to the user.
 //-For example, if the file is from a message, then the message must be not deleted and accessible to the user. If the file database is disabled, then the corresponding object with the file must be preloaded by the application

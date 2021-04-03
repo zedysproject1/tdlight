@@ -195,6 +195,8 @@ class MessagesManager : public Actor {
   void get_channel_difference_if_needed(DialogId dialog_id, MessagesInfo &&messages_info,
                                         Promise<MessagesInfo> &&promise);
 
+  bool run_get_channel_difference_request(long id);
+
   void on_get_messages(vector<tl_object_ptr<telegram_api::Message>> &&messages, bool is_channel_message,
                        bool is_scheduled, const char *source);
 
@@ -2788,7 +2790,8 @@ class MessagesManager : public Actor {
 
   void on_channel_get_difference_timeout(DialogId dialog_id);
 
-  void get_channel_difference_delayed(DialogId dialog_id, int32 pts, bool force, double timeout, const char *source);
+  void get_channel_difference_delayed(DialogId dialog_id, int32 pts, bool force, bool enable_pull_based_backpressure,
+                                      const char *source);
 
   void get_channel_difference(DialogId dialog_id, int32 pts, bool force, const char *source);
 
@@ -3129,6 +3132,20 @@ class MessagesManager : public Actor {
     Promise<Unit> promise;
   };
   std::unordered_map<int64, unique_ptr<PendingMessageImport>> pending_message_imports_;
+
+  struct PendingChannelDifference {
+    DialogId dialog_id;
+    int32 pts;
+    bool force;
+    const char *source;
+
+    PendingChannelDifference(DialogId dialog_id, int32 pts, bool force, const char *source)
+        : dialog_id(dialog_id), pts(pts), force(force), source(source) {
+
+    }
+  };
+  std::unordered_map<int64, unique_ptr<PendingChannelDifference>> pending_channel_difference_;
+  int64 last_pending_channel_difference_ = 0;
 
   struct PendingMessageGroupSend {
     DialogId dialog_id;

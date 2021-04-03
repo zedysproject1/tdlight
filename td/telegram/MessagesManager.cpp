@@ -32718,14 +32718,14 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
           auto next_message = *it;
           if (next_message != nullptr) {
             if (next_message->message_id.is_server()) {
-              if (G()->shared_config().get_option_integer("get_channel_difference_delay_milliseconds", 0) <= 0) {
+              if (G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false) == false) {
               LOG(ERROR) << "Attach " << message_id << " from " << source << " before " << next_message->message_id
                          << " and after " << previous_message_id << " in " << dialog_id;
               dump_debug_message_op(d);
               }
             }
           } else {
-            if (G()->shared_config().get_option_integer("get_channel_difference_delay_milliseconds", 0) <= 0) {
+            if (G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false) == false) {
             LOG(ERROR) << "Have_next is true, but there is no next message after " << previous_message_id << " from "
                        << source << " in " << dialog_id;
             dump_debug_message_op(d);
@@ -35794,20 +35794,30 @@ class MessagesManager::GetChannelDifferenceLogEvent {
 };
 
 void MessagesManager::get_channel_difference_delayed(DialogId dialog_id, int32 pts,
-                                             bool force, double delay_seconds, const char *source) {
-  if (delay_seconds <= 0.0) {
+                                             bool force, bool enable_pull_based_backpressure, const char *source) {
+  if (!enable_pull_based_backpressure) {
     // Execute get_channel_difference immediatly
     get_channel_difference(dialog_id,pts, force, "on_get_channel_difference");
   } else {
-    // Schedule get_channel_difference
-    create_actor<SleepActor>(
-        "GetChannelDifferenceDelayedActor", delay_seconds,
-        PromiseCreator::lambda([actor_id = actor_id(this), dialog_id, pts, force](Result<Unit> result) {
-          send_closure(actor_id, &MessagesManager::get_channel_difference, dialog_id, pts, force,
-                       "on_get_channel_difference");
-        }))
-        .release();
+    auto channel_difference_id = ++last_pending_channel_difference_;
+    pending_channel_difference_
+        .emplace(channel_difference_id, td::make_unique<PendingChannelDifference>(dialog_id, pts, force, source));
+    send_closure(G()->td(), &Td::send_update,
+                 make_tl_object<td_api::updateNewChannelDifferencePart>(channel_difference_id));
   }
+}
+
+bool MessagesManager::run_get_channel_difference_request(long id) {
+  auto pending_channel_difference_entry = pending_channel_difference_.find(id);
+  if (pending_channel_difference_entry == pending_channel_difference_.end()) {
+    return false;
+  }
+  pending_channel_difference_.erase(pending_channel_difference_entry->first);
+  // Run get_channel_difference
+  get_channel_difference(pending_channel_difference_entry->second->dialog_id,
+                         pending_channel_difference_entry->second->pts, pending_channel_difference_entry->second->force,
+                         "on_get_channel_difference");
+  return true;
 }
 
 void MessagesManager::get_channel_difference(DialogId dialog_id, int32 pts, bool force, const char *source) {
@@ -36226,9 +36236,9 @@ void MessagesManager::on_get_channel_difference(
 
   if (!is_final) {
     LOG_IF(ERROR, timeout > 0) << "Have timeout in not final ChannelDifference in " << dialog_id;
-    auto delay_seconds = static_cast<double>(G()->shared_config()
-                                  .get_option_integer("get_channel_difference_delay_milliseconds", 0)) / 1000.0;
-    get_channel_difference_delayed(dialog_id, d->pts, true, delay_seconds, "on_get_channel_difference");
+    auto enable_pull_based_backpressure
+        = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+    get_channel_difference_delayed(dialog_id, d->pts, true, enable_pull_based_backpressure, "on_get_channel_difference");
     return;
   }
 
