@@ -9,6 +9,7 @@
 #include "td/telegram/secret_api.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
+#include "td/telegram/ConfigShared.h"
 
 #include "td/telegram/files/FileManager.h"
 #include "td/telegram/Td.h"

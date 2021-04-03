@@ -402,13 +402,13 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
           LOG(ERROR) << "Receive unexpected JPEG minithumbnail in photo of format " << format;
         }
         if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
-          return "";
+          return std::string("");
         } else {
           return std::move(res);
         }
       }
       if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
-        return "";
+        return std::string("");
       } else {
         return size->bytes_.as_slice().str();
       }
