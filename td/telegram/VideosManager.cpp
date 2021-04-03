@@ -215,7 +215,11 @@ void VideosManager::create_video(FileId file_id, string minithumbnail, PhotoSize
   v->mime_type = std::move(mime_type);
   v->duration = max(duration, 0);
   v->dimensions = dimensions;
-  v->minithumbnail = std::move(minithumbnail);
+  if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    v->minithumbnail = "";
+  } else {
+    v->minithumbnail = std::move(minithumbnail);
+  }
   v->thumbnail = std::move(thumbnail);
   v->animated_thumbnail = std::move(animated_thumbnail);
   v->supports_streaming = supports_streaming;

@@ -12,6 +12,7 @@
 
 #include "td/telegram/files/FileManager.h"
 #include "td/telegram/SecretChatActor.h"
+#include "td/telegram/ConfigShared.h"
 #include "td/telegram/Td.h"
 
 #include "td/utils/logging.h"
@@ -170,7 +171,11 @@ void VideoNotesManager::create_video_note(FileId file_id, string minithumbnail, 
   } else {
     LOG(INFO) << "Receive wrong video note dimensions " << dimensions;
   }
-  v->minithumbnail = std::move(minithumbnail);
+  if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    v->minithumbnail = "";
+  } else {
+    v->minithumbnail = std::move(minithumbnail);
+  }
   v->thumbnail = std::move(thumbnail);
   on_get_video_note(std::move(v), replace);
 }

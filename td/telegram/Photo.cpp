@@ -401,9 +401,17 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
         } else {
           LOG(ERROR) << "Receive unexpected JPEG minithumbnail in photo of format " << format;
         }
-        return std::move(res);
+        if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+          return "";
+        } else {
+          return std::move(res);
+        }
       }
-      return size->bytes_.as_slice().str();
+      if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+        return "";
+      } else {
+        return size->bytes_.as_slice().str();
+      }
     }
     case telegram_api::photoSizeProgressive::ID: {
       auto size = move_tl_object_as<telegram_api::photoSizeProgressive>(size_ptr);
@@ -734,7 +742,11 @@ Photo get_photo(FileManager *file_manager, tl_object_ptr<telegram_api::photo> &&
       }
       res.photos.push_back(std::move(size));
     } else {
-      res.minithumbnail = std::move(photo_size.get<1>());
+      if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+        res.minithumbnail = "";
+      } else {
+        res.minithumbnail = std::move(photo_size.get<1>());
+      }
     }
   }
 
