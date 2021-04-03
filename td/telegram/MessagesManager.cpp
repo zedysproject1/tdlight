@@ -6332,7 +6332,7 @@ int32 MessagesManager::get_message_index_mask(DialogId dialog_id, const Message 
 
 void MessagesManager::update_reply_count_by_message(Dialog *d, int diff, const Message *m) {
   if (td_->auth_manager_->is_bot() || !m->top_thread_message_id.is_valid() ||
-      m->top_thread_message_id == m->message_id || !m->message_id.is_server()) {
+      m->top_thread_message_id == m->message_id || !m->message_id.is_valid() || !m->message_id.is_server()) {
     return;
   }
 
@@ -13653,7 +13653,7 @@ std::pair<DialogId, unique_ptr<MessagesManager::Message>> MessagesManager::creat
         reply_in_dialog_id = DialogId();
       }
     }
-    if (reply_to_message_id.is_valid() && !td_->auth_manager_->is_bot()) {
+    if (reply_to_message_id.is_valid() && !td_->auth_manager_->is_bot() && !message_id.is_scheduled()) {
       if ((message_info.reply_header->flags_ & telegram_api::messageReplyHeader::REPLY_TO_TOP_ID_MASK) != 0) {
         top_thread_message_id = MessageId(ServerMessageId(message_info.reply_header->reply_to_top_id_));
       } else if (!is_broadcast_channel(dialog_id)) {
@@ -13716,7 +13716,7 @@ std::pair<DialogId, unique_ptr<MessagesManager::Message>> MessagesManager::creat
   }
   MessageReplyInfo reply_info(std::move(message_info.reply_info), td_->auth_manager_->is_bot());
   if (!top_thread_message_id.is_valid() && !is_broadcast_channel(dialog_id) &&
-      is_active_message_reply_info(dialog_id, reply_info)) {
+      is_active_message_reply_info(dialog_id, reply_info) && !message_id.is_scheduled()) {
     top_thread_message_id = message_id;
   }
   if (top_thread_message_id.is_valid() && dialog_type != DialogType::Channel) {
@@ -13859,10 +13859,8 @@ FullMessageId MessagesManager::on_get_message(MessageInfo &&message_info, bool f
 
   MessageId old_message_id = find_old_message_id(dialog_id, message_id);
   bool is_sent_message = false;
-  if (old_message_id.is_valid()) {
-    LOG(INFO) << "Found temporary " << old_message_id << " for " << FullMessageId{dialog_id, message_id};
-  }
   if (old_message_id.is_valid() || old_message_id.is_valid_scheduled()) {
+    LOG(INFO) << "Found temporary " << old_message_id << " for " << FullMessageId{dialog_id, message_id};
     Dialog *d = get_dialog(dialog_id);
     if (d == nullptr) {
       LOG(ERROR) << "Message " << message_id << " received from unknown dialog " << dialog_id;
@@ -13975,7 +13973,7 @@ FullMessageId MessagesManager::on_get_message(MessageInfo &&message_info, bool f
     update_message_count_by_index(d, +1, m);
   }
 
-  if (is_sent_message || need_update) {
+  if (is_sent_message || (need_update && !message_id.is_scheduled())) {
     update_reply_count_by_message(d, +1, m);
     update_forward_count(dialog_id, m);
   }
@@ -19612,8 +19610,8 @@ void MessagesManager::create_new_secret_chat(UserId user_id, Promise<SecretChatI
   }
   auto user = move_tl_object_as<telegram_api::inputUser>(user_base);
 
-  send_closure(G()->secret_chats_manager(), &SecretChatsManager::create_chat, user->user_id_, user->access_hash_,
-               std::move(promise));
+  send_closure(G()->secret_chats_manager(), &SecretChatsManager::create_chat, UserId(user->user_id_),
+               user->access_hash_, std::move(promise));
 }
 
 DialogId MessagesManager::migrate_dialog_to_megagroup(DialogId dialog_id, Promise<Unit> &&promise) {
@@ -22551,7 +22549,7 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
         last_added_message_id = m->message_id;
       }
       if (old_message == nullptr) {
-        add_message_dependencies(dependencies, dialog_id, m);
+        add_message_dependencies(dependencies, m);
         added_new_message = true;
       } else if (m->message_id != from_message_id) {
         added_new_message = true;
@@ -22893,7 +22891,7 @@ void MessagesManager::on_get_scheduled_messages_from_database(DialogId dialog_id
     Message *m = add_scheduled_message_to_dialog(d, std::move(message), false, &need_update,
                                                  "on_get_scheduled_messages_from_database");
     if (m != nullptr) {
-      add_message_dependencies(dependencies, dialog_id, m);
+      add_message_dependencies(dependencies, m);
       added_message_ids.push_back(m->message_id);
     }
   }
@@ -23238,11 +23236,13 @@ MessagesManager::Message *MessagesManager::get_message_to_send(
   m->send_date = G()->unix_time();
   m->date = is_scheduled ? options.schedule_date : m->send_date;
   m->reply_to_message_id = reply_to_message_id;
-  m->top_thread_message_id = top_thread_message_id;
-  if (reply_to_message_id.is_valid()) {
-    const Message *reply_m = get_message(d, reply_to_message_id);
-    if (reply_m != nullptr && reply_m->top_thread_message_id.is_valid()) {
-      m->top_thread_message_id = reply_m->top_thread_message_id;
+  if (!is_scheduled) {
+    m->top_thread_message_id = top_thread_message_id;
+    if (reply_to_message_id.is_valid()) {
+      const Message *reply_m = get_message(d, reply_to_message_id);
+      if (reply_m != nullptr && reply_m->top_thread_message_id.is_valid()) {
+        m->top_thread_message_id = reply_m->top_thread_message_id;
+      }
     }
   }
   m->is_channel_post = is_channel_post;
@@ -23745,7 +23745,7 @@ bool MessagesManager::is_message_auto_read(DialogId dialog_id, bool is_outgoing)
   }
 }
 
-void MessagesManager::add_message_dependencies(Dependencies &dependencies, DialogId dialog_id, const Message *m) {
+void MessagesManager::add_message_dependencies(Dependencies &dependencies, const Message *m) {
   dependencies.user_ids.insert(m->sender_user_id);
   add_dialog_and_dependencies(dependencies, m->sender_dialog_id);
   add_dialog_and_dependencies(dependencies, m->reply_in_dialog_id);
@@ -27014,7 +27014,7 @@ Result<MessageId> MessagesManager::add_local_message(
   }
   m->date = G()->unix_time();
   m->reply_to_message_id = get_reply_to_message_id(d, MessageId(), reply_to_message_id, false);
-  if (m->reply_to_message_id.is_valid()) {
+  if (m->reply_to_message_id.is_valid() && !message_id.is_scheduled()) {
     const Message *reply_m = get_message(d, m->reply_to_message_id);
     if (reply_m != nullptr) {
       m->top_thread_message_id = reply_m->top_thread_message_id;
@@ -32222,8 +32222,8 @@ MessagesManager::Message *MessagesManager::on_get_message_from_database(DialogId
   }
 
   Dependencies dependencies;
-  add_message_dependencies(dependencies, d->dialog_id, m.get());
-  resolve_dependencies_force(td_, dependencies, "get_message");
+  add_message_dependencies(dependencies, m.get());
+  resolve_dependencies_force(td_, dependencies, "on_get_message_from_database");
 
   m->have_previous = false;
   m->have_next = false;
@@ -32300,7 +32300,7 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
     }
   }
   if (!message->top_thread_message_id.is_valid() && !is_broadcast_channel(dialog_id) &&
-      is_visible_message_reply_info(dialog_id, message.get())) {
+      is_visible_message_reply_info(dialog_id, message.get()) && !message_id.is_scheduled()) {
     message->top_thread_message_id = message_id;
   }
 
@@ -33027,6 +33027,8 @@ MessagesManager::Message *MessagesManager::add_scheduled_message_to_dialog(Dialo
   CHECK(message_id.is_valid_scheduled());
   CHECK(!message->notification_id.is_valid());
   CHECK(!message->removed_notification_id.is_valid());
+
+  message->top_thread_message_id = MessageId();
 
   if (d->deleted_message_ids.count(message_id)) {
     LOG(INFO) << "Skip adding deleted " << message_id << " to " << dialog_id << " from " << source;
@@ -34197,9 +34199,9 @@ MessagesManager::Dialog *MessagesManager::add_new_dialog(unique_ptr<Dialog> &&d,
       break;
     }
     case DialogType::SecretChat:
-      if (!d->last_new_message_id.is_valid()) {
+      if (d->last_new_message_id.get() <= MessageId::min().get()) {
         LOG(INFO) << "Set " << d->dialog_id << " last new message in add_new_dialog";
-        d->last_new_message_id = MessageId::min();
+        d->last_new_message_id = MessageId::min().get_next_message_id(MessageType::Local);
       }
 
       if (!d->notification_settings.is_secret_chat_show_preview_fixed) {
@@ -34489,8 +34491,11 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
   d->debug_last_new_message_id = d->last_new_message_id;
 
   if (last_database_message != nullptr) {
+    Dependencies dependencies;
+    add_message_dependencies(dependencies, last_database_message.get());
+
     int32 dependent_dialog_count = 0;
-    auto depend_on_dialog = [&](DialogId other_dialog_id) {
+    for (auto &other_dialog_id : dependencies.dialog_ids) {
       if (other_dialog_id.is_valid() && !have_dialog(other_dialog_id)) {
         LOG(INFO) << "Postpone adding of last message in " << dialog_id << " because of cyclic dependency with "
                   << other_dialog_id;
@@ -34498,13 +34503,6 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
         dependent_dialog_count++;
       }
     };
-    if (last_database_message->forward_info != nullptr) {
-      depend_on_dialog(last_database_message->forward_info->sender_dialog_id);
-      depend_on_dialog(last_database_message->forward_info->from_dialog_id);
-    }
-    depend_on_dialog(last_database_message->sender_dialog_id);
-    depend_on_dialog(last_database_message->reply_in_dialog_id);
-    depend_on_dialog(last_database_message->real_forward_from_dialog_id);
 
     if (dependent_dialog_count == 0) {
       add_dialog_last_database_message(d, std::move(last_database_message));
@@ -34524,6 +34522,7 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
 
   if (default_join_group_call_as_dialog_id != d->default_join_group_call_as_dialog_id) {
     CHECK(default_join_group_call_as_dialog_id.is_valid());
+    CHECK(!d->default_join_group_call_as_dialog_id.is_valid());
     if (!have_dialog(default_join_group_call_as_dialog_id)) {
       LOG(INFO) << "Postpone adding of default join voice chat as " << default_join_group_call_as_dialog_id << " in "
                 << dialog_id;
@@ -34904,7 +34903,8 @@ bool MessagesManager::set_dialog_order(Dialog *d, int64 new_order, bool need_sen
   }
 
   auto folder_ptr = get_dialog_folder(d->folder_id);
-  CHECK(folder_ptr != nullptr);
+  LOG_CHECK(folder_ptr != nullptr) << dialog_id << ' ' << d->folder_id << ' ' << is_loaded_from_database << ' '
+                                   << source;
   auto &folder = *folder_ptr;
   if (old_date == new_date) {
     if (new_order == DEFAULT_ORDER) {
@@ -35316,7 +35316,7 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
     add_message_sender_dependencies(dependencies, d->default_join_group_call_as_dialog_id);
   }
   if (d->messages != nullptr) {
-    add_message_dependencies(dependencies, dialog_id, d->messages.get());
+    add_message_dependencies(dependencies, d->messages.get());
   }
   if (d->draft_message != nullptr) {
     add_formatted_text_dependencies(dependencies, &d->draft_message->input_message_text.text);
@@ -36365,16 +36365,16 @@ void MessagesManager::speculatively_update_channel_participants(DialogId dialog_
   bool by_me = m->sender_user_id == my_user_id;
   switch (m->content->get_type()) {
     case MessageContentType::ChatAddUsers:
-      td_->contacts_manager_->speculative_add_channel_participants(
-          channel_id, get_message_content_added_user_ids(m->content.get()), m->sender_user_id, m->date, by_me);
+      send_closure_later(G()->contacts_manager(), &ContactsManager::speculative_add_channel_participants, channel_id,
+                         get_message_content_added_user_ids(m->content.get()), m->sender_user_id, m->date, by_me);
       break;
     case MessageContentType::ChatJoinedByLink:
-      td_->contacts_manager_->speculative_add_channel_participants(channel_id, {m->sender_user_id}, m->sender_user_id,
-                                                                   m->date, by_me);
+      send_closure_later(G()->contacts_manager(), &ContactsManager::speculative_add_channel_participants, channel_id,
+                         vector<UserId>{m->sender_user_id}, m->sender_user_id, m->date, by_me);
       break;
     case MessageContentType::ChatDeleteUser:
-      td_->contacts_manager_->speculative_delete_channel_participant(
-          channel_id, get_message_content_deleted_user_id(m->content.get()), by_me);
+      send_closure_later(G()->contacts_manager(), &ContactsManager::speculative_delete_channel_participant, channel_id,
+                         get_message_content_deleted_user_id(m->content.get()), by_me);
       break;
     default:
       break;
@@ -36618,7 +36618,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
 
         Dependencies dependencies;
         add_dialog_dependencies(dependencies, dialog_id);
-        add_message_dependencies(dependencies, dialog_id, m.get());
+        add_message_dependencies(dependencies, m.get());
         resolve_dependencies_force(td_, dependencies, "SendMessageLogEvent");
 
         m->content =
@@ -36648,7 +36648,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
 
         Dependencies dependencies;
         add_dialog_dependencies(dependencies, dialog_id);
-        add_message_dependencies(dependencies, dialog_id, m.get());
+        add_message_dependencies(dependencies, m.get());
         resolve_dependencies_force(td_, dependencies, "SendBotStartMessageLogEvent");
 
         auto bot_user_id = log_event.bot_user_id;
@@ -36685,7 +36685,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
 
         Dependencies dependencies;
         add_dialog_dependencies(dependencies, dialog_id);
-        add_message_dependencies(dependencies, dialog_id, m.get());
+        add_message_dependencies(dependencies, m.get());
         resolve_dependencies_force(td_, dependencies, "SendInlineQueryResultMessageLogEvent");
 
         m->content = dup_message_content(td_, dialog_id, m->content.get(), MessageContentDupType::SendViaBot,
@@ -36714,7 +36714,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
 
         Dependencies dependencies;
         add_dialog_dependencies(dependencies, dialog_id);
-        add_message_dependencies(dependencies, dialog_id, m.get());
+        add_message_dependencies(dependencies, m.get());
         resolve_dependencies_force(td_, dependencies, "SendScreenshotTakenNotificationMessageLogEvent");
 
         auto result_message = continue_send_message(dialog_id, std::move(m), event.id_);
@@ -36740,7 +36740,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         add_dialog_dependencies(dependencies, to_dialog_id);
         add_dialog_dependencies(dependencies, from_dialog_id);
         for (auto &m : messages) {
-          add_message_dependencies(dependencies, to_dialog_id, m.get());
+          add_message_dependencies(dependencies, m.get());
         }
         resolve_dependencies_force(td_, dependencies, "ForwardMessagesLogEvent");
 

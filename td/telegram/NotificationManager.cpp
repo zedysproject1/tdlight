@@ -849,7 +849,8 @@ int32 NotificationManager::get_notification_delay_ms(DialogId dialog_id, const P
     return 0;
   }();
 
-  auto passed_time_ms = max(0, static_cast<int32>((G()->server_time_cached() - notification.date - 1) * 1000));
+  auto passed_time_ms =
+      static_cast<int32>(clamp(G()->server_time_cached() - notification.date - 1, 0.0, 1000000.0) * 1000);
   return max(max(min_delay_ms, delay_ms) - passed_time_ms, MIN_NOTIFICATION_DELAY_MS);
 }
 
@@ -1861,7 +1862,9 @@ void NotificationManager::remove_notification(NotificationGroupId group_id, Noti
   bool is_total_count_changed = false;
   if ((!have_all_notifications && is_permanent) || (have_all_notifications && is_found)) {
     if (group_it->second.total_count == 0) {
-      LOG(ERROR) << "Total notification count became negative in " << group_id << " after removing " << notification_id;
+      LOG(ERROR) << "Total notification count became negative in " << group_it->second << " after removing "
+                 << notification_id << " with is_permanent = " << is_permanent << ", is_found = " << is_found
+                 << ", force_update = " << force_update << " from " << source;
     } else {
       group_it->second.total_count--;
       is_total_count_changed = true;
@@ -3824,7 +3827,7 @@ Result<int64> NotificationManager::get_push_receiver_id(string payload) {
         return Status::Error(400, "Expected user_id as a String or a Number");
       }
       Slice user_id_str = user_id.type() == JsonValue::Type::String ? user_id.get_string() : user_id.get_number();
-      auto r_user_id = to_integer_safe<int32>(user_id_str);
+      auto r_user_id = to_integer_safe<int64>(user_id_str);
       if (r_user_id.is_error()) {
         return Status::Error(400, PSLICE() << "Failed to get user_id from " << user_id_str);
       }
