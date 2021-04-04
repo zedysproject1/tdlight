@@ -3143,7 +3143,7 @@ class MessagesManager : public Actor {
 
     }
   };
-  std::unordered_map<int64, unique_ptr<PendingChannelDifference>> pending_channel_difference_;
+  std::unordered_map<int64, PendingChannelDifference> pending_channel_difference_;
   int64 last_pending_channel_difference_ = 0;
 
   struct PendingMessageGroupSend {
