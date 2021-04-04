@@ -35809,10 +35809,11 @@ void MessagesManager::get_channel_difference_delayed(DialogId dialog_id, int32 p
 
 bool MessagesManager::run_get_channel_difference_request(long id) {
   auto pending_channel_difference_entry = pending_channel_difference_.find(id);
-  if (pending_channel_difference_entry == pending_channel_difference_.end()) {
+  if (pending_channel_difference_entry == pending_channel_difference_.end() ||
+      pending_channel_difference_entry->second == nullptr) {
     return false;
   }
-  pending_channel_difference_.erase(pending_channel_difference_entry->first);
+  pending_channel_difference_.erase(pending_channel_difference_entry);
   // Run get_channel_difference
   get_channel_difference(pending_channel_difference_entry->second->dialog_id,
                          pending_channel_difference_entry->second->pts, pending_channel_difference_entry->second->force,
