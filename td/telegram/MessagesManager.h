@@ -3137,10 +3137,9 @@ class MessagesManager : public Actor {
     DialogId dialog_id;
     int32 pts;
     bool force;
-    const char *source;
 
-    PendingChannelDifference(DialogId dialog_id, int32 pts, bool force, const char *source)
-        : dialog_id(dialog_id), pts(pts), force(force), source(source) {
+    PendingChannelDifference(DialogId dialog_id, int32 pts, bool force)
+        : dialog_id(dialog_id), pts(pts), force(force) {
 
     }
   };
