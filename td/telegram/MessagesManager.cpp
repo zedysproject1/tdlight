@@ -35822,7 +35822,7 @@ void MessagesManager::get_channel_difference_delayed(DialogId dialog_id, int32 p
   } else {
     auto channel_difference_id = ++last_pending_channel_difference_;
     PendingChannelDifference pendingChannelDifference = {dialog_id, pts, force};
-    pending_channel_difference_.emplace(channel_difference_id, pendingChannelDifference);
+    pending_channel_difference_[channel_difference_id] = pendingChannelDifference;
     send_closure(G()->td(), &Td::send_update,
                  make_tl_object<td_api::updateNewChannelDifferencePart>(channel_difference_id));
   }
@@ -35833,11 +35833,11 @@ bool MessagesManager::run_get_channel_difference_request(long id) {
   if (pending_channel_difference_entry == pending_channel_difference_.end()) {
     return false;
   }
-  pending_channel_difference_.erase(pending_channel_difference_entry);
   // Run get_channel_difference
   get_channel_difference(pending_channel_difference_entry->second.dialog_id,
                          pending_channel_difference_entry->second.pts, pending_channel_difference_entry->second.force,
                          "on_get_channel_difference");
+  pending_channel_difference_.erase(pending_channel_difference_entry);
   return true;
 }
 
