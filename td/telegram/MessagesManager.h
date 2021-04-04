@@ -3137,11 +3137,6 @@ class MessagesManager : public Actor {
     DialogId dialog_id;
     int32 pts;
     bool force;
-
-    PendingChannelDifference(DialogId dialog_id, int32 pts, bool force)
-        : dialog_id(dialog_id), pts(pts), force(force) {
-
-    }
   };
   std::unordered_map<int64, PendingChannelDifference> pending_channel_difference_;
   int64 last_pending_channel_difference_ = 0;

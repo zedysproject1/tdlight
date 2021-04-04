@@ -35821,8 +35821,8 @@ void MessagesManager::get_channel_difference_delayed(DialogId dialog_id, int32 p
     get_channel_difference(dialog_id,pts, force, "on_get_channel_difference");
   } else {
     auto channel_difference_id = ++last_pending_channel_difference_;
-    PendingChannelDifference pendingChannelDifference = {dialog_id, pts, force};
-    pending_channel_difference_[channel_difference_id] = pendingChannelDifference;
+    PendingChannelDifference pending_channel_difference = {dialog_id, pts, force};
+    pending_channel_difference_[channel_difference_id] = pending_channel_difference;
     send_closure(G()->td(), &Td::send_update,
                  make_tl_object<td_api::updateNewChannelDifferencePart>(channel_difference_id));
   }
