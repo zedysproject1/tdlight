@@ -6927,11 +6927,17 @@ void MessagesManager::on_update_channel_too_long(tl_object_ptr<telegram_api::upd
 
   if (d != nullptr) {
     if (update_pts == 0 || update_pts > d->pts) {
-      get_channel_difference(dialog_id, d->pts, true, "on_update_channel_too_long 1");
+      auto enable_pull_based_backpressure
+          = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+      get_channel_difference_delayed(dialog_id, d->pts, true, enable_pull_based_backpressure,
+                                     "on_update_channel_too_long 1");
     }
   } else {
     if (force_apply) {
-      get_channel_difference(dialog_id, -1, true, "on_update_channel_too_long 2");
+      auto enable_pull_based_backpressure
+          = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+      get_channel_difference_delayed(dialog_id, -1, true, enable_pull_based_backpressure,
+                                     "on_update_channel_too_long 2");
     } else {
       td_->updates_manager_->schedule_get_difference("on_update_channel_too_long 3");
     }
@@ -7006,7 +7012,10 @@ void MessagesManager::update_message_interaction_info(FullMessageId full_message
     LOG(INFO) << "Ignore message interaction info about unknown " << full_message_id;
     if (!message_id.is_scheduled() && message_id > d->last_new_message_id &&
         dialog_id.get_type() == DialogType::Channel) {
-      get_channel_difference(dialog_id, d->pts, true, "update_message_interaction_info");
+      auto enable_pull_based_backpressure
+          = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+      get_channel_difference_delayed(dialog_id, d->pts, true, enable_pull_based_backpressure,
+                                     "update_message_interaction_info");
     }
     return;
   }
@@ -7578,7 +7587,9 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
                      << ", update is from " << source << ": " << oneline(to_string(update));
           last_channel_pts_jump_warning_time_ = now;
         }
-        get_channel_difference(dialog_id, old_pts, true, "add_pending_channel_update old");
+        auto enable_pull_based_backpressure
+            = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+        get_channel_difference_delayed(dialog_id, old_pts, true, enable_pull_based_backpressure, "old");
       }
 
       if (update->get_id() == telegram_api::updateNewChannelMessage::ID) {
@@ -7626,7 +7637,10 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
       d->postponed_channel_updates.emplace(new_pts,
                                            PendingPtsUpdate(std::move(update), new_pts, pts_count, std::move(promise)));
 
-      get_channel_difference(dialog_id, old_pts, true, "add_pending_channel_update pts mismatch");
+      auto enable_pull_based_backpressure
+          = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+      get_channel_difference_delayed(dialog_id, old_pts, true, enable_pull_based_backpressure,
+                                     "add_pending_channel_update pts mismatch");
       return;
     }
   }
@@ -11438,7 +11452,10 @@ void MessagesManager::read_channel_message_content_from_updates(Dialog *d, Messa
   if (m != nullptr) {
     read_message_content(d, m, false, "read_channel_message_content_from_updates");
   } else if (message_id > d->last_new_message_id) {
-    get_channel_difference(d->dialog_id, d->pts, true, "read_channel_message_content_from_updates");
+    auto enable_pull_based_backpressure
+        = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+    get_channel_difference_delayed(d->dialog_id, d->pts, true, enable_pull_based_backpressure,
+                                   "read_channel_message_content_from_updates");
   }
 }
 
@@ -29056,7 +29073,10 @@ void MessagesManager::check_send_message_result(int64 random_id, DialogId dialog
       return;
     }
     if (dialog_id.get_type() == DialogType::Channel) {
-      get_channel_difference(dialog_id, d->pts, true, "check_send_message_result");
+      auto enable_pull_based_backpressure
+          = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+      get_channel_difference_delayed(dialog_id, d->pts, true, enable_pull_based_backpressure,
+                                     "check_send_message_result");
     } else {
       td_->updates_manager_->schedule_get_difference("check_send_message_result");
     }
@@ -35768,7 +35788,10 @@ void MessagesManager::run_after_channel_difference(DialogId dialog_id, Promise<U
 
   run_after_get_channel_difference_[dialog_id].push_back(std::move(promise));
 
-  get_channel_difference(dialog_id, d->pts, true, "run_after_channel_difference");
+  auto enable_pull_based_backpressure
+      = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+  get_channel_difference_delayed(dialog_id, d->pts, true, enable_pull_based_backpressure,
+                                 "run_after_channel_difference");
 }
 
 bool MessagesManager::running_get_channel_difference(DialogId dialog_id) const {
@@ -35786,7 +35809,10 @@ void MessagesManager::on_channel_get_difference_timeout(DialogId dialog_id) {
     LOG(ERROR) << "Unknown dialog " << dialog_id;
     return;
   }
-  get_channel_difference(dialog_id, d->pts, true, "on_channel_get_difference_timeout");
+  auto enable_pull_based_backpressure
+      = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
+  get_channel_difference_delayed(dialog_id, d->pts, true, enable_pull_based_backpressure,
+                                 "on_channel_get_difference_timeout");
 }
 
 class MessagesManager::GetChannelDifferenceLogEvent {
