@@ -6365,7 +6365,7 @@ void ContactsManager::set_channel_discussion_group(DialogId dialog_id, DialogId 
   ChannelId broadcast_channel_id;
   telegram_api::object_ptr<telegram_api::InputChannel> broadcast_input_channel;
   if (dialog_id.is_valid()) {
-    if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+    if (!td_->messages_manager_->have_dialog_force(dialog_id, "set_channel_discussion_group 1")) {
       return promise.set_error(Status::Error(400, "Chat not found"));
     }
 
@@ -6395,7 +6395,7 @@ void ContactsManager::set_channel_discussion_group(DialogId dialog_id, DialogId 
   ChannelId group_channel_id;
   telegram_api::object_ptr<telegram_api::InputChannel> group_input_channel;
   if (discussion_dialog_id.is_valid()) {
-    if (!td_->messages_manager_->have_dialog_force(discussion_dialog_id)) {
+    if (!td_->messages_manager_->have_dialog_force(discussion_dialog_id, "set_channel_discussion_group 2")) {
       return promise.set_error(Status::Error(400, "Discussion chat not found"));
     }
     if (discussion_dialog_id.get_type() != DialogType::Channel) {
@@ -6435,7 +6435,7 @@ void ContactsManager::set_channel_location(DialogId dialog_id, const DialogLocat
   if (!dialog_id.is_valid()) {
     return promise.set_error(Status::Error(400, "Invalid chat identifier specified"));
   }
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "set_channel_location")) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
 
@@ -6467,7 +6467,7 @@ void ContactsManager::set_channel_slow_mode_delay(DialogId dialog_id, int32 slow
   if (!dialog_id.is_valid()) {
     return promise.set_error(Status::Error(400, "Invalid chat identifier specified"));
   }
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "set_channel_slow_mode_delay")) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
 
@@ -6495,7 +6495,7 @@ void ContactsManager::get_channel_statistics_dc_id(DialogId dialog_id, bool for_
   if (!dialog_id.is_valid()) {
     return promise.set_error(Status::Error(400, "Invalid chat identifier specified"));
   }
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "get_channel_statistics_dc_id")) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
 
@@ -6716,7 +6716,7 @@ void ContactsManager::delete_channel(ChannelId channel_id, Promise<Unit> &&promi
 }
 
 void ContactsManager::delete_dialog(DialogId dialog_id, Promise<Unit> &&promise) {
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "delete_dialog")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -7074,7 +7074,7 @@ td_api::object_ptr<td_api::CanTransferOwnershipResult> ContactsManager::get_can_
 
 void ContactsManager::transfer_dialog_ownership(DialogId dialog_id, UserId user_id, const string &password,
                                                 Promise<Unit> &&promise) {
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "transfer_dialog_ownership")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
   if (!have_user_force(user_id)) {
@@ -7126,7 +7126,7 @@ void ContactsManager::transfer_channel_ownership(
 }
 
 Status ContactsManager::can_manage_dialog_invite_links(DialogId dialog_id, bool creator_only) {
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "can_manage_dialog_invite_links")) {
     return Status::Error(3, "Chat not found");
   }
 
@@ -7866,7 +7866,7 @@ void ContactsManager::on_load_contacts_from_database(string value) {
 }
 
 void ContactsManager::on_get_contacts_finished(size_t expected_contact_count) {
-  LOG(INFO) << "Finished to get " << contacts_hints_.size() << " contacts out of " << expected_contact_count;
+  LOG(INFO) << "Finished to get " << contacts_hints_.size() << " contacts out of expected " << expected_contact_count;
   are_contacts_loaded_ = true;
   auto promises = std::move(load_contacts_queries_);
   load_contacts_queries_.clear();
@@ -9236,7 +9236,11 @@ void ContactsManager::on_load_user_full_from_database(UserId user_id, string val
 
   Dependencies dependencies;
   dependencies.user_ids.insert(user_id);
-  resolve_dependencies_force(td_, dependencies, "user_full");
+  if (!resolve_dependencies_force(td_, dependencies, "user_full")) {
+    users_full_.erase(user_id);
+    G()->td_db()->get_sqlite_pmc()->erase(get_user_full_database_key(user_id), Auto());
+    return;
+  }
 
   if (user_full->need_phone_number_privacy_exception && is_user_contact(user_id)) {
     user_full->need_phone_number_privacy_exception = false;
@@ -9423,7 +9427,11 @@ void ContactsManager::on_load_chat_full_from_database(ChatId chat_id, string val
     dependencies.user_ids.insert(participant.inviter_user_id);
   }
   dependencies.user_ids.insert(chat_full->invite_link.get_creator_user_id());
-  resolve_dependencies_force(td_, dependencies, "chat_full");
+  if (!resolve_dependencies_force(td_, dependencies, "chat_full")) {
+    chats_full_.erase(chat_id);
+    G()->td_db()->get_sqlite_pmc()->erase(get_chat_full_database_key(chat_id), Auto());
+    return;
+  }
 
   for (auto &participant : chat_full->participants) {
     get_bot_info_force(participant.user_id);
@@ -9527,7 +9535,11 @@ void ContactsManager::on_load_channel_full_from_database(ChannelId channel_id, s
   dependencies.chat_ids.insert(channel_full->migrated_from_chat_id);
   dependencies.user_ids.insert(channel_full->bot_user_ids.begin(), channel_full->bot_user_ids.end());
   dependencies.user_ids.insert(channel_full->invite_link.get_creator_user_id());
-  resolve_dependencies_force(td_, dependencies, "channel_full");
+  if (!resolve_dependencies_force(td_, dependencies, "channel_full")) {
+    channels_full_.erase(channel_id);
+    G()->td_db()->get_sqlite_pmc()->erase(get_channel_full_database_key(channel_id), Auto());
+    return;
+  }
 
   for (auto &user_id : channel_full->bot_user_ids) {
     get_bot_info_force(user_id);
@@ -14384,7 +14396,7 @@ std::pair<int32, vector<UserId>> ContactsManager::search_among_users(const vecto
 
 void ContactsManager::add_dialog_participant(DialogId dialog_id, UserId user_id, int32 forward_limit,
                                              Promise<Unit> &&promise) {
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "add_dialog_participant")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -14409,7 +14421,7 @@ void ContactsManager::add_dialog_participants(DialogId dialog_id, const vector<U
     return promise.set_error(Status::Error(3, "Method is not available for bots"));
   }
 
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "add_dialog_participants")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -14432,7 +14444,7 @@ void ContactsManager::set_dialog_participant_status(DialogId dialog_id, UserId u
                                                     const tl_object_ptr<td_api::ChatMemberStatus> &chat_member_status,
                                                     Promise<Unit> &&promise) {
   auto status = get_dialog_participant_status(chat_member_status);
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "set_dialog_participant_status")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -14453,7 +14465,7 @@ void ContactsManager::set_dialog_participant_status(DialogId dialog_id, UserId u
 
 void ContactsManager::ban_dialog_participant(DialogId dialog_id, UserId user_id, int32 banned_until_date,
                                              bool revoke_messages, Promise<Unit> &&promise) {
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "ban_dialog_participant")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -14477,7 +14489,7 @@ DialogParticipant ContactsManager::get_dialog_participant(DialogId dialog_id, Us
                                                           bool force, Promise<Unit> &&promise) {
   LOG(INFO) << "Receive GetChatMember request to get " << user_id << " in " << dialog_id << " with random_id "
             << random_id;
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "get_dialog_participant")) {
     promise.set_error(Status::Error(3, "Chat not found"));
     return DialogParticipant();
   }
@@ -14571,7 +14583,7 @@ void ContactsManager::search_dialog_participants(DialogId dialog_id, const strin
                                                  Promise<DialogParticipants> &&promise) {
   LOG(INFO) << "Receive searchChatMembers request to search for \"" << query << "\" in " << dialog_id << " with filter "
             << filter;
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "search_dialog_participants")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
   if (limit < 0) {
@@ -14861,7 +14873,7 @@ void ContactsManager::do_get_channel_participants(ChannelId channel_id, ChannelP
 vector<DialogAdministrator> ContactsManager::get_dialog_administrators(DialogId dialog_id, int left_tries,
                                                                        Promise<Unit> &&promise) {
   LOG(INFO) << "Receive GetChatAdministrators request in " << dialog_id << " with " << left_tries << " left tries";
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "get_dialog_administrators")) {
     promise.set_error(Status::Error(3, "Chat not found"));
     return {};
   }

@@ -263,7 +263,7 @@ class GroupCallManager : public Actor {
 
   void on_group_call_left(InputGroupCallId input_group_call_id, int32 audio_source, bool need_rejoin);
 
-  void on_group_call_left_impl(GroupCall *group_call, bool need_rejoin);
+  void on_group_call_left_impl(GroupCall *group_call, bool need_rejoin, const char *source);
 
   InputGroupCallId update_group_call(const tl_object_ptr<telegram_api::GroupCall> &group_call_ptr, DialogId dialog_id);
 
@@ -303,10 +303,11 @@ class GroupCallManager : public Actor {
 
   void send_update_group_call(const GroupCall *group_call, const char *source);
 
-  void send_update_group_call_participant(GroupCallId group_call_id, const GroupCallParticipant &participant);
+  void send_update_group_call_participant(GroupCallId group_call_id, const GroupCallParticipant &participant,
+                                          const char *source);
 
-  void send_update_group_call_participant(InputGroupCallId input_group_call_id,
-                                          const GroupCallParticipant &participant);
+  void send_update_group_call_participant(InputGroupCallId input_group_call_id, const GroupCallParticipant &participant,
+                                          const char *source);
 
   Td *td_;
   ActorShared<> parent_;

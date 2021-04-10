@@ -10,6 +10,7 @@
 #include "td/telegram/ChatId.h"
 #include "td/telegram/ConfigShared.h"
 #include "td/telegram/ContactsManager.h"
+#include "td/telegram/Dependencies.h"
 #include "td/telegram/DialogDb.h"
 #include "td/telegram/DialogFilter.h"
 #include "td/telegram/DialogFilter.hpp"
@@ -6869,7 +6870,7 @@ void MessagesManager::on_update_read_channel_messages_contents(
 
   DialogId dialog_id = DialogId(channel_id);
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "on_update_read_channel_messages_contents");
   if (d == nullptr) {
     LOG(INFO) << "Receive read channel messages contents update in unknown " << dialog_id;
     return;
@@ -6883,7 +6884,7 @@ void MessagesManager::on_update_read_channel_messages_contents(
 void MessagesManager::on_update_read_message_comments(DialogId dialog_id, MessageId message_id,
                                                       MessageId max_message_id, MessageId last_read_inbox_message_id,
                                                       MessageId last_read_outbox_message_id) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "on_update_read_message_comments");
   if (d == nullptr) {
     LOG(INFO) << "Ignore update of read message comments in unknown " << dialog_id << " in updateReadDiscussion";
     return;
@@ -6909,17 +6910,17 @@ void MessagesManager::on_update_channel_too_long(tl_object_ptr<telegram_api::upd
   }
 
   DialogId dialog_id = DialogId(channel_id);
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_channel_too_long 4");
   if (d == nullptr) {
     auto pts = load_channel_pts(dialog_id);
     if (pts > 0) {
-      d = add_dialog(dialog_id);
+      d = add_dialog(dialog_id, "on_update_channel_too_long 5");
       if (d == nullptr) {
         LOG(ERROR) << "Unknown dialog " << dialog_id;
         return;
       }
       CHECK(d->pts == pts);
-      update_dialog_pos(d, "on_update_channel_too_long");
+      update_dialog_pos(d, "on_update_channel_too_long 6");
     }
   }
 
@@ -7002,7 +7003,7 @@ void MessagesManager::update_message_interaction_info(FullMessageId full_message
                                                       int32 forward_count, bool has_reply_info,
                                                       tl_object_ptr<telegram_api::messageReplies> &&reply_info) {
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "update_message_interaction_info");
   if (d == nullptr) {
     return;
   }
@@ -7263,7 +7264,7 @@ void MessagesManager::on_read_channel_inbox(ChannelId channel_id, MessageId max_
   }
 
   DialogId dialog_id(channel_id);
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, source);
   if (d == nullptr) {
     LOG(INFO) << "Receive read inbox in unknown " << dialog_id << " from " << source;
     return;
@@ -7358,7 +7359,7 @@ void MessagesManager::on_update_delete_scheduled_messages(DialogId dialog_id,
     return;
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "on_update_delete_scheduled_messages");
   if (d == nullptr) {
     LOG(INFO) << "Skip updateDeleteScheduledMessages in unknown " << dialog_id;
     return;
@@ -7400,7 +7401,7 @@ void MessagesManager::on_user_dialog_action(DialogId dialog_id, MessageId top_th
       LOG(ERROR) << "Receive " << action << " in thread of " << top_thread_message_id << " in " << dialog_id;
       return;
     }
-    const Dialog *d = get_dialog_force(dialog_id);
+    const Dialog *d = get_dialog_force(dialog_id, "on_user_dialog_action");
     if (d != nullptr && d->active_group_call_id.is_valid()) {
       auto group_call_id = td_->group_call_manager_->get_group_call_id(d->active_group_call_id, dialog_id);
       td_->group_call_manager_->on_user_speaking_in_group_call(group_call_id, typing_dialog_id, date);
@@ -7548,7 +7549,7 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
   // TODO need to save all updates that can change result of running queries not associated with pts (for example
   // getHistory) and apply them to result of these queries
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "add_pending_channel_update");
   if (d == nullptr) {
     auto pts = load_channel_pts(dialog_id);
     if (pts > 0) {
@@ -7559,7 +7560,7 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
         return;
       }
 
-      d = add_dialog(dialog_id);
+      d = add_dialog(dialog_id, "add_pending_channel_update");
       if (d == nullptr) {
         LOG(ERROR) << "Unknown dialog " << dialog_id;
         return;
@@ -7670,7 +7671,7 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
 bool MessagesManager::is_old_channel_update(DialogId dialog_id, int32 new_pts) {
   CHECK(dialog_id.get_type() == DialogType::Channel);
 
-  const Dialog *d = get_dialog_force(dialog_id);
+  const Dialog *d = get_dialog_force(dialog_id, "is_old_channel_update");
   return new_pts <= (d == nullptr ? load_channel_pts(dialog_id) : d->pts);
 }
 
@@ -7790,7 +7791,7 @@ void MessagesManager::process_channel_update(tl_object_ptr<telegram_api::Update>
       }
 
       auto dialog_id = DialogId(channel_id);
-      delete_dialog_messages(dialog_id, message_ids, true, false);
+      delete_dialog_messages(dialog_id, message_ids, true, false, "updateDeleteChannelMessages");
       break;
     }
     case telegram_api::updateEditChannelMessage::ID: {
@@ -8320,7 +8321,7 @@ void MessagesManager::repair_dialog_action_bar(Dialog *d, const char *source) {
 }
 
 void MessagesManager::hide_dialog_action_bar(DialogId dialog_id) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "hide_dialog_action_bar");
   if (d == nullptr) {
     return;
   }
@@ -8349,7 +8350,7 @@ void MessagesManager::hide_dialog_action_bar(Dialog *d) {
 }
 
 void MessagesManager::remove_dialog_action_bar(DialogId dialog_id, Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "remove_dialog_action_bar");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -8360,7 +8361,7 @@ void MessagesManager::remove_dialog_action_bar(DialogId dialog_id, Promise<Unit>
 
   if (dialog_id.get_type() == DialogType::SecretChat) {
     dialog_id = DialogId(td_->contacts_manager_->get_secret_chat_user_id(dialog_id.get_secret_chat_id()));
-    d = get_dialog_force(dialog_id);
+    d = get_dialog_force(dialog_id, "remove_dialog_action_bar 2");
     if (d == nullptr) {
       return promise.set_error(Status::Error(3, "Chat with the user not found"));
     }
@@ -8486,7 +8487,7 @@ bool MessagesManager::can_report_dialog(DialogId dialog_id) const {
 
 void MessagesManager::report_dialog(DialogId dialog_id, const vector<MessageId> &message_ids, ReportReason &&reason,
                                     Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "report_dialog");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -8502,7 +8503,7 @@ void MessagesManager::report_dialog(DialogId dialog_id, const vector<MessageId> 
     // report from action bar
     if (dialog_id.get_type() == DialogType::SecretChat) {
       auto user_dialog_id = DialogId(td_->contacts_manager_->get_secret_chat_user_id(dialog_id.get_secret_chat_id()));
-      user_d = get_dialog_force(user_dialog_id);
+      user_d = get_dialog_force(user_dialog_id, "report_dialog 2");
       if (user_d == nullptr) {
         return promise.set_error(Status::Error(3, "Chat with the user not found"));
       }
@@ -8546,7 +8547,7 @@ void MessagesManager::report_dialog(DialogId dialog_id, const vector<MessageId> 
 
 void MessagesManager::report_dialog_photo(DialogId dialog_id, FileId file_id, ReportReason &&reason,
                                           Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "report_dialog_photo");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -8583,7 +8584,7 @@ void MessagesManager::on_get_peer_settings(DialogId dialog_id,
                                                                                need_phone_number_privacy_exception);
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "on_get_peer_settings");
   if (d == nullptr) {
     return;
   }
@@ -8748,7 +8749,7 @@ void MessagesManager::fix_dialog_action_bar(Dialog *d) {
 
 void MessagesManager::get_dialog_statistics_url(DialogId dialog_id, const string &parameters, bool is_dark,
                                                 Promise<td_api::object_ptr<td_api::httpUrl>> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_dialog_statistics_url");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -8764,7 +8765,7 @@ void MessagesManager::get_dialog_statistics_url(DialogId dialog_id, const string
 }
 
 Result<string> MessagesManager::get_login_button_url(DialogId dialog_id, MessageId message_id, int32 button_id) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_login_button_url");
   if (d == nullptr) {
     return Status::Error(3, "Chat not found");
   }
@@ -9471,7 +9472,7 @@ void MessagesManager::after_get_difference() {
 
 void MessagesManager::on_get_empty_messages(DialogId dialog_id, vector<MessageId> empty_message_ids) {
   if (!empty_message_ids.empty()) {
-    delete_dialog_messages(dialog_id, std::move(empty_message_ids), true, true);
+    delete_dialog_messages(dialog_id, std::move(empty_message_ids), true, true, "on_get_empty_messages");
   }
 }
 
@@ -10306,10 +10307,11 @@ void MessagesManager::delete_messages_from_updates(const vector<MessageId> &mess
 }
 
 void MessagesManager::delete_dialog_messages(DialogId dialog_id, const vector<MessageId> &message_ids,
-                                             bool from_updates, bool skip_update_for_not_found_messages) {
-  Dialog *d = get_dialog_force(dialog_id);
+                                             bool from_updates, bool skip_update_for_not_found_messages,
+                                             const char *source) {
+  Dialog *d = get_dialog_force(dialog_id, "delete_dialog_messages");
   if (d == nullptr) {
-    LOG(INFO) << "Ignore deleteChannelMessages for unknown " << dialog_id;
+    LOG(INFO) << "Ignore deleteChannelMessages for unknown " << dialog_id << " from " << source;
     CHECK(from_updates);
     CHECK(dialog_id.get_type() == DialogType::Channel);
     return;
@@ -10321,7 +10323,7 @@ void MessagesManager::delete_dialog_messages(DialogId dialog_id, const vector<Me
     CHECK(!message_id.is_scheduled());
     if (from_updates) {
       if (!message_id.is_valid() || (!message_id.is_server() && dialog_id.get_type() != DialogType::SecretChat)) {
-        LOG(ERROR) << "Incoming update tries to delete " << message_id;
+        LOG(ERROR) << "Tried to delete " << message_id << " in " << dialog_id << " from " << source;
         continue;
       }
     } else {
@@ -10329,7 +10331,7 @@ void MessagesManager::delete_dialog_messages(DialogId dialog_id, const vector<Me
     }
 
     bool was_already_deleted = d->deleted_message_ids.count(message_id) != 0;
-    auto message = delete_message(d, message_id, true, &need_update_dialog_pos, "delete_dialog_messages");
+    auto message = delete_message(d, message_id, true, &need_update_dialog_pos, source);
     if (message == nullptr) {
       if (!skip_update_for_not_found_messages && !was_already_deleted) {
         deleted_message_ids.push_back(message_id.get());
@@ -10339,14 +10341,14 @@ void MessagesManager::delete_dialog_messages(DialogId dialog_id, const vector<Me
     }
   }
   if (need_update_dialog_pos) {
-    send_update_chat_last_message(d, "delete_dialog_messages");
+    send_update_chat_last_message(d, source);
   }
   send_update_delete_messages(dialog_id, std::move(deleted_message_ids), true, false);
 }
 
 void MessagesManager::update_dialog_pinned_messages_from_updates(DialogId dialog_id,
                                                                  const vector<MessageId> &message_ids, bool is_pin) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "update_dialog_pinned_messages_from_updates");
   if (d == nullptr) {
     LOG(INFO) << "Ignore updatePinnedMessages for unknown " << dialog_id;
     return;
@@ -10577,7 +10579,7 @@ void MessagesManager::delete_messages(DialogId dialog_id, const vector<MessageId
   if (G()->close_flag()) {
     return promise.set_error(Status::Error(500, "Request aborted"));
   }
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "delete_messages");
   if (d == nullptr) {
     return promise.set_error(Status::Error(6, "Chat is not found"));
   }
@@ -10639,11 +10641,11 @@ void MessagesManager::delete_messages(DialogId dialog_id, const vector<MessageId
   bool need_update_chat_has_scheduled_messages = false;
   vector<int64> deleted_message_ids;
   for (auto message_id : message_ids) {
-    need_update_chat_has_scheduled_messages |= message_id.is_scheduled();
     auto m = delete_message(d, message_id, true, &need_update_dialog_pos, DELETE_MESSAGE_USER_REQUEST_SOURCE);
     if (m == nullptr) {
       LOG(INFO) << "Can't delete " << message_id << " because it is not found";
     } else {
+      need_update_chat_has_scheduled_messages |= m->message_id.is_scheduled();
       deleted_message_ids.push_back(m->message_id.get());
     }
   }
@@ -10658,13 +10660,32 @@ void MessagesManager::delete_messages(DialogId dialog_id, const vector<MessageId
   }
 }
 
-void MessagesManager::delete_message_from_server(DialogId dialog_id, MessageId message_id, bool revoke) {
-  if (message_id.is_valid()) {
-    CHECK(message_id.is_server());
-    delete_messages_from_server(dialog_id, {message_id}, revoke, 0, Auto());
+void MessagesManager::delete_sent_message_from_server(DialogId dialog_id, MessageId message_id) {
+  // being sent message was deleted by the user or is in an inaccessible channel
+  // don't need to send an update to the user, because the message has already been deleted
+  if (!have_input_peer(dialog_id, AccessRights::Read)) {
+    LOG(INFO) << "Ignore sent " << message_id << " in inaccessible " << dialog_id;
+    return;
+  }
+
+  LOG(INFO) << "Delete already deleted sent " << message_id << " in " << dialog_id << " from server";
+  Dialog *d = get_dialog(dialog_id);
+  CHECK(d != nullptr);
+  if (get_message(d, message_id) != nullptr) {
+    delete_messages(dialog_id, {message_id}, true, Auto());
   } else {
-    CHECK(message_id.is_scheduled_server());
-    delete_scheduled_messages_from_server(dialog_id, {message_id}, 0, Auto());
+    if (message_id.is_valid()) {
+      CHECK(message_id.is_server());
+      delete_messages_from_server(dialog_id, {message_id}, true, 0, Auto());
+    } else {
+      CHECK(message_id.is_scheduled_server());
+      delete_scheduled_messages_from_server(dialog_id, {message_id}, 0, Auto());
+    }
+
+    bool need_update_dialog_pos = false;
+    auto m = delete_message(d, message_id, true, &need_update_dialog_pos, "delete_sent_message_from_server");
+    CHECK(m == nullptr);
+    CHECK(need_update_dialog_pos == false);
   }
 }
 
@@ -10728,7 +10749,7 @@ void MessagesManager::delete_messages_from_server(DialogId dialog_id, vector<Mes
       break;
     case DialogType::SecretChat: {
       vector<int64> random_ids;
-      auto d = get_dialog_force(dialog_id);
+      auto d = get_dialog_force(dialog_id, "delete_messages_from_server");
       if (d == nullptr) {
         LOG(ERROR) << "Unknown dialog " << dialog_id;
         break;
@@ -10800,7 +10821,7 @@ void MessagesManager::delete_dialog_history(DialogId dialog_id, bool remove_from
   LOG(INFO) << "Receive deleteChatHistory request to delete all messages in " << dialog_id
             << ", remove_from_chat_list is " << remove_from_dialog_list << ", revoke is " << revoke;
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "delete_dialog_history");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -11052,7 +11073,7 @@ void MessagesManager::delete_dialog_messages_from_user(DialogId dialog_id, UserI
 
   LOG(INFO) << "Receive deleteChatMessagesFromUser request to delete all messages in " << dialog_id << " from the user "
             << user_id;
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "delete_dialog_messages_from_user");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -11302,7 +11323,7 @@ void MessagesManager::delete_all_dialog_messages(Dialog *d, bool remove_from_dia
 
 void MessagesManager::on_dialog_deleted(DialogId dialog_id, Promise<Unit> &&promise) {
   LOG(INFO) << "Delete " << dialog_id;
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "on_dialog_deleted");
   if (d == nullptr) {
     return promise.set_value(Unit());
   }
@@ -11338,7 +11359,7 @@ void MessagesManager::read_all_dialog_mentions(DialogId dialog_id, Promise<Unit>
     return promise.set_error(Status::Error(3, "Method is not available for bots"));
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "read_all_dialog_mentions");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -11610,7 +11631,7 @@ void MessagesManager::repair_channel_server_unread_count(Dialog *d) {
   }
 
   LOG(INFO) << "Reload ChannelFull for " << d->dialog_id << " to repair unread message counts";
-  get_dialog_info_full(d->dialog_id, Promise<Unit>());
+  get_dialog_info_full(d->dialog_id, Auto());
 }
 
 void MessagesManager::read_history_inbox(DialogId dialog_id, MessageId max_message_id, int32 unread_count,
@@ -11621,7 +11642,7 @@ void MessagesManager::read_history_inbox(DialogId dialog_id, MessageId max_messa
     return;
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "read_history_inbox");
   if (d != nullptr) {
     if (d->need_repair_channel_server_unread_count) {
       d->need_repair_channel_server_unread_count = false;
@@ -11710,7 +11731,7 @@ void MessagesManager::read_history_outbox(DialogId dialog_id, MessageId max_mess
     return;
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "read_history_outbox");
   if (d != nullptr) {
     if (!max_message_id.is_valid()) {
       LOG(ERROR) << "Receive read outbox update in " << dialog_id << " with " << max_message_id;
@@ -12079,7 +12100,7 @@ void MessagesManager::set_dialog_max_unavailable_message_id(DialogId dialog_id, 
                                                             bool from_update, const char *source) {
   CHECK(!max_unavailable_message_id.is_scheduled());
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, source);
   if (d != nullptr) {
     if (max_unavailable_message_id > d->last_new_message_id && from_update) {
       if (d->last_new_message_id.is_valid()) {
@@ -12421,7 +12442,7 @@ void MessagesManager::ttl_loop(double now) {
     }
   }
   for (auto &it : to_delete) {
-    delete_dialog_messages(it.first, it.second, false, true);
+    delete_dialog_messages(it.first, it.second, false, true, "ttl_loop");
   }
   ttl_update_timeout(now);
 }
@@ -12652,7 +12673,7 @@ void MessagesManager::init() {
       } else {
         DialogId dialog_id(r_dialog_id.ok());
 
-        const Dialog *d = get_dialog_force(dialog_id);
+        const Dialog *d = get_dialog_force(dialog_id, "init");
         if (d != nullptr) {
           LOG(INFO) << "Loaded sponsored " << dialog_id;
           add_sponsored_dialog(d, r_source.move_as_ok());
@@ -13025,8 +13046,8 @@ void MessagesManager::ttl_db_on_result(Result<std::pair<std::vector<std::pair<Di
   LOG(INFO) << "Receive ttl_db query result " << tag("new expires_till", ttl_db_expires_till_)
             << tag("got messages", result.first.size());
   for (auto &dialog_message : result.first) {
-    on_get_message_from_database(dialog_message.first, get_dialog_force(dialog_message.first), dialog_message.second,
-                                 false, "ttl_db_on_result");
+    on_get_message_from_database(dialog_message.first, get_dialog_force(dialog_message.first, "ttl_db_on_result"),
+                                 dialog_message.second, false, "ttl_db_on_result");
   }
   ttl_db_loop(G()->server_time());
 }
@@ -13092,7 +13113,7 @@ void MessagesManager::delete_secret_messages(SecretChatId secret_chat_id, std::v
   CHECK(secret_chat_id.is_valid());
 
   DialogId dialog_id(secret_chat_id);
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "delete_secret_messages")) {
     LOG(ERROR) << "Ignore delete secret messages in unknown " << dialog_id;
     promise.set_value(Unit());
     return;
@@ -13132,7 +13153,7 @@ void MessagesManager::finish_delete_secret_messages(DialogId dialog_id, std::vec
       LOG(INFO) << "Skip deletion of service " << message_id;
     }
   }
-  delete_dialog_messages(dialog_id, to_delete_message_ids, true, false);
+  delete_dialog_messages(dialog_id, to_delete_message_ids, true, false, "finish_delete_secret_messages");
 }
 
 void MessagesManager::delete_secret_chat_history(SecretChatId secret_chat_id, bool remove_from_dialog_list,
@@ -13142,7 +13163,7 @@ void MessagesManager::delete_secret_chat_history(SecretChatId secret_chat_id, bo
   CHECK(!last_message_id.is_scheduled());
 
   DialogId dialog_id(secret_chat_id);
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "delete_secret_chat_history")) {
     LOG(ERROR) << "Ignore delete history in unknown " << dialog_id;
     promise.set_value(Unit());
     return;
@@ -13178,7 +13199,7 @@ void MessagesManager::read_secret_chat_outbox(SecretChatId secret_chat_id, int32
     return;
   }
   auto dialog_id = DialogId(secret_chat_id);
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "read_secret_chat_outbox");
   if (d == nullptr) {
     return;
   }
@@ -13221,7 +13242,7 @@ void MessagesManager::read_secret_chat_outbox_inner(DialogId dialog_id, int32 up
 void MessagesManager::open_secret_message(SecretChatId secret_chat_id, int64 random_id, Promise<> promise) {
   promise.set_value(Unit());  // TODO: set after event is saved
   DialogId dialog_id(secret_chat_id);
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "open_secret_message");
   if (d == nullptr) {
     LOG(ERROR) << "Ignore opening secret chat message in unknown " << dialog_id;
     return;
@@ -13244,7 +13265,7 @@ void MessagesManager::open_secret_message(SecretChatId secret_chat_id, int64 ran
 void MessagesManager::on_update_secret_chat_state(SecretChatId secret_chat_id, SecretChatState state) {
   if (state == SecretChatState::Closed && !td_->auth_manager_->is_bot()) {
     DialogId dialog_id(secret_chat_id);
-    Dialog *d = get_dialog_force(dialog_id);
+    Dialog *d = get_dialog_force(dialog_id, "on_update_secret_chat_state");
     if (d != nullptr) {
       if (d->new_secret_chat_notification_id.is_valid()) {
         remove_new_secret_chat_notification(d, true);
@@ -13281,7 +13302,7 @@ void MessagesManager::on_get_secret_message(SecretChatId secret_chat_id, UserId 
   message_info.random_id = message->random_id_;
   message_info.ttl = message->ttl_;
 
-  Dialog *d = get_dialog_force(message_info.dialog_id);
+  Dialog *d = get_dialog_force(message_info.dialog_id, "on_get_secret_message");
   if (d == nullptr) {
     LOG(ERROR) << "Ignore secret message in unknown " << message_info.dialog_id;
     pending_secret_message->success_promise.set_error(Status::Error(500, "Chat not found"));
@@ -13371,7 +13392,7 @@ void MessagesManager::on_secret_chat_screenshot_taken(SecretChatId secret_chat_i
   message_info.flags = MESSAGE_FLAG_HAS_FROM_ID;
   message_info.content = create_screenshot_taken_message_content();
 
-  Dialog *d = get_dialog_force(message_info.dialog_id);
+  Dialog *d = get_dialog_force(message_info.dialog_id, "on_secret_chat_screenshot_taken");
   if (d == nullptr) {
     LOG(ERROR) << "Ignore secret message in unknown " << message_info.dialog_id;
     pending_secret_message->success_promise.set_error(Status::Error(500, "Chat not found"));
@@ -13405,7 +13426,7 @@ void MessagesManager::on_secret_chat_ttl_changed(SecretChatId secret_chat_id, Us
   message_info.flags = MESSAGE_FLAG_HAS_FROM_ID;
   message_info.content = create_chat_set_ttl_message_content(ttl);
 
-  Dialog *d = get_dialog_force(message_info.dialog_id);
+  Dialog *d = get_dialog_force(message_info.dialog_id, "on_secret_chat_ttl_changed");
   if (d == nullptr) {
     LOG(ERROR) << "Ignore secret message in unknown " << message_info.dialog_id;
     pending_secret_message->success_promise.set_error(Status::Error(500, "Chat not found"));
@@ -13711,14 +13732,14 @@ std::pair<DialogId, unique_ptr<MessagesManager::Message>> MessagesManager::creat
   }
 
   int32 ttl_period = message_info.ttl_period;
-  if (ttl_period < 0 || message_id.is_scheduled()) {
+  if (ttl_period < 0 || (message_id.is_scheduled() && ttl_period != 0)) {
     LOG(ERROR) << "Wrong TTL period = " << ttl_period << " received in " << message_id << " in " << dialog_id;
     ttl_period = 0;
   }
 
   int32 ttl = message_info.ttl;
   bool is_content_secret = is_secret_message_content(ttl, content_type);  // should be calculated before TTL is adjusted
-  if (ttl < 0 || message_id.is_scheduled()) {
+  if (ttl < 0 || (message_id.is_scheduled() && ttl != 0)) {
     LOG(ERROR) << "Wrong TTL = " << ttl << " received in " << message_id << " in " << dialog_id;
     ttl = 0;
   } else if (ttl > 0) {
@@ -13926,10 +13947,7 @@ FullMessageId MessagesManager::on_get_message(MessageInfo &&message_info, bool f
     unique_ptr<Message> old_message =
         delete_message(d, old_message_id, false, &need_update_dialog_pos, "add sent message");
     if (old_message == nullptr) {
-      // message has already been deleted by the user or sent to inaccessible channel
-      // don't need to send update to the user, because the message has already been deleted
-      LOG(INFO) << "Delete already deleted sent " << new_message->message_id << " from server";
-      delete_message_from_server(dialog_id, new_message->message_id, true);
+      delete_sent_message_from_server(dialog_id, new_message->message_id);
       being_readded_message_id_ = FullMessageId();
       return FullMessageId();
     }
@@ -14683,11 +14701,11 @@ void MessagesManager::on_get_dialogs(FolderId folder_id, vector<tl_object_ptr<te
       continue;
     }
     added_dialog_ids.push_back(dialog_id);
-    Dialog *d = get_dialog_force(dialog_id);
+    Dialog *d = get_dialog_force(dialog_id, "on_get_dialogs");
     bool need_update_dialog_pos = false;
     being_added_dialog_id_ = dialog_id;
     if (d == nullptr) {
-      d = add_dialog(dialog_id);
+      d = add_dialog(dialog_id, "on_get_dialogs");
       need_update_dialog_pos = true;
     } else {
       LOG(INFO) << "Receive already created " << dialog_id;
@@ -14939,11 +14957,11 @@ void MessagesManager::on_get_dialogs(FolderId folder_id, vector<tl_object_ptr<te
         }
       }
       for (auto dialog_id : old_pinned_dialog_ids) {
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "on_get_dialogs pinned");
         if (d == nullptr) {
           LOG(ERROR) << "Failed to find " << dialog_id << " to unpin in " << folder_id;
           force_create_dialog(dialog_id, "from_pinned_dialog_list", true);
-          d = get_dialog_force(dialog_id);
+          d = get_dialog_force(dialog_id, "on_get_dialogs pinned 2");
         }
         if (d != nullptr && set_dialog_is_pinned(DialogListId(folder_id), d, false)) {
           are_pinned_dialogs_saved = true;
@@ -15631,7 +15649,7 @@ bool MessagesManager::load_dialog(DialogId dialog_id, int left_tries, Promise<Un
     return false;
   }
 
-  if (!have_dialog_force(dialog_id)) {  // TODO remove _force
+  if (!have_dialog_force(dialog_id, "load_dialog")) {  // TODO remove _force
     if (G()->parameters().use_message_db) {
       //      TODO load dialog from database, DialogLoader
       //      send_closure_later(actor_id(this), &MessagesManager::load_dialog_from_database, dialog_id,
@@ -15674,7 +15692,7 @@ bool MessagesManager::load_dialog(DialogId dialog_id, int left_tries, Promise<Un
         return false;
       }
 
-      add_dialog(dialog_id);
+      add_dialog(dialog_id, "load_dialog");
       return true;
     }
 
@@ -15716,7 +15734,7 @@ void MessagesManager::load_dialog_filter(const DialogFilter *filter, bool force,
   for (auto &input_dialog_id : needed_dialog_ids) {
     auto dialog_id = input_dialog_id.get_dialog_id();
     // TODO load dialogs asynchronously
-    if (!have_dialog_force(dialog_id)) {
+    if (!have_dialog_force(dialog_id, "load_dialog_filter")) {
       if (dialog_id.get_type() == DialogType::SecretChat) {
         if (have_dialog_info_force(dialog_id)) {
           force_create_dialog(dialog_id, "load_dialog_filter");
@@ -15874,7 +15892,7 @@ std::pair<int32, vector<DialogId>> MessagesManager::get_dialogs(DialogListId dia
     vector<InputDialogId> input_dialog_ids;
     for (auto &input_dialog_id : filter->pinned_dialog_ids) {
       auto dialog_id = input_dialog_id.get_dialog_id();
-      if (!have_dialog_force(dialog_id)) {
+      if (!have_dialog_force(dialog_id, "get_dialogs")) {
         if (dialog_id.get_type() == DialogType::SecretChat) {
           if (have_dialog_info_force(dialog_id)) {
             force_create_dialog(dialog_id, "get_dialogs");
@@ -15901,7 +15919,7 @@ std::pair<int32, vector<DialogId>> MessagesManager::get_dialogs(DialogListId dia
     for (auto &pinned_dialog : list.pinned_dialogs_) {
       if (offset < pinned_dialog) {
         auto dialog_id = pinned_dialog.get_dialog_id();
-        auto d = get_dialog_force(dialog_id);
+        auto d = get_dialog_force(dialog_id, "get_dialogs");
         if (d == nullptr) {
           LOG(ERROR) << "Failed to load pinned " << dialog_id << " from " << dialog_list_id;
           if (dialog_id.get_type() != DialogType::SecretChat) {
@@ -16100,7 +16118,7 @@ void MessagesManager::on_get_dialogs_from_database(FolderId folder_id, int32 lim
 
   size_t dialogs_skipped = 0;
   for (auto &dialog : dialogs.dialogs) {
-    Dialog *d = on_load_dialog_from_database(DialogId(), std::move(dialog));
+    Dialog *d = on_load_dialog_from_database(DialogId(), std::move(dialog), "on_get_dialogs_from_database");
     if (d == nullptr) {
       dialogs_skipped++;
       continue;
@@ -16804,7 +16822,7 @@ void MessagesManager::block_message_sender_from_replies(MessageId message_id, bo
                                                         bool delete_all_messages, bool report_spam,
                                                         Promise<Unit> &&promise) {
   auto dialog_id = DialogId(ContactsManager::get_replies_bot_user_id());
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "block_message_sender_from_replies");
   if (d == nullptr) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
@@ -17002,7 +17020,7 @@ const MessagesManager::Message *MessagesManager::get_message(FullMessageId full_
 }
 
 MessagesManager::Message *MessagesManager::get_message_force(FullMessageId full_message_id, const char *source) {
-  Dialog *d = get_dialog_force(full_message_id.get_dialog_id());
+  Dialog *d = get_dialog_force(full_message_id.get_dialog_id(), source);
   if (d == nullptr) {
     return nullptr;
   }
@@ -17050,7 +17068,7 @@ void MessagesManager::get_message_force_from_server(Dialog *d, MessageId message
 }
 
 void MessagesManager::get_message(FullMessageId full_message_id, Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(full_message_id.get_dialog_id());
+  Dialog *d = get_dialog_force(full_message_id.get_dialog_id(), "get_message");
   if (d == nullptr) {
     return promise.set_error(Status::Error(6, "Chat not found"));
   }
@@ -17061,7 +17079,7 @@ void MessagesManager::get_message(FullMessageId full_message_id, Promise<Unit> &
 FullMessageId MessagesManager::get_replied_message(DialogId dialog_id, MessageId message_id, bool force,
                                                    Promise<Unit> &&promise) {
   LOG(INFO) << "Get replied message to " << message_id << " in " << dialog_id;
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_replied_message");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return FullMessageId();
@@ -17092,7 +17110,7 @@ FullMessageId MessagesManager::get_replied_message(DialogId dialog_id, MessageId
     }
 
     force_create_dialog(dialog_id, "get_replied_message");
-    d = get_dialog_force(dialog_id);
+    d = get_dialog_force(dialog_id, "get_replied_message");
     if (d == nullptr) {
       promise.set_error(Status::Error(500, "Chat with replied message not found"));
       return {};
@@ -17139,7 +17157,7 @@ Result<FullMessageId> MessagesManager::get_top_thread_full_message_id(DialogId d
 void MessagesManager::get_message_thread(DialogId dialog_id, MessageId message_id,
                                          Promise<MessageThreadInfo> &&promise) {
   LOG(INFO) << "Get message thread from " << message_id << " in " << dialog_id;
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_message_thread");
   if (d == nullptr) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
@@ -17259,7 +17277,7 @@ void MessagesManager::on_get_discussion_message(DialogId dialog_id, MessageId me
   if (G()->close_flag()) {
     return promise.set_error(Status::Error(500, "Request aborted"));
   }
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "on_get_discussion_message");
   if (d == nullptr) {
     LOG(ERROR) << "Unknown dialog " << dialog_id;
     return;
@@ -17295,10 +17313,10 @@ void MessagesManager::on_get_discussion_message(DialogId dialog_id, MessageId me
   }
   if (expected_dialog_id != dialog_id && m->reply_info.is_comment && !result.message_ids.empty() &&
       m->linked_top_thread_message_id != result.message_ids.back()) {
-    auto linked_d = get_dialog_force(expected_dialog_id);
+    auto linked_d = get_dialog_force(expected_dialog_id, "on_get_discussion_message 2");
     CHECK(linked_d != nullptr);
     auto linked_message_id = result.message_ids.back();
-    Message *linked_m = get_message_force(linked_d, linked_message_id, "on_get_discussion_message");
+    Message *linked_m = get_message_force(linked_d, linked_message_id, "on_get_discussion_message 3");
     CHECK(linked_m != nullptr && linked_m->message_id.is_server());
     if (linked_m->top_thread_message_id == linked_m->message_id &&
         is_active_message_reply_info(expected_dialog_id, linked_m->reply_info)) {
@@ -17402,7 +17420,7 @@ void MessagesManager::reload_dialog_info_full(DialogId dialog_id) {
 }
 
 MessageId MessagesManager::get_dialog_pinned_message(DialogId dialog_id, Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_dialog_pinned_message");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return MessageId();
@@ -17433,7 +17451,7 @@ MessageId MessagesManager::get_dialog_pinned_message(DialogId dialog_id, Promise
 
 void MessagesManager::get_callback_query_message(DialogId dialog_id, MessageId message_id, int64 callback_query_id,
                                                  Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_callback_query_message");
   if (d == nullptr) {
     return promise.set_error(Status::Error(6, "Chat not found"));
   }
@@ -17449,7 +17467,7 @@ void MessagesManager::get_callback_query_message(DialogId dialog_id, MessageId m
 }
 
 bool MessagesManager::get_messages(DialogId dialog_id, const vector<MessageId> &message_ids, Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_messages");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return false;
@@ -17543,7 +17561,7 @@ void MessagesManager::get_messages_from_server(vector<FullMessageId> &&message_i
 
   for (auto &it : scheduled_message_ids) {
     auto dialog_id = it.first;
-    have_dialog_force(dialog_id);
+    have_dialog_force(dialog_id, "get_messages_from_server");
     auto input_peer = get_input_peer(dialog_id, AccessRights::Read);
     if (input_peer == nullptr) {
       LOG(ERROR) << "Can't find info about " << dialog_id << " to get a message from it";
@@ -17587,7 +17605,7 @@ bool MessagesManager::is_message_edited_recently(FullMessageId full_message_id, 
 Result<std::pair<string, bool>> MessagesManager::get_message_link(FullMessageId full_message_id, bool for_group,
                                                                   bool for_comment) {
   auto dialog_id = full_message_id.get_dialog_id();
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "get_message_link");
   if (d == nullptr) {
     return Status::Error(400, "Chat not found");
   }
@@ -17680,7 +17698,7 @@ Result<std::pair<string, bool>> MessagesManager::get_message_link(FullMessageId 
 string MessagesManager::get_message_embedding_code(FullMessageId full_message_id, bool for_group,
                                                    Promise<Unit> &&promise) {
   auto dialog_id = full_message_id.get_dialog_id();
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "get_message_embedding_code");
   if (d == nullptr) {
     promise.set_error(Status::Error(400, "Chat not found"));
     return {};
@@ -17943,7 +17961,7 @@ void MessagesManager::on_get_message_link_dialog(MessageLinkInfo &&info, Promise
       force_create_dialog(dialog_id, "on_get_message_link_dialog", true);
     }
   }
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "on_get_message_link_dialog");
   if (d == nullptr) {
     return promise.set_error(Status::Error(500, "Chat not found"));
   }
@@ -17992,7 +18010,7 @@ void MessagesManager::on_get_message_link_discussion_message(MessageLinkInfo &&i
   CHECK(comment_dialog_id.is_valid());
   info.comment_dialog_id = comment_dialog_id;
 
-  Dialog *d = get_dialog_force(comment_dialog_id);
+  Dialog *d = get_dialog_force(comment_dialog_id, "on_get_message_link_discussion_message");
   if (d == nullptr) {
     return promise.set_error(Status::Error(500, "Chat not found"));
   }
@@ -18085,7 +18103,7 @@ Result<unique_ptr<DialogFilter>> MessagesManager::create_dialog_filter(DialogFil
       if (!dialog_id.is_valid()) {
         return Status::Error(400, "Invalid chat identifier specified");
       }
-      const Dialog *d = get_dialog_force(dialog_id);
+      const Dialog *d = get_dialog_force(dialog_id, "create_dialog_filter");
       if (d == nullptr) {
         return Status::Error(400, "Chat not found");
       }
@@ -18727,7 +18745,7 @@ Status MessagesManager::delete_dialog_reply_markup(DialogId dialog_id, MessageId
     return Status::Error(6, "Invalid message identifier specified");
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "delete_dialog_reply_markup");
   if (d == nullptr) {
     return Status::Error(6, "Chat not found");
   }
@@ -18779,7 +18797,7 @@ Status MessagesManager::set_dialog_draft_message(DialogId dialog_id, MessageId t
     return Status::Error(6, "Bots can't change chat draft message");
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "set_dialog_draft_message");
   if (d == nullptr) {
     return Status::Error(6, "Chat not found");
   }
@@ -18920,7 +18938,7 @@ Status MessagesManager::toggle_dialog_is_pinned(DialogListId dialog_list_id, Dia
     return Status::Error(6, "Bots can't change chat pin state");
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "toggle_dialog_is_pinned");
   if (d == nullptr) {
     return Status::Error(6, "Chat not found");
   }
@@ -19057,7 +19075,7 @@ Status MessagesManager::set_pinned_dialogs(DialogListId dialog_list_id, vector<D
   int32 secret_dialog_count = 0;
   auto dialog_count_limit = get_pinned_dialogs_limit(dialog_list_id);
   for (auto dialog_id : dialog_ids) {
-    Dialog *d = get_dialog_force(dialog_id);
+    Dialog *d = get_dialog_force(dialog_id, "set_pinned_dialogs");
     if (d == nullptr) {
       return Status::Error(6, "Chat not found");
     }
@@ -19156,11 +19174,11 @@ Status MessagesManager::set_pinned_dialogs(DialogListId dialog_list_id, vector<D
     set_dialog_is_pinned(dialog_id, true);
   }
   for (auto dialog_id : old_pinned_dialog_ids) {
-    Dialog *d = get_dialog_force(dialog_id);
+    Dialog *d = get_dialog_force(dialog_id, "set_pinned_dialogs 2");
     if (d == nullptr) {
       LOG(ERROR) << "Failed to find " << dialog_id << " to unpin in " << dialog_list_id;
       force_create_dialog(dialog_id, "set_pinned_dialogs", true);
-      d = get_dialog_force(dialog_id);
+      d = get_dialog_force(dialog_id, "set_pinned_dialogs 3");
     }
     if (d != nullptr) {
       set_dialog_is_pinned(dialog_list_id, d, false);
@@ -19213,7 +19231,7 @@ void MessagesManager::reorder_pinned_dialogs_on_server(FolderId folder_id, const
 }
 
 Status MessagesManager::toggle_dialog_is_marked_as_unread(DialogId dialog_id, bool is_marked_as_unread) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "toggle_dialog_is_marked_as_unread");
   if (d == nullptr) {
     return Status::Error(6, "Chat not found");
   }
@@ -19291,7 +19309,7 @@ Status MessagesManager::toggle_message_sender_is_blocked(const td_api::object_pt
       break;
     case td_api::messageSenderChat::ID: {
       auto sender_dialog_id = DialogId(static_cast<const td_api::messageSenderChat *>(sender.get())->chat_id_);
-      if (!have_dialog_force(sender_dialog_id)) {
+      if (!have_dialog_force(sender_dialog_id, "toggle_message_sender_is_blocked")) {
         return Status::Error(400, "Sender chat not found");
       }
 
@@ -19326,7 +19344,7 @@ Status MessagesManager::toggle_message_sender_is_blocked(const td_api::object_pt
     return Status::Error(5, is_blocked ? Slice("Can't block self") : Slice("Can't unblock self"));
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "toggle_message_sender_is_blocked");
   if (d != nullptr) {
     if (is_blocked == d->is_blocked) {
       return Status::OK();
@@ -19388,7 +19406,7 @@ void MessagesManager::toggle_dialog_is_blocked_on_server(DialogId dialog_id, boo
 Status MessagesManager::toggle_dialog_silent_send_message(DialogId dialog_id, bool silent_send_message) {
   CHECK(!td_->auth_manager_->is_bot());
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "toggle_dialog_silent_send_message");
   if (d == nullptr) {
     return Status::Error(6, "Chat not found");
   }
@@ -19475,7 +19493,7 @@ void MessagesManager::on_updated_dialog_notification_settings(DialogId dialog_id
 }
 
 Status MessagesManager::set_dialog_client_data(DialogId dialog_id, string &&client_data) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "set_dialog_client_data");
   if (d == nullptr) {
     return Status::Error(6, "Chat not found");
   }
@@ -19536,7 +19554,7 @@ void MessagesManager::create_dialog(DialogId dialog_id, bool force, Promise<Unit
   if (force || td_->auth_manager_->is_bot() || dialog_id.get_type() == DialogType::SecretChat) {
     force_create_dialog(dialog_id, "create dialog");
   } else {
-    const Dialog *d = get_dialog_force(dialog_id);
+    const Dialog *d = get_dialog_force(dialog_id, "create_dialog");
     if (!is_dialog_inited(d)) {
       return send_get_dialog_query(dialog_id, std::move(promise), 0, "create_dialog");
     }
@@ -19669,9 +19687,9 @@ DialogId MessagesManager::migrate_dialog_to_megagroup(DialogId dialog_id, Promis
   }
 
   auto new_dialog_id = DialogId(channel_id);
-  Dialog *d = get_dialog_force(new_dialog_id);
+  Dialog *d = get_dialog_force(new_dialog_id, "migrate_dialog_to_megagroup");
   if (d == nullptr) {
-    d = add_dialog(new_dialog_id);
+    d = add_dialog(new_dialog_id, "migrate_dialog_to_megagroup");
     if (d->pts == 0) {
       d->pts = 1;
       if (is_debug_message_op_enabled()) {
@@ -19686,7 +19704,7 @@ DialogId MessagesManager::migrate_dialog_to_megagroup(DialogId dialog_id, Promis
 }
 
 Status MessagesManager::open_dialog(DialogId dialog_id) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "open_dialog");
   if (d == nullptr) {
     return Status::Error(3, "Chat not found");
   }
@@ -19696,7 +19714,7 @@ Status MessagesManager::open_dialog(DialogId dialog_id) {
 }
 
 Status MessagesManager::close_dialog(DialogId dialog_id) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "close_dialog");
   if (d == nullptr) {
     return Status::Error(3, "Chat not found");
   }
@@ -19713,7 +19731,7 @@ Status MessagesManager::view_messages(DialogId dialog_id, MessageId top_thread_m
                                       const vector<MessageId> &message_ids, bool force_read) {
   CHECK(!td_->auth_manager_->is_bot());
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "view_messages");
   if (d == nullptr) {
     return Status::Error(3, "Chat not found");
   }
@@ -19859,7 +19877,7 @@ Status MessagesManager::view_messages(DialogId dialog_id, MessageId top_thread_m
 
 Status MessagesManager::open_message_content(FullMessageId full_message_id) {
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "open_message_content");
   if (d == nullptr) {
     return Status::Error(3, "Chat not found");
   }
@@ -20403,8 +20421,8 @@ vector<DialogId> MessagesManager::get_dialog_notification_settings_exceptions(No
     vector<DialogDate> ordered_dialogs;
     auto my_dialog_id = get_my_dialog_id();
     for (const auto &list : dialog_folders_) {
-      for (const auto &it : list.second.ordered_dialogs_) {
-        auto dialog_id = it.get_dialog_id();
+      for (const auto &dialog_date : list.second.ordered_dialogs_) {
+        auto dialog_id = dialog_date.get_dialog_id();
         if (filter_scope && get_dialog_notification_setting_scope(dialog_id) != scope) {
           continue;
         }
@@ -20413,10 +20431,13 @@ vector<DialogId> MessagesManager::get_dialog_notification_settings_exceptions(No
         }
 
         const Dialog *d = get_dialog(dialog_id);
+        CHECK(d != nullptr);
         if (d == nullptr) {
           LOG(ERROR) << "Unknown dialog " << dialog_id;
           continue;
         }
+        LOG_CHECK(d->folder_id == list.first)
+            << list.first << ' ' << dialog_id << ' ' << d->folder_id << ' ' << d->order;
         if (d->order == DEFAULT_ORDER) {
           break;
         }
@@ -20432,9 +20453,9 @@ vector<DialogId> MessagesManager::get_dialog_notification_settings_exceptions(No
     std::sort(ordered_dialogs.begin(), ordered_dialogs.end());
 
     vector<DialogId> result;
-    for (auto &it : ordered_dialogs) {
-      CHECK(result.empty() || result.back() != it.get_dialog_id());
-      result.push_back(it.get_dialog_id());
+    for (auto &dialog_date : ordered_dialogs) {
+      CHECK(result.empty() || result.back() != dialog_date.get_dialog_id());
+      result.push_back(dialog_date.get_dialog_id());
     }
     promise.set_value(Unit());
     return result;
@@ -20462,7 +20483,7 @@ const ScopeNotificationSettings *MessagesManager::get_scope_notification_setting
 }
 
 DialogNotificationSettings *MessagesManager::get_dialog_notification_settings(DialogId dialog_id, bool force) {
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "get_dialog_notification_settings");
   if (d == nullptr) {
     return nullptr;
   }
@@ -20660,7 +20681,7 @@ tl_object_ptr<td_api::messages> MessagesManager::get_dialog_history(DialogId dia
     return nullptr;
   }
 
-  const Dialog *d = get_dialog_force(dialog_id);
+  const Dialog *d = get_dialog_force(dialog_id, "get_dialog_history");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return nullptr;
@@ -21094,7 +21115,7 @@ std::pair<DialogId, vector<MessageId>> MessagesManager::get_message_thread_histo
   CHECK(0 < limit && limit <= MAX_GET_HISTORY);
   CHECK(-limit < offset && offset <= 0);
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_message_thread_history");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return {};
@@ -21282,7 +21303,7 @@ std::pair<int32, vector<MessageId>> MessagesManager::search_dialog_messages(
   }
   from_message_id = from_message_id.get_next_server_message_id();
 
-  const Dialog *d = get_dialog_force(dialog_id);
+  const Dialog *d = get_dialog_force(dialog_id, "search_dialog_messages");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return result;
@@ -21532,7 +21553,7 @@ std::pair<int32, vector<MessageId>> MessagesManager::search_dialog_recent_locati
     limit = MAX_SEARCH_MESSAGES;
   }
 
-  const Dialog *d = get_dialog_force(dialog_id);
+  const Dialog *d = get_dialog_force(dialog_id, "search_dialog_recent_location_messages");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return result;
@@ -22014,7 +22035,7 @@ MessagesManager::FoundMessages MessagesManager::offline_search_messages(DialogId
     promise.set_value(Unit());
     return {};
   }
-  if (dialog_id != DialogId() && !have_dialog_force(dialog_id)) {
+  if (dialog_id != DialogId() && !have_dialog_force(dialog_id, "offline_search_messages")) {
     promise.set_error(Status::Error(400, "Chat not found"));
     return {};
   }
@@ -22072,8 +22093,9 @@ void MessagesManager::on_messages_db_fts_result(Result<MessagesDbFtsResult> resu
 
   res.reserve(fts_result.messages.size());
   for (auto &message : fts_result.messages) {
-    auto m = on_get_message_from_database(message.dialog_id, get_dialog_force(message.dialog_id), message.data, false,
-                                          "on_messages_db_fts_result");
+    auto m = on_get_message_from_database(message.dialog_id,
+                                          get_dialog_force(message.dialog_id, "on_messages_db_fts_result"),
+                                          message.data, false, "on_messages_db_fts_result");
     if (m != nullptr) {
       res.push_back(FullMessageId(message.dialog_id, m->message_id));
     }
@@ -22106,8 +22128,9 @@ void MessagesManager::on_messages_db_calls_result(Result<MessagesDbCallsResult> 
 
   res.reserve(calls_result.messages.size());
   for (auto &message : calls_result.messages) {
-    auto m = on_get_message_from_database(message.dialog_id, get_dialog_force(message.dialog_id), message.data, false,
-                                          "on_messages_db_calls_result");
+    auto m = on_get_message_from_database(message.dialog_id,
+                                          get_dialog_force(message.dialog_id, "on_messages_db_calls_result"),
+                                          message.data, false, "on_messages_db_calls_result");
 
     if (m != nullptr && first_db_message_id <= m->message_id) {
       res.push_back(FullMessageId(message.dialog_id, m->message_id));
@@ -22188,7 +22211,7 @@ std::pair<int32, vector<FullMessageId>> MessagesManager::search_messages(
 }
 
 int64 MessagesManager::get_dialog_message_by_date(DialogId dialog_id, int32 date, Promise<Unit> &&promise) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_dialog_message_by_date");
   if (d == nullptr) {
     promise.set_error(Status::Error(5, "Chat not found"));
     return 0;
@@ -22367,7 +22390,7 @@ int32 MessagesManager::get_dialog_message_count(DialogId dialog_id, MessageSearc
   LOG(INFO) << "Get " << (return_local ? "local " : "") << "number of messages in " << dialog_id << " filtered by "
             << filter;
 
-  const Dialog *d = get_dialog_force(dialog_id);
+  const Dialog *d = get_dialog_force(dialog_id, "get_dialog_message_count");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return -1;
@@ -22463,7 +22486,6 @@ void MessagesManager::preload_older_messages(const Dialog *d, MessageId min_mess
 
 unique_ptr<MessagesManager::Message> MessagesManager::parse_message(DialogId dialog_id, const BufferSlice &value,
                                                                     bool is_scheduled) {
-  LOG(INFO) << "Loaded message of size " << value.size() << " from database";
   auto m = make_unique<Message>();
 
   auto status = log_event_parse(*m, value.as_slice());
@@ -22480,6 +22502,7 @@ unique_ptr<MessagesManager::Message> MessagesManager::parse_message(DialogId dia
     return nullptr;
   }
 
+  LOG(INFO) << "Loaded " << m->message_id << " in " << dialog_id << " of size " << value.size() << " from database";
   return m;
 }
 
@@ -22612,7 +22635,7 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
     is_first = false;
     pos++;
   }
-  resolve_dependencies_force(td_, dependencies, "get_history");
+  resolve_dependencies_force(td_, dependencies, "on_get_history_from_database");
 
   if (from_the_end && !last_added_message_id.is_valid() && last_received_message_id < d->first_database_message_id &&
       !d->have_full_history) {
@@ -22798,7 +22821,7 @@ vector<MessageId> MessagesManager::get_dialog_scheduled_messages(DialogId dialog
     return {};
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_dialog_scheduled_messages");
   if (d == nullptr) {
     promise.set_error(Status::Error(6, "Chat not found"));
     return {};
@@ -22930,7 +22953,7 @@ void MessagesManager::on_get_scheduled_messages_from_database(DialogId dialog_id
       added_message_ids.push_back(m->message_id);
     }
   }
-  resolve_dependencies_force(td_, dependencies, "get_scheduled_messages");
+  resolve_dependencies_force(td_, dependencies, "on_get_scheduled_messages_from_database");
 
   // for (auto message_id : added_message_ids) {
   //   send_update_new_message(d, get_message(d, message_id));
@@ -22962,7 +22985,7 @@ MessagesManager::FoundMessages MessagesManager::get_message_public_forwards(Full
   }
 
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_message_public_forwards");
   if (d == nullptr) {
     promise.set_error(Status::Error(5, "Chat not found"));
     return {};
@@ -23831,7 +23854,7 @@ Result<MessageId> MessagesManager::send_message(DialogId dialog_id, MessageId to
     return Status::Error(5, "Can't send message without content");
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "send_message");
   if (d == nullptr) {
     return Status::Error(5, "Chat not found");
   }
@@ -23908,7 +23931,7 @@ Result<InputMessageContent> MessagesManager::process_input_message_content(
     }
 
     DialogId from_dialog_id(input_message->from_chat_id_);
-    Dialog *from_dialog = get_dialog_force(from_dialog_id);
+    Dialog *from_dialog = get_dialog_force(from_dialog_id, "send_message copy");
     if (from_dialog == nullptr) {
       return Status::Error(400, "Chat to copy message from not found");
     }
@@ -24069,7 +24092,7 @@ Result<vector<MessageId>> MessagesManager::send_message_group(
     return Status::Error(4, "There are no messages to send");
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "send_message_group");
   if (d == nullptr) {
     return Status::Error(5, "Chat not found");
   }
@@ -24721,7 +24744,7 @@ Result<MessageId> MessagesManager::send_bot_start_message(UserId bot_user_id, Di
 
   TRY_RESULT(bot_data, td_->contacts_manager_->get_bot_data(bot_user_id));
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "send_bot_start_message");
   if (d == nullptr) {
     return Status::Error(5, "Chat not found");
   }
@@ -24877,7 +24900,7 @@ Result<MessageId> MessagesManager::send_inline_query_result_message(DialogId dia
                                                                     bool hide_via_bot) {
   LOG(INFO) << "Begin to send inline query result message to " << dialog_id << " in reply to " << reply_to_message_id;
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "send_inline_query_result_message");
   if (d == nullptr) {
     return Status::Error(5, "Chat not found");
   }
@@ -25274,7 +25297,7 @@ void MessagesManager::edit_message_text(FullMessageId full_message_id,
 
   LOG(INFO) << "Begin to edit text of " << full_message_id;
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "edit_message_text");
   if (d == nullptr) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
@@ -25329,7 +25352,7 @@ void MessagesManager::edit_message_live_location(FullMessageId full_message_id,
                                                  int32 proximity_alert_radius, Promise<Unit> &&promise) {
   LOG(INFO) << "Begin to edit live location of " << full_message_id;
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "edit_message_live_location");
   if (d == nullptr) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
@@ -25492,7 +25515,7 @@ void MessagesManager::edit_message_media(FullMessageId full_message_id,
 
   LOG(INFO) << "Begin to edit media of " << full_message_id;
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "edit_message_media");
   if (d == nullptr) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
@@ -25569,7 +25592,7 @@ void MessagesManager::edit_message_caption(FullMessageId full_message_id,
   LOG(INFO) << "Begin to edit caption of " << full_message_id;
 
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "edit_message_caption");
   if (d == nullptr) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
@@ -25621,7 +25644,7 @@ void MessagesManager::edit_message_reply_markup(FullMessageId full_message_id,
 
   LOG(INFO) << "Begin to edit reply markup of " << full_message_id;
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "edit_message_reply_markup");
   if (d == nullptr) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
@@ -25850,7 +25873,7 @@ void MessagesManager::edit_message_scheduling_state(
   LOG(INFO) << "Begin to reschedule " << full_message_id << " to " << schedule_date;
 
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "edit_message_scheduling_state");
   if (d == nullptr) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
@@ -26030,7 +26053,7 @@ void MessagesManager::set_game_score(FullMessageId full_message_id, bool edit_me
 
   LOG(INFO) << "Begin to set game score of " << user_id << " in " << full_message_id;
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "set_game_score");
   if (d == nullptr) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
@@ -26086,7 +26109,7 @@ int64 MessagesManager::get_game_high_scores(FullMessageId full_message_id, UserI
 
   LOG(INFO) << "Begin to get game high scores of " << user_id << " in " << full_message_id;
   auto dialog_id = full_message_id.get_dialog_id();
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_game_high_scores");
   if (d == nullptr) {
     promise.set_error(Status::Error(5, "Chat not found"));
     return 0;
@@ -26456,7 +26479,7 @@ Result<vector<MessageId>> MessagesManager::forward_messages(DialogId to_dialog_i
     return Status::Error(4, "There are no messages to forward");
   }
 
-  Dialog *from_dialog = get_dialog_force(from_dialog_id);
+  Dialog *from_dialog = get_dialog_force(from_dialog_id, "forward_messages from");
   if (from_dialog == nullptr) {
     return Status::Error(5, "Chat to forward messages from not found");
   }
@@ -26467,7 +26490,7 @@ Result<vector<MessageId>> MessagesManager::forward_messages(DialogId to_dialog_i
     return Status::Error(7, "Can't forward messages from secret chats");
   }
 
-  Dialog *to_dialog = get_dialog_force(to_dialog_id);
+  Dialog *to_dialog = get_dialog_force(to_dialog_id, "forward_messages to");
   if (to_dialog == nullptr) {
     return Status::Error(5, "Chat to forward messages to not found");
   }
@@ -26761,7 +26784,7 @@ Result<vector<MessageId>> MessagesManager::resend_messages(DialogId dialog_id, v
     return Status::Error(4, "There are no messages to resend");
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "resend_messages");
   if (d == nullptr) {
     return Status::Error(400, "Chat not found");
   }
@@ -26882,7 +26905,7 @@ Status MessagesManager::send_screenshot_taken_notification_message(DialogId dial
 
   LOG(INFO) << "Begin to send notification about taken screenshot in " << dialog_id;
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "send_screenshot_taken_notification_message");
   if (d == nullptr) {
     return Status::Error(5, "Chat not found");
   }
@@ -26965,7 +26988,7 @@ Result<MessageId> MessagesManager::add_local_message(
   }
 
   LOG(INFO) << "Begin to add local message to " << dialog_id << " in reply to " << reply_to_message_id;
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "add_local_message");
   if (d == nullptr) {
     return Status::Error(5, "Chat not found");
   }
@@ -27000,7 +27023,7 @@ Result<MessageId> MessagesManager::add_local_message(
         if (sender_dialog_id.get_type() != DialogType::Channel) {
           return Status::Error(400, "Sender chat must be a supergroup or channel");
         }
-        if (!have_dialog_force(sender_dialog_id)) {
+        if (!have_dialog_force(sender_dialog_id, "add_local_message")) {
           return Status::Error(400, "Sender chat not found");
         }
         break;
@@ -27111,7 +27134,7 @@ void MessagesManager::get_message_file_type(const string &message_file_head,
 }
 
 Status MessagesManager::can_import_messages(DialogId dialog_id) {
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "can_import_messages")) {
     return Status::Error(400, "Chat not found");
   }
 
@@ -27293,7 +27316,13 @@ bool MessagesManager::on_update_message_id(int64 random_id, MessageId new_messag
 
   being_sent_messages_.erase(it);
 
+  if (!have_message_force({dialog_id, old_message_id}, "on_update_message_id")) {
+    delete_sent_message_from_server(dialog_id, new_message_id);
+    return true;
+  }
+
   LOG(INFO) << "Save correspondence from " << new_message_id << " in " << dialog_id << " to " << old_message_id;
+  CHECK(old_message_id.is_yet_unsent());
   update_message_ids_[FullMessageId(dialog_id, new_message_id)] = old_message_id;
   return true;
 }
@@ -27317,7 +27346,13 @@ bool MessagesManager::on_update_scheduled_message_id(int64 random_id, ScheduledS
 
   being_sent_messages_.erase(it);
 
+  if (!have_message_force({dialog_id, old_message_id}, "on_update_scheduled_message_id")) {
+    delete_sent_message_from_server(dialog_id, MessageId(new_message_id, std::numeric_limits<int32>::max()));
+    return true;
+  }
+
   LOG(INFO) << "Save correspondence from " << new_message_id << " in " << dialog_id << " to " << old_message_id;
+  CHECK(old_message_id.is_yet_unsent());
   update_scheduled_message_ids_[dialog_id][new_message_id] = old_message_id;
   return true;
 }
@@ -27417,11 +27452,11 @@ Result<MessagesManager::MessagePushNotificationInfo> MessagesManager::get_messag
     return Status::Error("Ignore notification sent to bot");
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "get_message_push_notification_info");
   if (d == nullptr) {
     return Status::Error(406, "Ignore notification in unknown chat");
   }
-  if (sender_dialog_id.is_valid() && !have_dialog_force(sender_dialog_id)) {
+  if (sender_dialog_id.is_valid() && !have_dialog_force(sender_dialog_id, "get_message_push_notification_info")) {
     return Status::Error(406, "Ignore notification sent by unknown chat");
   }
 
@@ -27476,10 +27511,10 @@ Result<MessagesManager::MessagePushNotificationInfo> MessagesManager::get_messag
   if (contains_mention) {
     if (sender_user_id.is_valid()) {
       settings_dialog_id = DialogId(sender_user_id);
-      settings_dialog = get_dialog_force(settings_dialog_id);
+      settings_dialog = get_dialog_force(settings_dialog_id, "get_message_push_notification_info 2");
     } else if (sender_dialog_id.is_valid()) {
       settings_dialog_id = sender_dialog_id;
-      settings_dialog = get_dialog_force(settings_dialog_id);
+      settings_dialog = get_dialog_force(settings_dialog_id, "get_message_push_notification_info 3");
     }
   }
 
@@ -27558,7 +27593,7 @@ MessagesManager::MessageNotificationGroup MessagesManager::get_message_notificat
     auto r_value = G()->td_db()->get_dialog_db_sync()->get_notification_group(group_id);
     if (r_value.is_ok()) {
       VLOG(notifications) << "Loaded " << r_value.ok() << " from database by " << group_id;
-      d = get_dialog_force(r_value.ok().dialog_id);
+      d = get_dialog_force(r_value.ok().dialog_id, "get_message_notification_group_force");
     } else {
       CHECK(r_value.error().message() == "Not found");
       VLOG(notifications) << "Failed to load " << group_id << " from database";
@@ -27860,7 +27895,7 @@ vector<NotificationGroupKey> MessagesManager::get_message_notification_group_key
   vector<NotificationGroupKey> result;
   for (auto &group_key : group_keys) {
     CHECK(group_key.dialog_id.is_valid());
-    const Dialog *d = get_dialog_force(group_key.dialog_id);
+    const Dialog *d = get_dialog_force(group_key.dialog_id, "get_message_notification_group_keys_from_database");
     if (d == nullptr || (d->message_notification_group.group_id != group_key.group_id &&
                          d->mention_notification_group.group_id != group_key.group_id)) {
       continue;
@@ -28076,7 +28111,7 @@ void MessagesManager::on_get_message_notifications_from_database(DialogId dialog
 
 void MessagesManager::remove_message_notification(DialogId dialog_id, NotificationGroupId group_id,
                                                   NotificationId notification_id) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "remove_message_notification");
   if (d == nullptr) {
     LOG(ERROR) << "Can't find " << dialog_id;
     return;
@@ -28123,7 +28158,7 @@ void MessagesManager::remove_message_notification(DialogId dialog_id, Notificati
 void MessagesManager::remove_message_notifications_by_message_ids(DialogId dialog_id,
                                                                   const vector<MessageId> &message_ids) {
   VLOG(notifications) << "Trying to remove notification about " << message_ids << " in " << dialog_id;
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "remove_message_notifications_by_message_ids");
   if (d == nullptr) {
     return;
   }
@@ -28176,7 +28211,7 @@ void MessagesManager::do_remove_message_notification(DialogId dialog_id, bool fr
 
 void MessagesManager::remove_message_notifications(DialogId dialog_id, NotificationGroupId group_id,
                                                    NotificationId max_notification_id, MessageId max_message_id) {
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "remove_message_notifications");
   if (d == nullptr) {
     LOG(ERROR) << "Can't find " << dialog_id;
     return;
@@ -28389,10 +28424,10 @@ bool MessagesManager::add_new_message_notification(Dialog *d, Message *m, bool f
     // have a mention, so use notification settings from the dialog with the sender
     if (m->sender_user_id.is_valid()) {
       settings_dialog_id = DialogId(m->sender_user_id);
-      settings_dialog = get_dialog_force(settings_dialog_id);
+      settings_dialog = get_dialog_force(settings_dialog_id, "add_new_message_notification 1");
     } else if (m->sender_dialog_id.is_valid()) {
       settings_dialog_id = m->sender_dialog_id;
-      settings_dialog = get_dialog_force(settings_dialog_id);
+      settings_dialog = get_dialog_force(settings_dialog_id, "add_new_message_notification 2");
     }
   }
 
@@ -29134,10 +29169,7 @@ FullMessageId MessagesManager::on_send_message_success(int64 random_id, MessageI
   being_readded_message_id_ = {dialog_id, old_message_id};
   unique_ptr<Message> sent_message = delete_message(d, old_message_id, false, &need_update_dialog_pos, source);
   if (sent_message == nullptr) {
-    // message has already been deleted by the user or sent to inaccessible channel
-    // don't need to send update to the user, because the message has already been deleted
-    LOG(INFO) << "Delete already deleted sent " << new_message_id << " from server";
-    delete_message_from_server(dialog_id, new_message_id, true);
+    delete_sent_message_from_server(dialog_id, new_message_id);
     being_readded_message_id_ = FullMessageId();
     return {};
   }
@@ -29694,13 +29726,13 @@ void MessagesManager::on_update_dialog_draft_message(DialogId dialog_id,
     LOG(ERROR) << "Receive update chat draft in invalid " << dialog_id;
     return;
   }
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_draft_message");
   if (d == nullptr) {
     LOG(INFO) << "Ignore update chat draft in unknown " << dialog_id;
     if (!have_input_peer(dialog_id, AccessRights::Read)) {
       LOG(ERROR) << "Have no read access to " << dialog_id << " to repair chat draft message";
     } else {
-      send_get_dialog_query(dialog_id, Promise<Unit>(), 0, "on_update_dialog_draft_message");
+      send_get_dialog_query(dialog_id, Auto(), 0, "on_update_dialog_draft_message");
     }
     return;
   }
@@ -29759,7 +29791,7 @@ void MessagesManager::on_update_dialog_is_pinned(FolderId folder_id, DialogId di
     return;
   }
 
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_is_pinned");
   if (d == nullptr) {
     LOG(INFO) << "Can't apply updateDialogPinned in " << folder_id << " with unknown " << dialog_id;
     on_update_pinned_dialogs(folder_id);
@@ -29811,7 +29843,7 @@ void MessagesManager::on_update_dialog_is_marked_as_unread(DialogId dialog_id, b
     return;
   }
 
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_is_marked_as_unread");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -29869,7 +29901,7 @@ void MessagesManager::on_update_dialog_is_blocked(DialogId dialog_id, bool is_bl
     td_->contacts_manager_->on_update_user_is_blocked(dialog_id.get_user_id(), is_blocked);
   }
 
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_is_blocked");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -29940,7 +29972,7 @@ void MessagesManager::on_update_dialog_last_pinned_message_id(DialogId dialog_id
     return;
   }
 
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_last_pinned_message_id");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -30025,7 +30057,7 @@ void MessagesManager::on_update_dialog_has_scheduled_server_messages(DialogId di
     return;
   }
 
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_has_scheduled_server_messages");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -30079,7 +30111,7 @@ void MessagesManager::set_dialog_has_scheduled_database_messages_impl(Dialog *d,
 }
 
 void MessagesManager::on_update_dialog_folder_id(DialogId dialog_id, FolderId folder_id) {
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_folder_id");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -30112,8 +30144,7 @@ void MessagesManager::set_dialog_folder_id(Dialog *d, FolderId folder_id) {
   }
 
   DialogDate dialog_date(d->order, d->dialog_id);
-  auto *folder = get_dialog_folder(d->folder_id);
-  if (folder->ordered_dialogs_.erase(dialog_date) == 0) {
+  if (get_dialog_folder(d->folder_id)->ordered_dialogs_.erase(dialog_date) == 0) {
     LOG_IF(ERROR, d->order != DEFAULT_ORDER) << d->dialog_id << " not found in the chat list";
   }
 
@@ -30207,7 +30238,7 @@ void MessagesManager::on_update_dialog_group_call(DialogId dialog_id, bool has_a
 }
 
 void MessagesManager::on_update_dialog_group_call_id(DialogId dialog_id, InputGroupCallId input_group_call_id) {
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_group_call_id");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -30231,7 +30262,7 @@ void MessagesManager::on_update_dialog_group_call_id(DialogId dialog_id, InputGr
 void MessagesManager::on_update_dialog_default_join_group_call_as_dialog_id(DialogId dialog_id,
                                                                             DialogId default_join_as_dialog_id,
                                                                             bool force) {
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_default_join_group_call_as_dialog_id");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -30259,7 +30290,7 @@ void MessagesManager::on_update_dialog_default_join_group_call_as_dialog_id(Dial
 }
 
 void MessagesManager::on_update_dialog_message_ttl_setting(DialogId dialog_id, MessageTtlSetting message_ttl_setting) {
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_update_dialog_message_ttl_setting");
   if (d == nullptr) {
     // nothing to do
     return;
@@ -30347,7 +30378,7 @@ void MessagesManager::on_dialog_bots_updated(DialogId dialog_id, vector<UserId> 
     return;
   }
 
-  auto d = from_database ? get_dialog(dialog_id) : get_dialog_force(dialog_id);
+  auto d = from_database ? get_dialog(dialog_id) : get_dialog_force(dialog_id, "on_dialog_bots_updated");
   if (d == nullptr || d->reply_markup_message_id == MessageId()) {
     return;
   }
@@ -30518,9 +30549,9 @@ DialogId MessagesManager::search_public_dialog(const string &username_to_search,
   if (dialog_id.is_valid()) {
     if (have_input_peer(dialog_id, AccessRights::Read)) {
       if (td_->auth_manager_->is_bot()) {
-        force_create_dialog(dialog_id, "search public dialog", true);
+        force_create_dialog(dialog_id, "search_public_dialog", true);
       } else {
-        const Dialog *d = get_dialog_force(dialog_id);
+        const Dialog *d = get_dialog_force(dialog_id, "search_public_dialog");
         if (!is_dialog_inited(d)) {
           send_get_dialog_query(dialog_id, std::move(promise), 0, "search_public_dialog");
           return DialogId();
@@ -30532,7 +30563,7 @@ DialogId MessagesManager::search_public_dialog(const string &username_to_search,
     } else {
       // bot username maybe known despite there is no access_hash
       if (force || dialog_id.get_type() != DialogType::User) {
-        force_create_dialog(dialog_id, "search public dialog", true);
+        force_create_dialog(dialog_id, "search_public_dialog", true);
         promise.set_value(Unit());
         return dialog_id;
       }
@@ -30866,7 +30897,7 @@ bool MessagesManager::is_dialog_action_unneeded(DialogId dialog_id) const {
 
 void MessagesManager::send_dialog_action(DialogId dialog_id, MessageId top_thread_message_id, DialogAction action,
                                          Promise<Unit> &&promise) {
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "send_dialog_action")) {
     return promise.set_error(Status::Error(5, "Chat not found"));
   }
   if (top_thread_message_id != MessageId() &&
@@ -31013,7 +31044,7 @@ void MessagesManager::clear_active_dialog_actions(DialogId dialog_id) {
 
 vector<DialogListId> MessagesManager::get_dialog_lists_to_add_dialog(DialogId dialog_id) {
   vector<DialogListId> result;
-  const Dialog *d = get_dialog_force(dialog_id);
+  const Dialog *d = get_dialog_force(dialog_id, "get_dialog_lists_to_add_dialog");
   if (d == nullptr || d->order == DEFAULT_ORDER || !have_input_peer(dialog_id, AccessRights::Read)) {
     return result;
   }
@@ -31053,7 +31084,7 @@ void MessagesManager::add_dialog_to_list(DialogId dialog_id, DialogListId dialog
   LOG(INFO) << "Receive addChatToList request to add " << dialog_id << " to " << dialog_list_id;
   CHECK(!td_->auth_manager_->is_bot());
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "add_dialog_to_list");
   if (d == nullptr) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
@@ -31182,7 +31213,7 @@ void MessagesManager::set_dialog_photo(DialogId dialog_id, const tl_object_ptr<t
                                        Promise<Unit> &&promise) {
   LOG(INFO) << "Receive setChatPhoto request to change photo of " << dialog_id;
 
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "set_dialog_photo")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -31297,7 +31328,7 @@ void MessagesManager::upload_dialog_photo(DialogId dialog_id, FileId file_id, bo
 void MessagesManager::set_dialog_title(DialogId dialog_id, const string &title, Promise<Unit> &&promise) {
   LOG(INFO) << "Receive setChatTitle request to change title of " << dialog_id << " to \"" << title << '"';
 
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "set_dialog_title")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -31346,7 +31377,7 @@ void MessagesManager::set_dialog_message_ttl_setting(DialogId dialog_id, int32 t
     return promise.set_error(Status::Error(400, "Message auto-delete time can't be negative"));
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "set_dialog_message_ttl_setting");
   if (d == nullptr) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
@@ -31413,7 +31444,7 @@ void MessagesManager::set_dialog_permissions(DialogId dialog_id,
   LOG(INFO) << "Receive setChatPermissions request to change permissions of " << dialog_id << " to "
             << to_string(permissions);
 
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "set_dialog_permissions")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
   if (!have_input_peer(dialog_id, AccessRights::Write)) {
@@ -31467,7 +31498,7 @@ void MessagesManager::set_dialog_description(DialogId dialog_id, const string &d
   LOG(INFO) << "Receive setChatDescription request to set description of " << dialog_id << " to \"" << description
             << '"';
 
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "set_dialog_description")) {
     return promise.set_error(Status::Error(3, "Chat not found"));
   }
 
@@ -31523,7 +31554,7 @@ Status MessagesManager::can_pin_messages(DialogId dialog_id) const {
 
 void MessagesManager::pin_dialog_message(DialogId dialog_id, MessageId message_id, bool disable_notification,
                                          bool only_for_self, bool is_unpin, Promise<Unit> &&promise) {
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "pin_dialog_message");
   if (d == nullptr) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
@@ -31554,7 +31585,7 @@ void MessagesManager::pin_dialog_message(DialogId dialog_id, MessageId message_i
 }
 
 void MessagesManager::unpin_all_dialog_messages(DialogId dialog_id, Promise<Unit> &&promise) {
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "unpin_all_dialog_messages");
   if (d == nullptr) {
     return promise.set_error(Status::Error(6, "Chat not found"));
   }
@@ -31656,10 +31687,10 @@ tl_object_ptr<telegram_api::channelAdminLogEventsFilter> MessagesManager::get_ch
     flags |= telegram_api::channelAdminLogEventsFilter::SETTINGS_MASK;
   }
   if (filters->invite_link_changes_) {
-    flags |= telegram_api::channelAdminLogEventsFilter::GROUP_CALL_MASK;
+    flags |= telegram_api::channelAdminLogEventsFilter::INVITES_MASK;
   }
   if (filters->voice_chat_changes_) {
-    flags |= telegram_api::channelAdminLogEventsFilter::INVITES_MASK;
+    flags |= telegram_api::channelAdminLogEventsFilter::GROUP_CALL_MASK;
   }
 
   return make_tl_object<telegram_api::channelAdminLogEventsFilter>(
@@ -31676,7 +31707,7 @@ int64 MessagesManager::get_dialog_event_log(DialogId dialog_id, const string &qu
     return 0;
   }
 
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "get_dialog_event_log")) {
     promise.set_error(Status::Error(3, "Chat not found"));
     return 0;
   }
@@ -32231,14 +32262,14 @@ MessagesManager::Message *MessagesManager::on_get_message_from_database(DialogId
     }
 
     force_create_dialog(dialog_id, source);
-    d = get_dialog_force(dialog_id);
+    d = get_dialog_force(dialog_id, source);
     if (d == nullptr) {
       LOG(ERROR) << "Unknown dialog " << dialog_id;
       return nullptr;
     }
   }
 
-  if (!have_input_peer(d->dialog_id, AccessRights::Read)) {
+  if (!have_input_peer(dialog_id, AccessRights::Read)) {
     return nullptr;
   }
 
@@ -32261,7 +32292,10 @@ MessagesManager::Message *MessagesManager::on_get_message_from_database(DialogId
 
   Dependencies dependencies;
   add_message_dependencies(dependencies, m.get());
-  resolve_dependencies_force(td_, dependencies, "on_get_message_from_database");
+  if (!resolve_dependencies_force(td_, dependencies, "on_get_message_from_database")) {
+    FullMessageId full_message_id{dialog_id, m->message_id};
+    get_message_from_server(full_message_id, Auto());
+  }
 
   m->have_previous = false;
   m->have_next = false;
@@ -32271,7 +32305,7 @@ MessagesManager::Message *MessagesManager::on_get_message_from_database(DialogId
   auto result = add_message_to_dialog(d, std::move(m), false, &need_update, &need_update_dialog_pos, source);
   if (need_update_dialog_pos) {
     LOG(ERROR) << "Need update dialog pos after load " << (result == nullptr ? MessageId() : result->message_id)
-               << " in " << d->dialog_id << " from " << source;
+               << " in " << dialog_id << " from " << source;
     send_update_chat_last_message(d, source);
   }
   return result;
@@ -32300,9 +32334,9 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(DialogId dialog
     return nullptr;
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, source);
   if (d == nullptr) {
-    d = add_dialog(dialog_id);
+    d = add_dialog(dialog_id, "add_message_to_dialog");
     *need_update_dialog_pos = true;
   } else {
     CHECK(d->dialog_id == dialog_id);
@@ -32337,6 +32371,13 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
       }
     }
   }
+  if (message->sender_user_id == ContactsManager::get_anonymous_bot_user_id() &&
+      !message->sender_dialog_id.is_valid() && dialog_id.get_type() == DialogType::Channel &&
+      !is_broadcast_channel(dialog_id)) {
+    message->sender_user_id = UserId();
+    message->sender_dialog_id = dialog_id;
+  }
+
   if (!message->top_thread_message_id.is_valid() && !is_broadcast_channel(dialog_id) &&
       is_visible_message_reply_info(dialog_id, message.get()) && !message_id.is_scheduled()) {
     message->top_thread_message_id = message_id;
@@ -32344,6 +32385,9 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
 
   if (!message_id.is_scheduled() && message_id <= d->last_clear_history_message_id) {
     LOG(INFO) << "Skip adding cleared " << message_id << " to " << dialog_id << " from " << source;
+    if (message->from_database) {
+      delete_message_from_database(d, message_id, message.get(), true);
+    }
     debug_add_message_to_dialog_fail_reason_ = "cleared full history";
     return nullptr;
   }
@@ -32472,6 +32516,9 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
     }
     LOG(INFO) << "Process MessageChatDeleteHistory in " << message_id << " in " << dialog_id << " with date "
               << message->date << " from " << source;
+    if (message_id > d->max_unavailable_message_id) {
+      set_dialog_max_unavailable_message_id(dialog_id, message_id, false, "message chat delete history");
+    }
     CHECK(!message->from_database);
     debug_add_message_to_dialog_fail_reason_ = "skip adding MessageChatDeleteHistory";
     return nullptr;
@@ -33035,6 +33082,7 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
     add_notification_id_to_message_id_correspondence(d, m->notification_id, m->message_id);
   }
 
+  result_message->debug_source = source;
   d->being_added_message_id = MessageId();
 
   if (!td_->auth_manager_->is_bot() && from_update && d->reply_markup_message_id != MessageId()) {
@@ -33410,7 +33458,9 @@ void MessagesManager::delete_message_from_database(Dialog *d, MessageId message_
     if (message_id.is_any_server()) {
       auto old_message_id = find_old_message_id(d->dialog_id, message_id);
       if (old_message_id.is_valid()) {
-        LOG(WARNING) << "Sent " << FullMessageId{d->dialog_id, message_id} << " was deleted before it was received";
+        bool have_old_message = get_message(d, old_message_id) != nullptr;
+        LOG(WARNING) << "Sent " << FullMessageId{d->dialog_id, message_id}
+                     << " was deleted before it was received. Have old message = " << have_old_message;
         send_closure_later(actor_id(this), &MessagesManager::delete_messages, d->dialog_id,
                            vector<MessageId>{old_message_id}, false, Promise<Unit>());
         delete_update_message_id(d->dialog_id, message_id);
@@ -33689,6 +33739,9 @@ bool MessagesManager::update_message(Dialog *d, Message *old_message, unique_ptr
   }
   if (new_message->is_mention_notification_disabled) {
     old_message->is_mention_notification_disabled = true;
+  }
+  if (!new_message->from_database) {
+    old_message->from_database = false;
   }
 
   if (old_message->ttl_period != new_message->ttl_period) {
@@ -34056,8 +34109,8 @@ MessagesManager::Dialog *MessagesManager::get_dialog_by_message_id(MessageId mes
           G()->td_db()->get_messages_db_sync()->get_message_by_unique_message_id(message_id.get_server_message_id());
       if (r_value.is_ok()) {
         DialogId dialog_id(r_value.ok().first);
-        Message *m = on_get_message_from_database(dialog_id, get_dialog_force(dialog_id), r_value.ok().second, false,
-                                                  "get_dialog_by_message_id");
+        Message *m = on_get_message_from_database(dialog_id, get_dialog_force(dialog_id, "get_dialog_by_message_id"),
+                                                  r_value.ok().second, false, "get_dialog_by_message_id");
         if (m != nullptr) {
           CHECK(m->message_id == message_id);
           CHECK(message_id_to_dialog_id_[message_id] == dialog_id);
@@ -34120,7 +34173,7 @@ void MessagesManager::force_create_dialog(DialogId dialog_id, const char *source
                                           bool force_update_dialog_pos) {
   LOG_CHECK(dialog_id.is_valid()) << source;
   LOG_CHECK(is_inited_) << dialog_id << ' ' << source << ' ' << expect_no_access << ' ' << force_update_dialog_pos;
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, source);
   if (d == nullptr) {
     LOG(INFO) << "Force create " << dialog_id << " from " << source;
     if (loaded_dialogs_.count(dialog_id) > 0) {
@@ -34128,7 +34181,7 @@ void MessagesManager::force_create_dialog(DialogId dialog_id, const char *source
       return;
     }
 
-    d = add_dialog(dialog_id);
+    d = add_dialog(dialog_id, "force_create_dialog");
     update_dialog_pos(d, "force_create_dialog");
 
     if (dialog_id.get_type() == DialogType::SecretChat && !d->notification_settings.is_synchronized &&
@@ -34139,7 +34192,7 @@ void MessagesManager::force_create_dialog(DialogId dialog_id, const char *source
       auto secret_chat_id = dialog_id.get_secret_chat_id();
       {
         auto user_id = td_->contacts_manager_->get_secret_chat_user_id(secret_chat_id);
-        Dialog *user_d = get_dialog_force(DialogId(user_id));
+        Dialog *user_d = get_dialog_force(DialogId(user_id), source);
         if (user_d != nullptr && user_d->notification_settings.is_synchronized) {
           VLOG(notifications) << "Copy notification settings from " << user_d->dialog_id << " to " << dialog_id;
           auto new_notification_settings = user_d->notification_settings;
@@ -34188,7 +34241,7 @@ void MessagesManager::force_create_dialog(DialogId dialog_id, const char *source
   }
 }
 
-MessagesManager::Dialog *MessagesManager::add_dialog(DialogId dialog_id) {
+MessagesManager::Dialog *MessagesManager::add_dialog(DialogId dialog_id, const char *source) {
   LOG(DEBUG) << "Creating " << dialog_id;
   CHECK(!have_dialog(dialog_id));
 
@@ -34197,7 +34250,7 @@ MessagesManager::Dialog *MessagesManager::add_dialog(DialogId dialog_id) {
     auto r_value = G()->td_db()->get_dialog_db_sync()->get_dialog(dialog_id);
     if (r_value.is_ok()) {
       LOG(INFO) << "Synchronously loaded " << dialog_id << " from database";
-      return add_new_dialog(parse_dialog(dialog_id, r_value.ok()), true);
+      return add_new_dialog(parse_dialog(dialog_id, r_value.ok()), true, source);
     }
   }
 
@@ -34205,12 +34258,13 @@ MessagesManager::Dialog *MessagesManager::add_dialog(DialogId dialog_id) {
   d->dialog_id = dialog_id;
   invalidate_message_indexes(d.get());
 
-  return add_new_dialog(std::move(d), false);
+  return add_new_dialog(std::move(d), false, source);
 }
 
-MessagesManager::Dialog *MessagesManager::add_new_dialog(unique_ptr<Dialog> &&d, bool is_loaded_from_database) {
+MessagesManager::Dialog *MessagesManager::add_new_dialog(unique_ptr<Dialog> &&d, bool is_loaded_from_database,
+                                                         const char *source) {
   auto dialog_id = d->dialog_id;
-  LOG_CHECK(is_inited_) << dialog_id << ' ' << is_loaded_from_database;
+  LOG_CHECK(is_inited_) << dialog_id << ' ' << is_loaded_from_database << ' ' << source;
   switch (dialog_id.get_type()) {
     case DialogType::User:
       if (dialog_id == get_my_dialog_id() && d->last_read_inbox_message_id == MessageId::max() &&
@@ -34346,7 +34400,7 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
     if (user_id.is_valid()) {
       force_create_dialog(DialogId(user_id), "add chat with user to load/store action_bar and is_blocked");
 
-      Dialog *user_d = get_dialog_force(DialogId(user_id));
+      Dialog *user_d = get_dialog_force(DialogId(user_id), "fix_new_dialog");
       if (user_d != nullptr && d->is_blocked != user_d->is_blocked) {
         set_dialog_is_blocked(d, user_d->is_blocked);
       }
@@ -34669,9 +34723,13 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
                       << ", max_notification_message_id = " << d->max_notification_message_id;
 
   if (d->messages != nullptr) {
-    CHECK(d->messages->message_id == last_message_id);
-    CHECK(d->messages->left == nullptr);
-    CHECK(d->messages->right == nullptr);
+    auto get_debug_source = [](const unique_ptr<Message> &message) {
+      return message->debug_source != nullptr ? message->debug_source : "null";
+    };
+    LOG_CHECK(d->messages->message_id == last_message_id)
+        << d->messages->message_id << ' ' << last_message_id << ' ' << get_debug_source(d->messages);
+    LOG_CHECK(d->messages->left == nullptr) << get_debug_source(d->messages->left);
+    LOG_CHECK(d->messages->right == nullptr) << get_debug_source(d->messages->right);
   }
 }
 
@@ -35024,7 +35082,10 @@ void MessagesManager::update_dialog_lists(
 
     if (d->folder_id != FolderId::main()) {
       LOG(INFO) << "Change folder of " << dialog_id << " to " << FolderId::main();
+      DialogDate dialog_date(d->order, dialog_id);
+      get_dialog_folder(d->folder_id)->ordered_dialogs_.erase(dialog_date);
       do_set_dialog_folder_id(d, FolderId::main());
+      get_dialog_folder(d->folder_id)->ordered_dialogs_.insert(dialog_date);
     }
   }
 
@@ -35290,11 +35351,11 @@ const MessagesManager::Dialog *MessagesManager::get_dialog(DialogId dialog_id) c
   return it == dialogs_.end() ? nullptr : it->second.get();
 }
 
-bool MessagesManager::have_dialog_force(DialogId dialog_id) {
-  return loaded_dialogs_.count(dialog_id) > 0 || get_dialog_force(dialog_id) != nullptr;
+bool MessagesManager::have_dialog_force(DialogId dialog_id, const char *source) {
+  return loaded_dialogs_.count(dialog_id) > 0 || get_dialog_force(dialog_id, source) != nullptr;
 }
 
-MessagesManager::Dialog *MessagesManager::get_dialog_force(DialogId dialog_id) {
+MessagesManager::Dialog *MessagesManager::get_dialog_force(DialogId dialog_id, const char *source) {
   // TODO remove most usages of that function, preload dialog asynchronously if possible
   auto it = dialogs_.find(dialog_id);
   if (it != dialogs_.end()) {
@@ -35307,12 +35368,13 @@ MessagesManager::Dialog *MessagesManager::get_dialog_force(DialogId dialog_id) {
 
   auto r_value = G()->td_db()->get_dialog_db_sync()->get_dialog(dialog_id);
   if (r_value.is_ok()) {
-    LOG(INFO) << "Loaded " << dialog_id << " from database";
-    auto d = on_load_dialog_from_database(dialog_id, r_value.move_as_ok());
+    LOG(INFO) << "Loaded " << dialog_id << " from database from " << source;
+    auto d = on_load_dialog_from_database(dialog_id, r_value.move_as_ok(), source);
     LOG_CHECK(d == nullptr || d->dialog_id == dialog_id) << d->dialog_id << " " << dialog_id;
     return d;
   } else {
-    LOG(INFO) << "Failed to load " << dialog_id << " from database: " << r_value.error().message();
+    LOG(INFO) << "Failed to load " << dialog_id << " from database from " << source << ": "
+              << r_value.error().message();
     return nullptr;
   }
 }
@@ -35362,12 +35424,15 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
   if (d->draft_message != nullptr) {
     add_formatted_text_dependencies(dependencies, &d->draft_message->input_message_text.text);
   }
-  resolve_dependencies_force(td_, dependencies, "parse_dialog");
+  if (!resolve_dependencies_force(td_, dependencies, "parse_dialog")) {
+    send_get_dialog_query(dialog_id, Auto(), 0, "parse_dialog");
+  }
 
   return d;
 }
 
-MessagesManager::Dialog *MessagesManager::on_load_dialog_from_database(DialogId dialog_id, const BufferSlice &value) {
+MessagesManager::Dialog *MessagesManager::on_load_dialog_from_database(DialogId dialog_id, const BufferSlice &value,
+                                                                       const char *source) {
   CHECK(G()->parameters().use_message_db);
 
   if (!dialog_id.is_valid()) {
@@ -35388,8 +35453,8 @@ MessagesManager::Dialog *MessagesManager::on_load_dialog_from_database(DialogId 
     return old_d;
   }
 
-  LOG(INFO) << "Add new " << dialog_id << " from database";
-  return add_new_dialog(parse_dialog(dialog_id, value), true);
+  LOG(INFO) << "Add new " << dialog_id << " from database from " << source;
+  return add_new_dialog(parse_dialog(dialog_id, value), true, source);
 }
 
 const DialogFilter *MessagesManager::get_server_dialog_filter(DialogFilterId dialog_filter_id) const {
@@ -35717,7 +35782,8 @@ void MessagesManager::set_channel_pts(Dialog *d, int32 new_pts, const char *sour
   CHECK(d->dialog_id.get_type() == DialogType::Channel);
 
   LOG_IF(ERROR, running_get_channel_difference(d->dialog_id))
-      << "Set pts of " << d->dialog_id << " to " << new_pts << " while running getChannelDifference";
+      << "Set pts of " << d->dialog_id << " to " << new_pts << " from " << source
+      << " while running getChannelDifference";
 
   if (is_debug_message_op_enabled()) {
     d->debug_message_op.emplace_back(Dialog::MessageOp::SetPts, new_pts, source);
@@ -35725,7 +35791,7 @@ void MessagesManager::set_channel_pts(Dialog *d, int32 new_pts, const char *sour
 
   // TODO delete_first_messages support in channels
   if (new_pts == std::numeric_limits<int32>::max()) {
-    LOG(ERROR) << "Update " << d->dialog_id << " pts to -1";
+    LOG(ERROR) << "Update " << d->dialog_id << " pts to -1 from " << source;
     G()->td_db()->get_binlog_pmc()->erase(get_channel_pts_key(d->dialog_id));
     d->pts = std::numeric_limits<int32>::max();
     if (d->pending_read_channel_inbox_pts != 0) {
@@ -35735,9 +35801,10 @@ void MessagesManager::set_channel_pts(Dialog *d, int32 new_pts, const char *sour
   }
   if (new_pts > d->pts || (0 < new_pts && new_pts < d->pts - 99999)) {  // pts can only go up or drop cardinally
     if (new_pts < d->pts - 99999) {
-      LOG(WARNING) << "Pts of " << d->dialog_id << " decreases from " << d->pts << " to " << new_pts;
+      LOG(WARNING) << "Pts of " << d->dialog_id << " decreases from " << d->pts << " to " << new_pts << " from "
+                   << source;
     } else {
-      LOG(INFO) << "Update " << d->dialog_id << " pts to " << new_pts;
+      LOG(INFO) << "Update " << d->dialog_id << " pts to " << new_pts << " from " << source;
     }
 
     d->pts = new_pts;
@@ -35756,7 +35823,8 @@ void MessagesManager::set_channel_pts(Dialog *d, int32 new_pts, const char *sour
       G()->td_db()->get_binlog_pmc()->set(get_channel_pts_key(d->dialog_id), to_string(new_pts));
     }
   } else if (new_pts < d->pts) {
-    LOG(ERROR) << "Receive wrong pts " << new_pts << " in " << d->dialog_id << ". Current pts is " << d->pts;
+    LOG(ERROR) << "Receive wrong pts " << new_pts << " in " << d->dialog_id << " from " << source << ". Current pts is "
+               << d->pts;
   }
 }
 
@@ -35771,7 +35839,7 @@ bool MessagesManager::need_channel_difference_to_add_message(DialogId dialog_id,
     return false;
   }
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "need_channel_difference_to_add_message");
   if (d == nullptr || d->last_new_message_id == MessageId()) {
     return false;
   }
@@ -36105,7 +36173,7 @@ void MessagesManager::on_get_channel_difference(
   LOG(INFO) << "----- END  GET CHANNEL DIFFERENCE----- for " << dialog_id;
   CHECK(active_get_channel_differencies_.count(dialog_id) == 1);
   active_get_channel_differencies_.erase(dialog_id);
-  auto d = get_dialog_force(dialog_id);
+  auto d = get_dialog_force(dialog_id, "on_get_channel_difference");
 
   if (difference_ptr == nullptr) {
     bool have_access = have_input_peer(dialog_id, AccessRights::Read);
@@ -36150,7 +36218,7 @@ void MessagesManager::on_get_channel_difference(
 
   bool need_update_dialog_pos = false;
   if (d == nullptr) {
-    d = add_dialog(dialog_id);
+    d = add_dialog(dialog_id, "on_get_channel_difference");
     need_update_dialog_pos = true;
   }
 
@@ -36559,7 +36627,7 @@ void MessagesManager::try_hide_distance(DialogId dialog_id, const Message *m) {
     case DialogType::SecretChat: {
       auto user_id = td_->contacts_manager_->get_secret_chat_user_id(dialog_id.get_secret_chat_id());
       if (user_id.is_valid()) {
-        d = get_dialog_force(DialogId(user_id));
+        d = get_dialog_force(DialogId(user_id), "try_hide_distance");
       }
       break;
     }
@@ -36584,7 +36652,7 @@ MessagesManager::Message *MessagesManager::continue_send_message(DialogId dialog
   CHECK(m != nullptr);
   CHECK(m->content != nullptr);
 
-  Dialog *d = get_dialog_force(dialog_id);
+  Dialog *d = get_dialog_force(dialog_id, "continue_send_message");
   if (d == nullptr) {
     LOG(ERROR) << "Can't find " << dialog_id << " to continue send a message";
     binlog_erase(G()->td_db()->get_binlog(), log_event_id);
@@ -36791,13 +36859,13 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         }
         resolve_dependencies_force(td_, dependencies, "ForwardMessagesLogEvent");
 
-        Dialog *to_dialog = get_dialog_force(to_dialog_id);
+        Dialog *to_dialog = get_dialog_force(to_dialog_id, "ForwardMessagesLogEvent to");
         if (to_dialog == nullptr) {
           LOG(ERROR) << "Can't find " << to_dialog_id << " to forward messages to";
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           continue;
         }
-        Dialog *from_dialog = get_dialog_force(from_dialog_id);
+        Dialog *from_dialog = get_dialog_force(from_dialog_id, "ForwardMessagesLogEvent from");
         if (from_dialog == nullptr) {
           LOG(ERROR) << "Can't find " << from_dialog_id << " to forward messages from";
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
@@ -36856,7 +36924,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
         log_event.id_ = event.id_;
 
-        Dialog *d = get_dialog_force(log_event.full_message_id_.get_dialog_id());
+        Dialog *d = get_dialog_force(log_event.full_message_id_.get_dialog_id(), "DeleteMessageLogEvent");
         if (d != nullptr) {
           auto message_id = log_event.full_message_id_.get_message_id();
           if (message_id.is_valid_scheduled() && message_id.is_scheduled_server()) {
@@ -36879,7 +36947,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "DeleteMessagesFromServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -36900,7 +36968,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "DeleteScheduledMessagesFromServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -36924,7 +36992,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "DeleteDialogHistoryFromServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -36986,7 +37054,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "ReadHistoryOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37037,7 +37105,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "ReadMessageThreadHistoryOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37063,7 +37131,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "ReadMessageContentsOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37082,7 +37150,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "ReadAllDialogMentionsOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37101,7 +37169,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "ToggleDialogIsPinnedOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37121,7 +37189,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
 
         vector<DialogId> dialog_ids;
         for (auto &dialog_id : log_event.dialog_ids_) {
-          Dialog *d = get_dialog_force(dialog_id);
+          Dialog *d = get_dialog_force(dialog_id, "ReorderPinnedDialogsOnServerLogEvent");
           if (d != nullptr && have_input_peer(dialog_id, AccessRights::Read)) {
             dialog_ids.push_back(dialog_id);
           }
@@ -37146,7 +37214,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         auto dialog_id = log_event.dialog_id_;
         bool have_info = dialog_id.get_type() == DialogType::User
                              ? td_->contacts_manager_->have_user_force(dialog_id.get_user_id())
-                             : have_dialog_force(dialog_id);
+                             : have_dialog_force(dialog_id, "ToggleDialogIsMarkedAsUnreadOnServerLogEvent");
         if (!have_info || !have_input_peer(dialog_id, AccessRights::Know)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37165,7 +37233,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "ToggleDialogIsBlockedOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37184,7 +37252,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "SaveDialogDraftMessageOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Write)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37204,7 +37272,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "UpdateDialogNotificationSettingsOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37238,7 +37306,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "ChangeDialogReportSpamStateOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37257,7 +37325,7 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         log_event_parse(log_event, event.data_).ensure();
 
         auto dialog_id = log_event.dialog_id_;
-        Dialog *d = get_dialog_force(dialog_id);
+        Dialog *d = get_dialog_force(dialog_id, "SetDialogFolderIdOnServerLogEvent");
         if (d == nullptr || !have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
@@ -37283,14 +37351,14 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
         add_dialog_dependencies(dependencies, dialog_id);
         resolve_dependencies_force(td_, dependencies, "GetDialogFromServerLogEvent");
 
-        get_dialog_force(dialog_id);  // load it if exists
+        get_dialog_force(dialog_id, "GetDialogFromServerLogEvent");  // load it if exists
 
         if (!have_input_peer(dialog_id, AccessRights::Read)) {
           binlog_erase(G()->td_db()->get_binlog(), event.id_);
           break;
         }
 
-        send_get_dialog_query(dialog_id, Promise<Unit>(), event.id_, "GetDialogFromServerLogEvent");
+        send_get_dialog_query(dialog_id, Auto(), event.id_, "GetDialogFromServerLogEvent");
         break;
       }
       case LogEvent::HandlerType::UnpinAllDialogMessagesOnServer: {
@@ -37420,7 +37488,7 @@ bool MessagesManager::load_recently_found_dialogs(Promise<Unit> &promise) {
           CHECK(dialog_id.is_valid());
           // TODO use asynchronous load
           // get_dialog(dialog_id, resolve_recently_found_dialogs_multipromise_.get_promise());
-          get_dialog_force(dialog_id);
+          get_dialog_force(dialog_id, "load_recently_found_dialogs");
         }
       }
       resolve_recently_found_dialogs_multipromise_.get_promise().set_value(Unit());
@@ -37434,7 +37502,7 @@ bool MessagesManager::load_recently_found_dialogs(Promise<Unit> &promise) {
 }
 
 Status MessagesManager::add_recently_found_dialog(DialogId dialog_id) {
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "add_recently_found_dialog")) {
     return Status::Error(5, "Chat not found");
   }
   if (add_recently_found_dialog_internal(dialog_id)) {
@@ -37445,7 +37513,7 @@ Status MessagesManager::add_recently_found_dialog(DialogId dialog_id) {
 }
 
 Status MessagesManager::remove_recently_found_dialog(DialogId dialog_id) {
-  if (!have_dialog_force(dialog_id)) {
+  if (!have_dialog_force(dialog_id, "remove_recently_found_dialog")) {
     return Status::Error(5, "Chat not found");
   }
   if (remove_recently_found_dialog_internal(dialog_id)) {

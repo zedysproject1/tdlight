@@ -16,6 +16,7 @@
 #include "td/telegram/ChatId.h"
 #include "td/telegram/Contact.h"
 #include "td/telegram/ContactsManager.h"
+#include "td/telegram/Dependencies.h"
 #include "td/telegram/Document.h"
 #include "td/telegram/DocumentsManager.h"
 #include "td/telegram/DocumentsManager.hpp"
@@ -437,7 +438,7 @@ class MessageChatSetTtl : public MessageContent {
 
 class MessageUnsupported : public MessageContent {
  public:
-  static constexpr int32 CURRENT_VERSION = 5;
+  static constexpr int32 CURRENT_VERSION = 6;
   int32 version = CURRENT_VERSION;
 
   MessageUnsupported() = default;

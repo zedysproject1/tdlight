@@ -8,7 +8,6 @@
 
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/ChannelId.h"
-#include "td/telegram/Dependencies.h"
 #include "td/telegram/DialogAction.h"
 #include "td/telegram/DialogDate.h"
 #include "td/telegram/DialogDb.h"
@@ -81,17 +80,12 @@
 namespace td {
 
 struct BinlogEvent;
-
+struct Dependencies;
 class DialogFilter;
-
 class DraftMessage;
-
 struct InputMessageContent;
-
 class MessageContent;
-
 class MultiSequenceDispatcher;
-
 class Td;
 
 class MessagesManager : public Actor {
@@ -508,7 +502,7 @@ class MessagesManager : public Actor {
   tl_object_ptr<td_api::chatEvents> get_chat_events_object(int64 random_id);
 
   bool have_dialog(DialogId dialog_id) const;
-  bool have_dialog_force(DialogId dialog_id);
+  bool have_dialog_force(DialogId dialog_id, const char *source = "have_dialog_force");
 
   bool have_dialog_info(DialogId dialog_id) const;
   bool have_dialog_info_force(DialogId dialog_id) const;
@@ -1117,6 +1111,8 @@ class MessagesManager : public Actor {
     Promise<Unit> edit_promise;
 
     int32 last_edit_pts = 0;
+
+    const char *debug_source = nullptr;
 
     unique_ptr<Message> left;
     unique_ptr<Message> right;
@@ -1824,7 +1820,7 @@ class MessagesManager : public Actor {
   void delete_messages_from_updates(const vector<MessageId> &message_ids);
 
   void delete_dialog_messages(DialogId dialog_id, const vector<MessageId> &message_ids, bool from_updates,
-                              bool skip_update_for_not_found_messages);
+                              bool skip_update_for_not_found_messages, const char *source);
 
   void update_dialog_pinned_messages_from_updates(DialogId dialog_id, const vector<MessageId> &message_ids,
                                                   bool is_pin);
@@ -1920,7 +1916,7 @@ class MessagesManager : public Actor {
   void do_delete_all_dialog_messages(Dialog *d, unique_ptr<Message> &message, bool is_permanently_deleted,
                                      vector<int64> &deleted_message_ids);
 
-  void delete_message_from_server(DialogId dialog_id, MessageId message_ids, bool revoke);
+  void delete_sent_message_from_server(DialogId dialog_id, MessageId message_id);
 
   void delete_messages_from_server(DialogId dialog_id, vector<MessageId> message_ids, bool revoke, uint64 log_event_id,
                                    Promise<Unit> &&promise);
@@ -2416,9 +2412,9 @@ class MessagesManager : public Actor {
 
   MessageId get_message_id_by_random_id(Dialog *d, int64 random_id, const char *source);
 
-  Dialog *add_dialog(DialogId dialog_id);
+  Dialog *add_dialog(DialogId dialog_id, const char *source);
 
-  Dialog *add_new_dialog(unique_ptr<Dialog> &&d, bool is_loaded_from_database);
+  Dialog *add_new_dialog(unique_ptr<Dialog> &&d, bool is_loaded_from_database, const char *source);
 
   void fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_database_message, MessageId last_database_message_id,
                       int64 order, int32 last_clear_history_date, MessageId last_clear_history_message_id,
@@ -2440,9 +2436,9 @@ class MessagesManager : public Actor {
   Dialog *get_dialog(DialogId dialog_id);
   const Dialog *get_dialog(DialogId dialog_id) const;
 
-  Dialog *get_dialog_force(DialogId dialog_id);
+  Dialog *get_dialog_force(DialogId dialog_id, const char *source = "get_dialog_force");
 
-  Dialog *on_load_dialog_from_database(DialogId dialog_id, const BufferSlice &value);
+  Dialog *on_load_dialog_from_database(DialogId dialog_id, const BufferSlice &value, const char *source);
 
   void on_get_dialogs_from_database(FolderId folder_id, int32 limit, DialogDbGetDialogsResult &&dialogs,
                                     Promise<Unit> &&promise);
