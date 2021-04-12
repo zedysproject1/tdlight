@@ -300,14 +300,14 @@ function getTargetName(target) {
     case 'tdjson':
     case 'WebAssembly':
     case 'iOS':
-      return '<a href="https://github.com/tdlib/td#using-json">JSON</a>';
+      return '<a href="https://github.com/tdlight-team/tdlight#using-json">JSON</a>';
     case 'tdclient':
-      return '<a href="https://github.com/tdlib/td#using-cxx">a simple and convenient C++11-interface</a>';
+      return '<a href="https://github.com/tdlight-team/tdlight#using-cxx">a simple and convenient C++11-interface</a>';
     case 'JNI':
     case 'Android':
-      return '<a href="https://github.com/tdlib/td#using-java">native ' + target + '</a>';
+      return '<a href="https://github.com/tdlight-team/tdlight#using-java">native ' + target + '</a>';
     default:
-      return '<a href="https://github.com/tdlib/td#using-dotnet">native ' + target + '</a>';
+      return '<a href="https://github.com/tdlight-team/tdlight#using-dotnet">native ' + target + '</a>';
   }
 }
 
@@ -322,16 +322,16 @@ function onOsChanged() {
     language = 'any other programming language';
   }
   var text = 'TDLib can be used from ' + language + ' on ' + os + ' through the ' + getTargetName(target) + ' interface.<br>' +
-             'See <a href="https://github.com/tdlib/td/blob/master/example/README.md#' + getExampleAnchor(language) + '">examples</a> of such usage and already available third-party frameworks.<br>';
+             'See <a href="https://github.com/tdlight-team/tdlight/blob/master/example/README.md#' + getExampleAnchor(language) + '">examples</a> of such usage and already available third-party frameworks.<br>';
 
   if (target === 'WebAssembly') {
     text = 'TDLib is available in a prebuilt form as an <a href="https://www.npmjs.com/">NPM</a> package <a href="https://www.npmjs.com/package/tdweb">tdweb</a>.<br>' +
-           'If you want to build it manually, take a look at our <a href="https://github.com/tdlib/td/tree/master/example/web">example</a>.';
+           'If you want to build it manually, take a look at our <a href="https://github.com/tdlight-team/tdlight/tree/master/example/web">example</a>.';
     target = '';
   }
   if (target === 'Android') {
-    text = 'TDLib for Android is available in a prebuilt form and can be downloaded from <a href="https://core.telegram.org/tdlib/tdlib.zip">there</a>.<br>' +
-           'See <a href="https://github.com/tdlib/td/issues/77#issuecomment-640719893">build instructions</a> if you want to build the latest TDLib version or want to build TDLib with different interface.';
+    text = 'TDLib for Android is available in a prebuilt form and can be downloaded from <a href="https://core.telegram.org/tdlight-team/tdlightlib.zip">there</a>.<br>' +
+           'See <a href="https://github.com/tdlight-team/tdlight/issues/77#issuecomment-640719893">build instructions</a> if you want to build the latest TDLib version or want to build TDLib with different interface.';
     target = '';
   }
   if (target === 'iOS') {
@@ -712,7 +712,7 @@ function onOptionsChanged() {
       commands.push('exit');
     }
   }
-  commands.push('git clone https://github.com/tdlib/td.git');
+  commands.push('git clone https://github.com/tdlight-team/tdlight.git');
 
   commands.push('cd td');
   // commands.push('git checkout v1.7.0');
