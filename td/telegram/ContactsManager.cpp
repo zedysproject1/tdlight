@@ -2789,6 +2789,7 @@ class GetChatsQuery : public Td::ResultHandler {
 
 class GetFullChatQuery : public Td::ResultHandler {
   Promise<Unit> promise_;
+  ChatId chat_id_;
 
  public:
   explicit GetFullChatQuery(Promise<Unit> &&promise) : promise_(std::move(promise)) {
@@ -2812,6 +2813,7 @@ class GetFullChatQuery : public Td::ResultHandler {
   }
 
   void on_error(uint64 id, Status status) override {
+    td->contacts_manager_->on_get_chat_full_failed(chat_id_);
     promise_.set_error(std::move(status));
   }
 };
@@ -2896,6 +2898,7 @@ class GetFullChannelQuery : public Td::ResultHandler {
 
   void on_error(uint64 id, Status status) override {
     td->contacts_manager_->on_get_channel_error(channel_id_, status, "GetFullChannelQuery");
+    td->contacts_manager_->on_get_channel_full_failed(channel_id_);
     promise_.set_error(std::move(status));
   }
 };
@@ -4744,10 +4747,9 @@ string ContactsManager::get_secret_chat_title(SecretChatId secret_chat_id) const
 
 RestrictedRights ContactsManager::get_user_default_permissions(UserId user_id) const {
   auto u = get_user(user_id);
-  if (u == nullptr) {
-    return RestrictedRights(false, false, false, false, false, false, false, false, false, false, false);
+  if (u == nullptr || user_id == get_replies_bot_user_id()) {
+    return RestrictedRights(false, false, false, false, false, false, false, false, false, false, u != nullptr);
   }
-
   return RestrictedRights(true, true, true, true, true, true, true, true, false, false, true);
 }
 
@@ -6787,6 +6789,7 @@ void ContactsManager::add_channel_participant(ChannelId channel_id, UserId user_
       return promise.set_error(Status::Error(3, "Can't return to kicked from chat"));
     }
 
+    speculative_add_channel_user(channel_id, user_id, DialogParticipantStatus::Member(), c->status);
     td_->create_handler<JoinChannelQuery>(std::move(promise))->send(channel_id);
     return;
   }
@@ -7406,6 +7409,7 @@ void ContactsManager::restrict_channel_participant(ChannelId channel_id, UserId 
     }
 
     // leave the channel
+    speculative_add_channel_user(channel_id, user_id, status, c->status);
     td_->create_handler<LeaveChannelQuery>(std::move(promise))->send(channel_id);
     return;
   }
@@ -9236,7 +9240,7 @@ void ContactsManager::on_load_user_full_from_database(UserId user_id, string val
 
   Dependencies dependencies;
   dependencies.user_ids.insert(user_id);
-  if (!resolve_dependencies_force(td_, dependencies, "user_full")) {
+  if (!resolve_dependencies_force(td_, dependencies, "on_load_user_full_from_database")) {
     users_full_.erase(user_id);
     G()->td_db()->get_sqlite_pmc()->erase(get_user_full_database_key(user_id), Auto());
     return;
@@ -9427,7 +9431,7 @@ void ContactsManager::on_load_chat_full_from_database(ChatId chat_id, string val
     dependencies.user_ids.insert(participant.inviter_user_id);
   }
   dependencies.user_ids.insert(chat_full->invite_link.get_creator_user_id());
-  if (!resolve_dependencies_force(td_, dependencies, "chat_full")) {
+  if (!resolve_dependencies_force(td_, dependencies, "on_load_chat_full_from_database")) {
     chats_full_.erase(chat_id);
     G()->td_db()->get_sqlite_pmc()->erase(get_chat_full_database_key(chat_id), Auto());
     return;
@@ -9508,8 +9512,9 @@ string ContactsManager::get_channel_full_database_value(const ChannelFull *chann
   return log_event_store(*channel_full).as_slice().str();
 }
 
-void ContactsManager::on_load_channel_full_from_database(ChannelId channel_id, string value) {
-  LOG(INFO) << "Successfully loaded full " << channel_id << " of size " << value.size() << " from database";
+void ContactsManager::on_load_channel_full_from_database(ChannelId channel_id, string value, const char *source) {
+  LOG(INFO) << "Successfully loaded full " << channel_id << " of size " << value.size() << " from database from "
+            << source;
   //  G()->td_db()->get_sqlite_pmc()->erase(get_channel_full_database_key(channel_id), Auto());
   //  return;
 
@@ -9535,7 +9540,7 @@ void ContactsManager::on_load_channel_full_from_database(ChannelId channel_id, s
   dependencies.chat_ids.insert(channel_full->migrated_from_chat_id);
   dependencies.user_ids.insert(channel_full->bot_user_ids.begin(), channel_full->bot_user_ids.end());
   dependencies.user_ids.insert(channel_full->invite_link.get_creator_user_id());
-  if (!resolve_dependencies_force(td_, dependencies, "channel_full")) {
+  if (!resolve_dependencies_force(td_, dependencies, source)) {
     channels_full_.erase(channel_id);
     G()->td_db()->get_sqlite_pmc()->erase(get_channel_full_database_key(channel_id), Auto());
     return;
@@ -9579,6 +9584,10 @@ void ContactsManager::on_load_channel_full_from_database(ChannelId channel_id, s
     if (channel_full->participant_count < channel_full->administrator_count) {
       channel_full->participant_count = channel_full->administrator_count;
       channel_full->expires_at = 0.0;
+
+      c->participant_count = channel_full->participant_count;
+      c->is_changed = true;
+      update_channel(c, channel_id);
     }
   }
 
@@ -9612,7 +9621,7 @@ ContactsManager::ChannelFull *ContactsManager::get_channel_full_force(ChannelId 
 
   LOG(INFO) << "Trying to load full " << channel_id << " from database from " << source;
   on_load_channel_full_from_database(
-      channel_id, G()->td_db()->get_sqlite_sync_pmc()->get(get_channel_full_database_key(channel_id)));
+      channel_id, G()->td_db()->get_sqlite_sync_pmc()->get(get_channel_full_database_key(channel_id)), source);
   return get_channel_full(channel_id, source);
 }
 
@@ -10679,6 +10688,26 @@ void ContactsManager::on_get_chat_full(tl_object_ptr<telegram_api::ChatFull> &&c
     }
   }
   promise.set_value(Unit());
+}
+
+void ContactsManager::on_get_chat_full_failed(ChatId chat_id) {
+  if (G()->close_flag()) {
+    return;
+  }
+
+  LOG(INFO) << "Failed to get " << chat_id;
+}
+
+void ContactsManager::on_get_channel_full_failed(ChannelId channel_id) {
+  if (G()->close_flag()) {
+    return;
+  }
+
+  LOG(INFO) << "Failed to get " << channel_id;
+  auto channel_full = get_channel_full(channel_id, "on_get_channel_full");
+  if (channel_full != nullptr) {
+    channel_full->repair_request_version = 0;
+  }
 }
 
 bool ContactsManager::is_update_about_username_change_received(UserId user_id) const {
@@ -11831,8 +11860,18 @@ void ContactsManager::speculative_add_channel_user(ChannelId channel_id, UserId 
                                                    DialogParticipantStatus new_status,
                                                    DialogParticipantStatus old_status) {
   auto c = get_channel_force(channel_id);
+  // channel full must be loaded before c->participant_count is updated, because on_load_channel_full_from_database
+  // must copy the initial c->participant_count before it is speculatibely updated
+  auto channel_full = get_channel_full_force(channel_id, "speculative_add_channel_user");
+  int32 min_count = 0;
+  if (channel_full != nullptr) {
+    channel_full->is_changed |= speculative_add_count(channel_full->administrator_count,
+                                                      new_status.is_administrator() - old_status.is_administrator());
+    min_count = channel_full->administrator_count;
+  }
+
   if (c != nullptr && c->participant_count != 0 &&
-      speculative_add_count(c->participant_count, new_status.is_member() - old_status.is_member())) {
+      speculative_add_count(c->participant_count, new_status.is_member() - old_status.is_member(), min_count)) {
     c->is_changed = true;
     update_channel(c, channel_id);
   }
@@ -11895,16 +11934,12 @@ void ContactsManager::speculative_add_channel_user(ChannelId channel_id, UserId 
     }
   }
 
-  auto channel_full = get_channel_full_force(channel_id, "speculative_add_channel_user");
   if (channel_full == nullptr) {
     return;
   }
 
-  channel_full->is_changed |= speculative_add_count(channel_full->administrator_count,
-                                                    new_status.is_administrator() - old_status.is_administrator());
-  channel_full->is_changed |=
-      speculative_add_count(channel_full->participant_count, new_status.is_member() - old_status.is_member(),
-                            channel_full->administrator_count);
+  channel_full->is_changed |= speculative_add_count(channel_full->participant_count,
+                                                    new_status.is_member() - old_status.is_member(), min_count);
   channel_full->is_changed |=
       speculative_add_count(channel_full->restricted_count, new_status.is_restricted() - old_status.is_restricted());
   channel_full->is_changed |=
@@ -12976,6 +13011,10 @@ void ContactsManager::on_channel_status_changed(Channel *c, ChannelId channel_id
 
   if (old_status.is_member() != new_status.is_member() || new_status.is_banned()) {
     remove_dialog_access_by_invite_link(DialogId(channel_id));
+
+    if (new_status.is_member()) {
+      reload_channel_full(channel_id, Promise<Unit>(), "on_channel_status_changed");
+    }
   }
   if (need_reload_group_call) {
     send_closure_later(G()->messages_manager(), &MessagesManager::on_update_dialog_group_call_rights,
@@ -14406,7 +14445,8 @@ void ContactsManager::add_dialog_participant(DialogId dialog_id, UserId user_id,
     case DialogType::Chat:
       return add_chat_participant(dialog_id.get_chat_id(), user_id, forward_limit, std::move(promise));
     case DialogType::Channel:
-      return add_channel_participant(dialog_id.get_channel_id(), user_id, std::move(promise));
+      return add_channel_participant(dialog_id.get_channel_id(), user_id, std::move(promise),
+                                     DialogParticipantStatus::Left());
     case DialogType::SecretChat:
       return promise.set_error(Status::Error(3, "Can't add members to a secret chat"));
     case DialogType::None:

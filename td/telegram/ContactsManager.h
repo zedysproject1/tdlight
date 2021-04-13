@@ -181,6 +181,8 @@ class ContactsManager : public Actor {
   void on_get_chats(vector<tl_object_ptr<telegram_api::Chat>> &&chats, const char *source);
 
   void on_get_chat_full(tl_object_ptr<telegram_api::ChatFull> &&chat_full, Promise<Unit> &&promise);
+  void on_get_chat_full_failed(ChatId chat_id);
+  void on_get_channel_full_failed(ChannelId channel_id);
 
   void on_update_profile_success(int32 flags, const string &first_name, const string &last_name, const string &about);
   void on_set_bot_commands_success(vector<std::pair<string, string>> &&commands);
@@ -1336,7 +1338,7 @@ class ContactsManager : public Actor {
   void save_channel_full(const ChannelFull *channel_full, ChannelId channel_id);
   static string get_channel_full_database_key(ChannelId channel_id);
   static string get_channel_full_database_value(const ChannelFull *channel_full);
-  void on_load_channel_full_from_database(ChannelId channel_id, string value);
+  void on_load_channel_full_from_database(ChannelId channel_id, string value, const char *source);
 
   void update_user(User *u, UserId user_id, bool from_binlog = false, bool from_database = false);
   void update_chat(Chat *c, ChatId chat_id, bool from_binlog = false, bool from_database = false);
@@ -1413,7 +1415,7 @@ class ContactsManager : public Actor {
   void add_chat_participant(ChatId chat_id, UserId user_id, int32 forward_limit, Promise<Unit> &&promise);
 
   void add_channel_participant(ChannelId channel_id, UserId user_id, Promise<Unit> &&promise,
-                               DialogParticipantStatus old_status = DialogParticipantStatus::Left());
+                               DialogParticipantStatus old_status);
 
   void add_channel_participants(ChannelId channel_id, const vector<UserId> &user_ids, Promise<Unit> &&promise);
 

@@ -12048,8 +12048,7 @@ void MessagesManager::set_dialog_last_read_inbox_message_id(Dialog *d, MessageId
     if (d->message_notification_group.group_id.is_valid()) {
       auto total_count = get_dialog_pending_notification_count(d, false);
       if (total_count == 0) {
-        set_dialog_last_notification(d->dialog_id, d->message_notification_group, 0, NotificationId(),
-                                     "set_dialog_last_read_inbox_message_id");
+        set_dialog_last_notification(d->dialog_id, d->message_notification_group, 0, NotificationId(), source);
       }
       if (!d->pending_new_message_notifications.empty()) {
         for (auto &it : d->pending_new_message_notifications) {
@@ -12074,7 +12073,7 @@ void MessagesManager::set_dialog_last_read_inbox_message_id(Dialog *d, MessageId
     if (d->mention_notification_group.group_id.is_valid() && d->pinned_message_notification_message_id.is_valid() &&
         d->pinned_message_notification_message_id <= d->last_read_inbox_message_id) {
       // remove pinned message notification when it is read
-      remove_dialog_pinned_message_notification(d, "set_dialog_last_read_inbox_message_id 2");
+      remove_dialog_pinned_message_notification(d, source);
     }
   }
 
@@ -16311,7 +16310,7 @@ void MessagesManager::on_get_dialog_filters(Result<vector<tl_object_ptr<telegram
       continue;
     }
 
-    sort_dialog_filter_input_dialog_ids(dialog_filter.get());
+    sort_dialog_filter_input_dialog_ids(dialog_filter.get(), "on_get_dialog_filters 1");
     new_server_dialog_filters.push_back(std::move(dialog_filter));
   }
 
@@ -16343,7 +16342,7 @@ void MessagesManager::on_get_dialog_filters(Result<vector<tl_object_ptr<telegram
               LOG(INFO) << "Old server filter: " << *old_server_filter;
               LOG(INFO) << "New server filter: " << *new_server_filter;
               LOG(INFO) << "New  local filter: " << *new_filter;
-              sort_dialog_filter_input_dialog_ids(new_filter.get());
+              sort_dialog_filter_input_dialog_ids(new_filter.get(), "on_get_dialog_filters 2");
               if (*new_filter != *old_filter) {
                 is_changed = true;
                 edit_dialog_filter(std::move(new_filter), "on_get_dialog_filters");
@@ -18060,7 +18059,7 @@ InputDialogId MessagesManager::get_input_dialog_id(DialogId dialog_id) const {
   }
 }
 
-void MessagesManager::sort_dialog_filter_input_dialog_ids(DialogFilter *dialog_filter) const {
+void MessagesManager::sort_dialog_filter_input_dialog_ids(DialogFilter *dialog_filter, const char *source) const {
   auto sort_input_dialog_ids = [contacts_manager =
                                     td_->contacts_manager_.get()](vector<InputDialogId> &input_dialog_ids) {
     std::sort(input_dialog_ids.begin(), input_dialog_ids.end(),
@@ -18089,7 +18088,10 @@ void MessagesManager::sort_dialog_filter_input_dialog_ids(DialogFilter *dialog_f
   for (auto input_dialog_ids :
        {&dialog_filter->pinned_dialog_ids, &dialog_filter->excluded_dialog_ids, &dialog_filter->included_dialog_ids}) {
     for (auto input_dialog_id : *input_dialog_ids) {
-      CHECK(all_dialog_ids.insert(input_dialog_id.get_dialog_id()).second);
+      LOG_CHECK(all_dialog_ids.insert(input_dialog_id.get_dialog_id()).second)
+          << source << ' ' << td::contains(dialog_filter->pinned_dialog_ids, input_dialog_id) << ' '
+          << td::contains(dialog_filter->excluded_dialog_ids, input_dialog_id) << ' '
+          << td::contains(dialog_filter->included_dialog_ids, input_dialog_id);
     }
   }
 }
@@ -18152,7 +18154,7 @@ Result<unique_ptr<DialogFilter>> MessagesManager::create_dialog_filter(DialogFil
   dialog_filter->include_channels = filter->include_channels_;
 
   TRY_STATUS(dialog_filter->check_limits());
-  sort_dialog_filter_input_dialog_ids(dialog_filter.get());
+  sort_dialog_filter_input_dialog_ids(dialog_filter.get(), "create_dialog_filter");
 
   return std::move(dialog_filter);
 }
@@ -18982,7 +18984,7 @@ Status MessagesManager::toggle_dialog_is_pinned(DialogListId dialog_list_id, Dia
     }
 
     TRY_STATUS(new_dialog_filter->check_limits());
-    sort_dialog_filter_input_dialog_ids(new_dialog_filter.get());
+    sort_dialog_filter_input_dialog_ids(new_dialog_filter.get(), "toggle_dialog_is_pinned");
 
     edit_dialog_filter(std::move(new_dialog_filter), "toggle_dialog_is_pinned");
     save_dialog_filters();
@@ -19138,7 +19140,7 @@ Status MessagesManager::set_pinned_dialogs(DialogListId dialog_list_id, vector<D
     append(new_dialog_filter->included_dialog_ids, old_pinned_dialog_ids);
 
     TRY_STATUS(new_dialog_filter->check_limits());
-    sort_dialog_filter_input_dialog_ids(new_dialog_filter.get());
+    sort_dialog_filter_input_dialog_ids(new_dialog_filter.get(), "set_pinned_dialogs");
 
     edit_dialog_filter(std::move(new_dialog_filter), "set_pinned_dialogs");
     save_dialog_filters();
@@ -23430,73 +23432,50 @@ Status MessagesManager::can_send_message_content(DialogId dialog_id, const Messa
     secret_chat_layer = td_->contacts_manager_->get_secret_chat_layer(secret_chat_id);
   }
 
-  bool can_send_messages = true;
-  bool can_send_media = true;
-  bool can_send_stickers = true;
-  bool can_send_animations = true;
-  bool can_send_games = true;
-  bool can_send_polls = true;
-
   auto content_type = content->get_type();
-  switch (dialog_type) {
-    case DialogType::User:
-      if (content_type == MessageContentType::Poll && !is_forward && !td_->auth_manager_->is_bot() &&
-          !td_->contacts_manager_->is_user_bot(dialog_id.get_user_id())) {
-        return Status::Error(400, "Polls can't be sent to the private chat");
-      }
-      break;
-    case DialogType::Chat:
-      // ok
-      break;
-    case DialogType::Channel: {
-      auto channel_status = td_->contacts_manager_->get_channel_permissions(dialog_id.get_channel_id());
-      can_send_messages = channel_status.can_send_messages();
-      can_send_media = channel_status.can_send_media();
-      can_send_stickers = channel_status.can_send_stickers();
-      can_send_animations = channel_status.can_send_animations();
-      can_send_games = channel_status.can_send_games();
-      can_send_polls = channel_status.can_send_polls();
-      break;
+  RestrictedRights permissions = [&] {
+    switch (dialog_type) {
+      case DialogType::User:
+        return td_->contacts_manager_->get_user_default_permissions(dialog_id.get_user_id());
+      case DialogType::Chat:
+        return td_->contacts_manager_->get_chat_permissions(dialog_id.get_chat_id()).get_restricted_rights();
+      case DialogType::Channel:
+        return td_->contacts_manager_->get_channel_permissions(dialog_id.get_channel_id()).get_restricted_rights();
+      case DialogType::SecretChat:
+        return td_->contacts_manager_->get_secret_chat_default_permissions(dialog_id.get_secret_chat_id());
+      case DialogType::None:
+      default:
+        UNREACHABLE();
+        return td_->contacts_manager_->get_user_default_permissions(UserId());
     }
-    case DialogType::SecretChat:
-      if (content_type == MessageContentType::Game) {
-        return Status::Error(400, "Games can't be sent to secret chats");
-      }
-      if (content_type == MessageContentType::Poll) {
-        return Status::Error(400, "Polls can't be sent to secret chats");
-      }
-      if (content_type == MessageContentType::Dice) {
-        return Status::Error(400, "Dice can't be sent to secret chats");
-      }
-      break;
-    case DialogType::None:
-    default:
-      UNREACHABLE();
-  }
+  }();
 
   switch (content_type) {
     case MessageContentType::Animation:
-      if (!can_send_animations) {
+      if (!permissions.can_send_animations()) {
         return Status::Error(400, "Not enough rights to send animations to the chat");
       }
       break;
     case MessageContentType::Audio:
-      if (!can_send_media) {
+      if (!permissions.can_send_media()) {
         return Status::Error(400, "Not enough rights to send audios to the chat");
       }
       break;
     case MessageContentType::Contact:
-      if (!can_send_messages) {
+      if (!permissions.can_send_messages()) {
         return Status::Error(400, "Not enough rights to send contacts to the chat");
       }
       break;
     case MessageContentType::Dice:
-      if (!can_send_stickers) {
+      if (!permissions.can_send_stickers()) {
         return Status::Error(400, "Not enough rights to send dice to the chat");
+      }
+      if (dialog_type == DialogType::SecretChat) {
+        return Status::Error(400, "Dice can't be sent to secret chats");
       }
       break;
     case MessageContentType::Document:
-      if (!can_send_media) {
+      if (!permissions.can_send_media()) {
         return Status::Error(400, "Not enough rights to send documents to the chat");
       }
       break;
@@ -23504,8 +23483,10 @@ Status MessagesManager::can_send_message_content(DialogId dialog_id, const Messa
       if (is_broadcast_channel(dialog_id)) {
         // return Status::Error(400, "Games can't be sent to channel chats");
       }
-
-      if (!can_send_games) {
+      if (dialog_type == DialogType::SecretChat) {
+        return Status::Error(400, "Games can't be sent to secret chats");
+      }
+      if (!permissions.can_send_games()) {
         return Status::Error(400, "Not enough rights to send games to the chat");
       }
       break;
@@ -23526,50 +23507,57 @@ Status MessagesManager::can_send_message_content(DialogId dialog_id, const Messa
       }
       break;
     case MessageContentType::LiveLocation:
-      if (!can_send_messages) {
+      if (!permissions.can_send_messages()) {
         return Status::Error(400, "Not enough rights to send live locations to the chat");
       }
       break;
     case MessageContentType::Location:
-      if (!can_send_messages) {
+      if (!permissions.can_send_messages()) {
         return Status::Error(400, "Not enough rights to send locations to the chat");
       }
       break;
     case MessageContentType::Photo:
-      if (!can_send_media) {
+      if (!permissions.can_send_media()) {
         return Status::Error(400, "Not enough rights to send photos to the chat");
       }
       break;
     case MessageContentType::Poll:
-      if (!can_send_polls) {
+      if (!permissions.can_send_polls()) {
         return Status::Error(400, "Not enough rights to send polls to the chat");
       }
       if (!get_message_content_poll_is_anonymous(td_, content) && is_broadcast_channel(dialog_id)) {
         return Status::Error(400, "Non-anonymous polls can't be sent to channel chats");
       }
+      if (dialog_type == DialogType::User && !is_forward && !td_->auth_manager_->is_bot() &&
+          !td_->contacts_manager_->is_user_bot(dialog_id.get_user_id())) {
+        return Status::Error(400, "Polls can't be sent to the private chat");
+      }
+      if (dialog_type == DialogType::SecretChat) {
+        return Status::Error(400, "Polls can't be sent to secret chats");
+      }
       break;
     case MessageContentType::Sticker:
-      if (!can_send_stickers) {
+      if (!permissions.can_send_stickers()) {
         return Status::Error(400, "Not enough rights to send stickers to the chat");
       }
       break;
     case MessageContentType::Text:
-      if (!can_send_messages) {
+      if (!permissions.can_send_messages()) {
         return Status::Error(400, "Not enough rights to send text messages to the chat");
       }
       break;
     case MessageContentType::Venue:
-      if (!can_send_messages) {
+      if (!permissions.can_send_messages()) {
         return Status::Error(400, "Not enough rights to send venues to the chat");
       }
       break;
     case MessageContentType::Video:
-      if (!can_send_media) {
+      if (!permissions.can_send_media()) {
         return Status::Error(400, "Not enough rights to send videos to the chat");
       }
       break;
     case MessageContentType::VideoNote:
-      if (!can_send_media) {
+      if (!permissions.can_send_media()) {
         return Status::Error(400, "Not enough rights to send video notes to the chat");
       }
       if (secret_chat_layer < SecretChatActor::VIDEO_NOTES_LAYER) {
@@ -23578,7 +23566,7 @@ Status MessagesManager::can_send_message_content(DialogId dialog_id, const Messa
       }
       break;
     case MessageContentType::VoiceNote:
-      if (!can_send_media) {
+      if (!permissions.can_send_media()) {
         return Status::Error(400, "Not enough rights to send voice notes to the chat");
       }
       break;
@@ -27443,8 +27431,6 @@ NotificationGroupId MessagesManager::get_dialog_notification_group_id(DialogId d
 Result<MessagesManager::MessagePushNotificationInfo> MessagesManager::get_message_push_notification_info(
     DialogId dialog_id, MessageId message_id, int64 random_id, UserId sender_user_id, DialogId sender_dialog_id,
     int32 date, bool is_from_scheduled, bool contains_mention, bool is_pinned, bool is_from_binlog) {
-  init();
-
   if (!is_from_scheduled && dialog_id == get_my_dialog_id()) {
     return Status::Error("Ignore notification in chat with self");
   }
@@ -27880,8 +27866,6 @@ vector<NotificationGroupKey> MessagesManager::get_message_notification_group_key
   if (!G()->parameters().use_message_db) {
     return {};
   }
-
-  init();
 
   VLOG(notifications) << "Trying to load " << limit << " message notification groups from database from "
                       << from_group_key;
@@ -31119,7 +31103,7 @@ void MessagesManager::add_dialog_to_list(DialogId dialog_id, DialogListId dialog
     if (status.is_error()) {
       return promise.set_error(std::move(status));
     }
-    sort_dialog_filter_input_dialog_ids(new_dialog_filter.get());
+    sort_dialog_filter_input_dialog_ids(new_dialog_filter.get(), "add_dialog_to_list");
 
     edit_dialog_filter(std::move(new_dialog_filter), "add_dialog_to_list");
     save_dialog_filters();
@@ -34250,7 +34234,7 @@ MessagesManager::Dialog *MessagesManager::add_dialog(DialogId dialog_id, const c
     auto r_value = G()->td_db()->get_dialog_db_sync()->get_dialog(dialog_id);
     if (r_value.is_ok()) {
       LOG(INFO) << "Synchronously loaded " << dialog_id << " from database";
-      return add_new_dialog(parse_dialog(dialog_id, r_value.ok()), true, source);
+      return add_new_dialog(parse_dialog(dialog_id, r_value.ok(), source), true, source);
     }
   }
 
@@ -34673,36 +34657,6 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
     LOG(ERROR) << dialog_id << " has order " << d->order << " instead of saved to database order " << order;
   }
 
-  // must be after update_dialog_pos, because uses d->order
-  if (d->pending_read_channel_inbox_pts != 0 && !td_->auth_manager_->is_bot() &&
-      have_input_peer(dialog_id, AccessRights::Read) && need_unread_counter(d->order)) {
-    if (d->pts == d->pending_read_channel_inbox_pts) {
-      read_history_inbox(dialog_id, d->pending_read_channel_inbox_max_message_id,
-                         d->pending_read_channel_inbox_server_unread_count, "fix_new_dialog 12");
-      d->pending_read_channel_inbox_pts = 0;
-      on_dialog_updated(dialog_id, "fix_new_dialog 13");
-    } else if (d->pts > d->pending_read_channel_inbox_pts) {
-      d->need_repair_channel_server_unread_count = true;
-      d->pending_read_channel_inbox_pts = 0;
-      on_dialog_updated(dialog_id, "fix_new_dialog 14");
-    } else {
-      channel_get_difference_retry_timeout_.add_timeout_in(dialog_id.get(), 0.001);
-    }
-  } else {
-    d->pending_read_channel_inbox_pts = 0;
-  }
-  if (need_get_history && !td_->auth_manager_->is_bot() && dialog_id != being_added_dialog_id_ &&
-      have_input_peer(dialog_id, AccessRights::Read) && (d->order != DEFAULT_ORDER || is_dialog_sponsored(d))) {
-    get_history_from_the_end(dialog_id, true, false, Auto());
-  }
-  if (d->need_repair_server_unread_count && need_unread_counter(d->order)) {
-    CHECK(dialog_type != DialogType::SecretChat);
-    repair_server_unread_count(dialog_id, d->server_unread_count);
-  }
-  if (d->need_repair_channel_server_unread_count) {
-    repair_channel_server_unread_count(d);
-  }
-
   LOG(INFO) << "Loaded " << dialog_id << " with last new " << d->last_new_message_id << ", first database "
             << d->first_database_message_id << ", last database " << d->last_database_message_id << ", last "
             << d->last_message_id << " with order " << d->order;
@@ -34730,6 +34684,38 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
         << d->messages->message_id << ' ' << last_message_id << ' ' << get_debug_source(d->messages);
     LOG_CHECK(d->messages->left == nullptr) << get_debug_source(d->messages->left);
     LOG_CHECK(d->messages->right == nullptr) << get_debug_source(d->messages->right);
+  }
+
+  // must be after update_dialog_pos, because uses d->order
+  // must be after checks that dialog has at most one message, because read_history_inbox can load
+  // pinned message to remove its notification
+  if (d->pending_read_channel_inbox_pts != 0 && !td_->auth_manager_->is_bot() &&
+      have_input_peer(dialog_id, AccessRights::Read) && need_unread_counter(d->order)) {
+    if (d->pts == d->pending_read_channel_inbox_pts) {
+      d->pending_read_channel_inbox_pts = 0;
+      read_history_inbox(dialog_id, d->pending_read_channel_inbox_max_message_id,
+                         d->pending_read_channel_inbox_server_unread_count, "fix_new_dialog 12");
+      on_dialog_updated(dialog_id, "fix_new_dialog 13");
+    } else if (d->pts > d->pending_read_channel_inbox_pts) {
+      d->need_repair_channel_server_unread_count = true;
+      d->pending_read_channel_inbox_pts = 0;
+      on_dialog_updated(dialog_id, "fix_new_dialog 14");
+    } else {
+      channel_get_difference_retry_timeout_.add_timeout_in(dialog_id.get(), 0.001);
+    }
+  } else {
+    d->pending_read_channel_inbox_pts = 0;
+  }
+  if (need_get_history && !td_->auth_manager_->is_bot() && dialog_id != being_added_dialog_id_ &&
+      have_input_peer(dialog_id, AccessRights::Read) && (d->order != DEFAULT_ORDER || is_dialog_sponsored(d))) {
+    get_history_from_the_end(dialog_id, true, false, Auto());
+  }
+  if (d->need_repair_server_unread_count && need_unread_counter(d->order)) {
+    CHECK(dialog_type != DialogType::SecretChat);
+    repair_server_unread_count(dialog_id, d->server_unread_count);
+  }
+  if (d->need_repair_channel_server_unread_count) {
+    repair_channel_server_unread_count(d);
   }
 }
 
@@ -35001,9 +34987,7 @@ bool MessagesManager::set_dialog_order(Dialog *d, int64 new_order, bool need_sen
   }
 
   auto folder_ptr = get_dialog_folder(d->folder_id);
-  LOG_CHECK(folder_ptr != nullptr) << is_inited_ << ' ' << G()->close_flag() << ' ' << dialog_id << ' ' << d->folder_id
-                                   << ' ' << is_loaded_from_database << ' ' << td_->auth_manager_->is_authorized()
-                                   << ' ' << td_->auth_manager_->was_authorized() << ' ' << source;
+  CHECK(folder_ptr != nullptr);
   auto &folder = *folder_ptr;
   if (old_date == new_date) {
     if (new_order == DEFAULT_ORDER) {
@@ -35356,7 +35340,8 @@ bool MessagesManager::have_dialog_force(DialogId dialog_id, const char *source) 
 }
 
 MessagesManager::Dialog *MessagesManager::get_dialog_force(DialogId dialog_id, const char *source) {
-  // TODO remove most usages of that function, preload dialog asynchronously if possible
+  init();
+
   auto it = dialogs_.find(dialog_id);
   if (it != dialogs_.end()) {
     return it->second.get();
@@ -35379,8 +35364,9 @@ MessagesManager::Dialog *MessagesManager::get_dialog_force(DialogId dialog_id, c
   }
 }
 
-unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialog_id, const BufferSlice &value) {
-  LOG(INFO) << "Loaded " << dialog_id << " of size " << value.size() << " from database";
+unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialog_id, const BufferSlice &value,
+                                                                  const char *source) {
+  LOG(INFO) << "Loaded " << dialog_id << " of size " << value.size() << " from database from " << source;
   auto d = make_unique<Dialog>();
   d->dialog_id = dialog_id;
   invalidate_message_indexes(d.get());  // must initialize indexes, because some of them could be not parsed
@@ -35392,7 +35378,7 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
     // can't happen unless database is broken, but has been seen in the wild
     // if dialog_id is invalid, we can't repair the dialog
     LOG_CHECK(dialog_id.is_valid()) << "Can't repair " << dialog_id << ' ' << d->dialog_id << ' ' << status << ' '
-                                    << format::as_hex_dump<4>(value.as_slice());
+                                    << source << ' ' << format::as_hex_dump<4>(value.as_slice());
 
     LOG(ERROR) << "Repair broken " << dialog_id << ' ' << format::as_hex_dump<4>(value.as_slice());
 
@@ -35405,10 +35391,10 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
     have_dialog_info_force(dialog_id);
     if (have_input_peer(dialog_id, AccessRights::Read)) {
       if (dialog_id.get_type() != DialogType::SecretChat) {
-        send_get_dialog_query(dialog_id, Auto(), 0, "parse_dialog");
+        send_get_dialog_query(dialog_id, Auto(), 0, source);
       }
     } else {
-      LOG(WARNING) << "Have no info about " << dialog_id << " to repair it";
+      LOG(ERROR) << "Have no info about " << dialog_id << " from " << source << " to repair it";
     }
   }
   CHECK(dialog_id == d->dialog_id);
@@ -35424,8 +35410,8 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
   if (d->draft_message != nullptr) {
     add_formatted_text_dependencies(dependencies, &d->draft_message->input_message_text.text);
   }
-  if (!resolve_dependencies_force(td_, dependencies, "parse_dialog")) {
-    send_get_dialog_query(dialog_id, Auto(), 0, "parse_dialog");
+  if (!resolve_dependencies_force(td_, dependencies, source)) {
+    send_get_dialog_query(dialog_id, Auto(), 0, source);
   }
 
   return d;
@@ -35454,7 +35440,7 @@ MessagesManager::Dialog *MessagesManager::on_load_dialog_from_database(DialogId 
   }
 
   LOG(INFO) << "Add new " << dialog_id << " from database from " << source;
-  return add_new_dialog(parse_dialog(dialog_id, value), true, source);
+  return add_new_dialog(parse_dialog(dialog_id, value, source), true, source);
 }
 
 const DialogFilter *MessagesManager::get_server_dialog_filter(DialogFilterId dialog_filter_id) const {
