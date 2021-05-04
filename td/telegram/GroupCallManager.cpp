@@ -3668,7 +3668,7 @@ bool GroupCallManager::try_clear_group_call_participants(InputGroupCallId input_
   group_call_participants_.erase(participants_it);
 
   if (!(group_call != nullptr && group_call->is_inited)) {
-    return;
+    return false;
   }
   LOG(INFO) << "Clear participants in " << input_group_call_id << " from " << group_call->dialog_id;
   if (group_call->loaded_all_participants) {
