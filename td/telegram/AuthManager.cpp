@@ -165,7 +165,7 @@ void AuthManager::check_bot_token(uint64 query_id, string bot_token) {
                       telegram_api::auth_importBotAuthorization(0, api_id_, api_hash_, bot_token_)));
 }
 
-void AuthManager::request_qr_code_authentication(uint64 query_id, vector<int32> other_user_ids) {
+void AuthManager::request_qr_code_authentication(uint64 query_id, vector<UserId> other_user_ids) {
   if (state_ != State::WaitPhoneNumber) {
     if ((state_ == State::WaitCode || state_ == State::WaitPassword || state_ == State::WaitRegistration) &&
         net_query_id_ == 0) {
@@ -181,8 +181,7 @@ void AuthManager::request_qr_code_authentication(uint64 query_id, vector<int32> 
                       "Cannot request QR code authentication after bot token was entered. You need to log out first"));
   }
   for (auto &other_user_id : other_user_ids) {
-    UserId user_id(other_user_id);
-    if (!user_id.is_valid()) {
+    if (!other_user_id.is_valid()) {
       return on_query_error(query_id, Status::Error(400, "Invalid user_id among other user_ids"));
     }
   }
@@ -200,8 +199,8 @@ void AuthManager::request_qr_code_authentication(uint64 query_id, vector<int32> 
 void AuthManager::send_export_login_token_query() {
   poll_export_login_code_timeout_.cancel_timeout();
   start_net_query(NetQueryType::RequestQrCode,
-                  G()->net_query_creator().create_unauth(
-                      telegram_api::auth_exportLoginToken(api_id_, api_hash_, vector<int32>(other_user_ids_))));
+                  G()->net_query_creator().create_unauth(telegram_api::auth_exportLoginToken(
+                      api_id_, api_hash_, UserId::get_input_user_ids(other_user_ids_))));
 }
 
 void AuthManager::set_login_token_expires_at(double login_token_expires_at) {
@@ -308,7 +307,7 @@ void AuthManager::check_password(uint64 query_id, string password) {
     return on_query_error(query_id, Status::Error(8, "Call to checkAuthenticationPassword unexpected"));
   }
 
-  LOG(INFO) << "Have SRP id " << wait_password_state_.srp_id_;
+  LOG(INFO) << "Have SRP ID " << wait_password_state_.srp_id_;
   on_new_query(query_id);
   password_ = std::move(password);
   start_net_query(NetQueryType::GetPassword,
@@ -569,7 +568,7 @@ void AuthManager::on_get_password_result(NetQueryPtr &result) {
   }
 
   if (state_ == State::WaitPassword) {
-    LOG(INFO) << "Have SRP id " << wait_password_state_.srp_id_;
+    LOG(INFO) << "Have SRP ID " << wait_password_state_.srp_id_;
     auto hash = PasswordManager::get_input_check_password(password_, wait_password_state_.current_client_salt_,
                                                           wait_password_state_.current_server_salt_,
                                                           wait_password_state_.srp_g_, wait_password_state_.srp_p_,

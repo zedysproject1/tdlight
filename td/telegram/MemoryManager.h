@@ -50,6 +50,8 @@ class MemoryManager : public Actor {
 
   bool can_manage_memory() const;
 
+  static bool do_session_settings_allow_for_memory_management();
+
   void get_memory_stats(bool full, Promise<MemoryStats> promise) const;
 
   void clean_memory(bool full, Promise<Unit> promise) const;

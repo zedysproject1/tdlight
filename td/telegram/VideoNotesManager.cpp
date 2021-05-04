@@ -12,6 +12,7 @@
 
 #include "td/telegram/files/FileManager.h"
 #include "td/telegram/SecretChatActor.h"
+#include "td/telegram/ConfigShared.h"
 #include "td/telegram/Td.h"
 
 #include "td/utils/logging.h"
@@ -124,7 +125,7 @@ FileId VideoNotesManager::dup_video_note(FileId new_id, FileId old_id) {
 
 bool VideoNotesManager::merge_video_notes(FileId new_id, FileId old_id, bool can_delete_old) {
   if (!old_id.is_valid()) {
-    LOG(ERROR) << "Old file id is invalid";
+    LOG(ERROR) << "Old file identifier is invalid";
     return true;
   }
 
@@ -170,7 +171,11 @@ void VideoNotesManager::create_video_note(FileId file_id, string minithumbnail, 
   } else {
     LOG(INFO) << "Receive wrong video note dimensions " << dimensions;
   }
-  v->minithumbnail = std::move(minithumbnail);
+  if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    v->minithumbnail = "";
+  } else {
+    v->minithumbnail = std::move(minithumbnail);
+  }
   v->thumbnail = std::move(thumbnail);
   on_get_video_note(std::move(v), replace);
 }

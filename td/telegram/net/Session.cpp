@@ -110,7 +110,7 @@ class GenAuthKeyActor : public Actor {
 
     auto raw_connection = r_raw_connection.move_as_ok();
     VLOG(dc) << "Receive raw connection " << raw_connection.get();
-    network_generation_ = raw_connection->extra_;
+    network_generation_ = raw_connection->extra().extra;
     child_ = create_actor_on_scheduler<mtproto::HandshakeActor>(
         PSLICE() << name_ + "::HandshakeActor", G()->get_slow_net_scheduler_id(), std::move(handshake_),
         std::move(raw_connection), std::move(context_), 10, std::move(connection_promise_),
@@ -181,6 +181,7 @@ Session::Session(unique_ptr<Callback> callback, std::shared_ptr<AuthDataShared> 
     auth_data_.set_header(G()->mtproto_header().get_default_header().str());
   }
   last_activity_timestamp_ = Time::now();
+  last_success_timestamp_ = Time::now() - 366 * 86400;
 }
 
 bool Session::can_destroy_auth_key() const {
@@ -273,8 +274,9 @@ void Session::on_bind_result(NetQueryPtr query) {
   if (query->is_error()) {
     status = std::move(query->error());
     if (status.code() == 400 && status.message() == "ENCRYPTED_MESSAGE_INVALID") {
-      bool has_immunity =
-          !G()->is_server_time_reliable() || G()->server_time() - auth_data_.get_main_auth_key().created_at() < 60;
+      auto auth_key_age = G()->server_time() - auth_data_.get_main_auth_key().created_at();
+      bool has_immunity = !G()->is_server_time_reliable() || auth_key_age < 60 ||
+                          (auth_key_age > 86400 && last_success_timestamp_ > Time::now() - 86400);
       if (!use_pfs_) {
         if (has_immunity) {
           LOG(WARNING) << "Do not drop main key, because it was created too recently";
@@ -559,8 +561,8 @@ void Session::on_closed(Status status) {
 
 void Session::on_session_created(uint64 unique_id, uint64 first_id) {
   // TODO: use unique_id
-  // send updatesTooLong to force getDifference
   LOG(INFO) << "New session " << unique_id << " created with first message_id " << first_id;
+  last_success_timestamp_ = Time::now();
   if (is_main_) {
     LOG(DEBUG) << "Sending updatesTooLong to force getDifference";
     BufferSlice packet(4);
@@ -711,9 +713,11 @@ Status Session::on_message_result_ok(uint64 id, BufferSlice packet, size_t origi
     if (is_cdn_) {
       return Status::Error("Got update from CDN connection");
     }
+    last_success_timestamp_ = Time::now();
     return_query(G()->net_query_creator().create_update(std::move(packet)));
     return Status::OK();
   }
+  last_success_timestamp_ = Time::now();
 
   TlParser parser(packet.as_slice());
   int32 ID = parser.fetch_int();
@@ -1052,7 +1056,7 @@ void Session::connection_open_finish(ConnectionInfo *info,
 
   auto raw_connection = r_raw_connection.move_as_ok();
   VLOG(dc) << "Receive raw connection " << raw_connection.get();
-  if (raw_connection->extra_ != network_generation_) {
+  if (raw_connection->extra().extra != network_generation_) {
     LOG(WARNING) << "Got RawConnection with old network_generation";
     info->state = ConnectionInfo::State::Empty;
     yield();
@@ -1087,7 +1091,7 @@ void Session::connection_open_finish(ConnectionInfo *info,
       mode_name = Slice("HttpLongPoll");
     }
   }
-  auto name = PSTRING() << get_name() << "::Connect::" << mode_name << "::" << raw_connection->debug_str_;
+  auto name = PSTRING() << get_name() << "::Connect::" << mode_name << "::" << raw_connection->extra().debug_str;
   LOG(INFO) << "Finished to open connection " << name;
   info->connection = make_unique<mtproto::SessionConnection>(mode, std::move(raw_connection), &auth_data_);
   if (can_destroy_auth_key()) {

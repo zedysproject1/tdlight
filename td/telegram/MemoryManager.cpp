@@ -88,6 +88,13 @@ bool MemoryManager::can_manage_memory() const {
   if (!(td_->auth_manager_->is_authorized() && !G()->close_flag())) {
     return false;
   }
+  if (!do_session_settings_allow_for_memory_management()) {
+    return false;
+  }
+  return true;
+}
+
+bool MemoryManager::do_session_settings_allow_for_memory_management() {
   if (G()->parameters().use_message_db || G()->parameters().use_chat_info_db || G()->parameters().use_file_db) {
     return false;
   }
@@ -96,7 +103,9 @@ bool MemoryManager::can_manage_memory() const {
 
 void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) const {
   if (!can_manage_memory()) {
-    promise.set_error(Status::Error(500, "Request aborted"));
+    auto value = MemoryStats("{}");
+
+    promise.set_value(std::move(value));
     return;
   }
 
@@ -202,7 +211,13 @@ void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) co
 
 void MemoryManager::clean_memory(bool full, Promise<Unit> promise) const {
   if (!can_manage_memory()) {
-    promise.set_error(Status::Error(500, "Request aborted"));
+    if (!do_session_settings_allow_for_memory_management()) {
+      promise.set_error(Status::Error(405, "MEMORY_STATS_DISALLOWED"
+        " Session settings don't allow memory optimization."
+        " If you want to optimize memory, you should completely disable all databases."));
+    } else {
+      promise.set_error(Status::Error(405, "Can't manage memory now"));
+    }
     return;
   }
 

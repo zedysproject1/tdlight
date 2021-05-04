@@ -216,7 +216,7 @@ void UpdatesManager::fill_qts_gap(void *td) {
 }
 
 void UpdatesManager::fill_get_difference_gap(void *td) {
-  fill_gap(td, "rare getDifference calls");
+  fill_gap(td, nullptr);
 }
 
 void UpdatesManager::fill_gap(void *td, const char *source) {
@@ -226,7 +226,9 @@ void UpdatesManager::fill_gap(void *td, const char *source) {
   }
   auto updates_manager = static_cast<Td *>(td)->updates_manager_.get();
 
-  LOG(WARNING) << "Filling gap in " << source << " by running getDifference";
+  if (source != nullptr) {
+    LOG(WARNING) << "Filling gap in " << source << " by running getDifference";
+  }
 
   updates_manager->get_difference("fill_gap");
 }
@@ -359,7 +361,7 @@ Promise<> UpdatesManager::set_pts(int32 pts, const char *source) {
     result = add_pts(pts);
     if (last_get_difference_pts_ < get_pts() - FORCED_GET_DIFFERENCE_PTS_DIFF) {
       last_get_difference_pts_ = get_pts();
-      schedule_get_difference("set_pts");
+      schedule_get_difference("rare pts getDifference");
     }
   } else if (pts < get_pts()) {
     LOG(ERROR) << "Receive wrong pts = " << pts << " from " << source << ". Current pts = " << get_pts();
@@ -621,6 +623,7 @@ bool UpdatesManager::is_acceptable_message(const telegram_api::Message *message_
         case telegram_api::messageActionSecureValuesSentMe::ID:
         case telegram_api::messageActionContactSignUp::ID:
         case telegram_api::messageActionGroupCall::ID:
+        case telegram_api::messageActionGroupCallScheduled::ID:
         case telegram_api::messageActionSetMessagesTTL::ID:
           break;
         case telegram_api::messageActionChatCreate::ID: {
@@ -904,8 +907,8 @@ void UpdatesManager::on_failed_get_difference(Status &&error) {
 }
 
 void UpdatesManager::schedule_get_difference(const char *source) {
-  VLOG(get_difference) << "Schedule getDifference from " << source;
   if (!retry_timeout_.has_timeout()) {
+    LOG(WARNING) << "Schedule getDifference in " << retry_time_ << " seconds from " << source;
     retry_timeout_.set_callback(std::move(fill_get_difference_gap));
     retry_timeout_.set_callback_data(static_cast<void *>(td_));
     retry_timeout_.set_timeout_in(retry_time_);
@@ -913,6 +916,8 @@ void UpdatesManager::schedule_get_difference(const char *source) {
     if (retry_time_ > 60) {
       retry_time_ = Random::fast(60, 80);
     }
+  } else {
+    VLOG(get_difference) << "Schedule getDifference from " << source;
   }
 }
 
@@ -1084,7 +1089,7 @@ vector<DialogId> UpdatesManager::get_chat_dialog_ids(const telegram_api::Updates
       continue;
     }
 
-    LOG(ERROR) << "Can't find id of " << oneline(to_string(chat));
+    LOG(ERROR) << "Can't find identifier of " << oneline(to_string(chat));
   }
   return dialog_ids;
 }
@@ -1653,6 +1658,7 @@ void UpdatesManager::add_pending_qts_update(tl_object_ptr<telegram_api::Update> 
   CHECK(update != nullptr);
   if (qts <= 1) {
     LOG(ERROR) << "Receive wrong qts " << qts << " in " << oneline(to_string(update));
+    schedule_get_difference("wrong qts");
     promise.set_value(Unit());
     return;
   }
@@ -1958,7 +1964,7 @@ void UpdatesManager::process_qts_update(tl_object_ptr<telegram_api::Update> &&up
   LOG(DEBUG) << "Process " << to_string(update_ptr);
   if (last_get_difference_qts_ < qts - FORCED_GET_DIFFERENCE_PTS_DIFF) {
     if (last_get_difference_qts_ != 0) {
-      schedule_get_difference("process_qts_update");
+      schedule_get_difference("rare qts getDifference");
     }
     last_get_difference_qts_ = qts;
   }
@@ -2208,7 +2214,7 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateChannelTooLong>
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateChannel> update, Promise<Unit> &&promise) {
-  td_->contacts_manager_->invalidate_channel_full(ChannelId(update->channel_id_), false, false);
+  td_->contacts_manager_->invalidate_channel_full(ChannelId(update->channel_id_), false);
   promise.set_value(Unit());
 }
 
@@ -2511,15 +2517,15 @@ int32 UpdatesManager::get_update_qts(const telegram_api::Update *update) {
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateUserTyping> update, Promise<Unit> &&promise) {
-  UserId user_id(update->user_id_);
-  td_->messages_manager_->on_user_dialog_action(DialogId(user_id), MessageId(), user_id,
+  DialogId dialog_id(UserId(update->user_id_));
+  td_->messages_manager_->on_user_dialog_action(dialog_id, MessageId(), dialog_id,
                                                 DialogAction(std::move(update->action_)), get_short_update_date());
   promise.set_value(Unit());
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateChatUserTyping> update, Promise<Unit> &&promise) {
   td_->messages_manager_->on_user_dialog_action(DialogId(ChatId(update->chat_id_)), MessageId(),
-                                                UserId(update->user_id_), DialogAction(std::move(update->action_)),
+                                                DialogId(update->from_id_), DialogAction(std::move(update->action_)),
                                                 get_short_update_date());
   promise.set_value(Unit());
 }
@@ -2530,7 +2536,7 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateChannelUserTypi
     top_thread_message_id = MessageId(ServerMessageId(update->top_msg_id_));
   }
   td_->messages_manager_->on_user_dialog_action(DialogId(ChannelId(update->channel_id_)), top_thread_message_id,
-                                                UserId(update->user_id_), DialogAction(std::move(update->action_)),
+                                                DialogId(update->from_id_), DialogAction(std::move(update->action_)),
                                                 get_short_update_date());
   promise.set_value(Unit());
 }
@@ -2538,7 +2544,7 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateChannelUserTypi
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateEncryptedChatTyping> update, Promise<Unit> &&promise) {
   SecretChatId secret_chat_id(update->chat_id_);
   UserId user_id = td_->contacts_manager_->get_secret_chat_user_id(secret_chat_id);
-  td_->messages_manager_->on_user_dialog_action(DialogId(secret_chat_id), MessageId(), user_id,
+  td_->messages_manager_->on_user_dialog_action(DialogId(secret_chat_id), MessageId(), DialogId(user_id),
                                                 DialogAction::get_typing_action(), get_short_update_date());
   promise.set_value(Unit());
 }
@@ -2818,9 +2824,9 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updatePhoneCallSignal
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateGroupCall> update, Promise<Unit> &&promise) {
   DialogId dialog_id(ChatId(update->chat_id_));
-  if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+  if (!td_->messages_manager_->have_dialog_force(dialog_id, "updateGroupCall")) {
     dialog_id = DialogId(ChannelId(update->chat_id_));
-    if (!td_->messages_manager_->have_dialog_force(dialog_id)) {
+    if (!td_->messages_manager_->have_dialog_force(dialog_id, "updateGroupCall")) {
       dialog_id = DialogId();
     }
   }
@@ -2831,7 +2837,7 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateGroupCall> upda
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateGroupCallParticipants> update,
                                Promise<Unit> &&promise) {
   send_closure(G()->group_call_manager(), &GroupCallManager::on_update_group_call_participants,
-               InputGroupCallId(update->call_), std::move(update->participants_), update->version_);
+               InputGroupCallId(update->call_), std::move(update->participants_), update->version_, false);
   promise.set_value(Unit());
 }
 

@@ -132,7 +132,7 @@ class SessionConnection
   bool is_main_ = false;
 
   int rtt() const {
-    return max(2, static_cast<int>(raw_connection_->rtt_ * 1.5 + 1));
+    return max(2, static_cast<int>(raw_connection_->extra().rtt * 1.5 + 1));
   }
 
   int32 read_disconnect_delay() const {
@@ -151,8 +151,8 @@ class SessionConnection
     return online_flag_ ? rtt() : 60;
   }
 
-  int http_max_wait() const {
-    return 25 * 1000;  // 25s. Longer could be closed by proxy
+  double http_max_wait() const {
+    return 25.0;  // 25s. Longer could be closed by proxy
   }
   static constexpr int HTTP_MAX_AFTER = 10;              // 0.01s
   static constexpr int HTTP_MAX_DELAY = 30;              // 0.03s

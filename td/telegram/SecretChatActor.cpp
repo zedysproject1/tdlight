@@ -83,7 +83,7 @@ void SecretChatActor::update_chat(telegram_api::object_ptr<telegram_api::Encrypt
   loop();
 }
 
-void SecretChatActor::create_chat(int32 user_id, int64 user_access_hash, int32 random_id,
+void SecretChatActor::create_chat(UserId user_id, int64 user_access_hash, int32 random_id,
                                   Promise<SecretChatId> promise) {
   if (close_flag_) {
     promise.set_error(Status::Error(400, "Chat is closed"));
@@ -646,7 +646,7 @@ void SecretChatActor::run_fill_gaps() {
 
 void SecretChatActor::run_pfs() {
   while (true) {
-    LOG(INFO) << "Run pfs loop: " << pfs_state_;
+    LOG(INFO) << "Run PFS loop: " << pfs_state_;
     if (pfs_state_.state == PfsState::Empty &&
         (pfs_state_.last_message_id + 100 < seq_no_state_.message_id ||
          pfs_state_.last_timestamp + 60 * 60 * 24 * 7 < Time::now()) &&
@@ -826,7 +826,7 @@ void SecretChatActor::do_create_chat_impl(unique_ptr<log_event::CreateSecretChat
 }
 
 telegram_api::object_ptr<telegram_api::inputUser> SecretChatActor::get_input_user() {
-  return telegram_api::make_object<telegram_api::inputUser>(auth_state_.user_id, auth_state_.user_access_hash);
+  return telegram_api::make_object<telegram_api::inputUser>(auth_state_.user_id.get(), auth_state_.user_access_hash);
 }
 telegram_api::object_ptr<telegram_api::inputEncryptedChat> SecretChatActor::get_input_chat() {
   return telegram_api::make_object<telegram_api::inputEncryptedChat>(auth_state_.id, auth_state_.access_hash);
@@ -1078,7 +1078,7 @@ void SecretChatActor::do_outbound_message_impl(unique_ptr<log_event::OutboundSec
   binlog_event->crc = crc64(binlog_event->encrypted_message.as_slice());
   LOG(INFO) << "Do outbound message: " << *binlog_event << tag("crc", binlog_event->crc);
   auto &state_id_ref = random_id_to_outbound_message_state_token_[binlog_event->random_id];
-  LOG_CHECK(state_id_ref == 0) << "Random id collision";
+  LOG_CHECK(state_id_ref == 0) << "Random ID collision";
   state_id_ref = outbound_message_states_.create();
   const uint64 state_id = state_id_ref;
   auto *state = outbound_message_states_.get(state_id);
@@ -1869,7 +1869,7 @@ Status SecretChatActor::on_update_chat(telegram_api::encryptedChatRequested &upd
   }
   auth_state_.state = State::SendAccept;
   auth_state_.x = 1;
-  auth_state_.user_id = update.admin_id_;
+  auth_state_.user_id = UserId(update.admin_id_);
   auth_state_.date = context_->unix_time();
   TRY_STATUS(save_common_info(update));
   auth_state_.handshake.set_g_a(update.g_a_.as_slice());
@@ -1963,7 +1963,7 @@ void SecretChatActor::start_up() {
     auth_state_ = r_auth_state.move_as_ok();
   }
   if (!can_be_empty_ && auth_state_.state == State::Empty) {
-    LOG(WARNING) << "Close Secret chat because it is empty";
+    LOG(INFO) << "Skip creation of empty secret chat " << auth_state_.id;
     return stop();
   }
   if (auth_state_.state == State::Closed) {
@@ -2283,9 +2283,9 @@ Status SecretChatActor::on_inbound_action(secret_api::DecryptedMessageAction &ac
   // Also, if SeqNoState with message_id greater than current message_id is not saved, then corresponding action will be
   // replayed.
   //
-  // This works only for ttl, not for pfs. Same ttl action may be processed twice.
+  // This works only for TTL, not for PFS. Same TTL action may be processed twice.
   if (message_id < seq_no_state_.message_id) {
-    LOG(INFO) << "Drop old inbound DecryptedMessageAction (non-pfs action): " << to_string(action);
+    LOG(INFO) << "Drop old inbound DecryptedMessageAction (non-PFS action): " << to_string(action);
     return Status::OK();
   }
   pfs_state_.message_id = message_id;  // replay protection
@@ -2305,7 +2305,7 @@ void SecretChatActor::on_outbound_action(secret_api::DecryptedMessageAction &act
 
   // see comment in on_inbound_action
   if (message_id < seq_no_state_.message_id) {
-    LOG(INFO) << "Drop old outbound DecryptedMessageAction (non-pfs action): " << to_string(action);
+    LOG(INFO) << "Drop old outbound DecryptedMessageAction (non-PFS action): " << to_string(action);
     return;
   }
   pfs_state_.message_id = message_id;  // replay protection
