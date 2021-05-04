@@ -2087,7 +2087,6 @@ int GroupCallManager::process_group_call_participant(InputGroupCallId input_grou
       group_call->can_self_unmute = can_self_unmute;
       send_update_group_call(group_call, "process_group_call_participant 1");
       sync_group_call_participants(input_group_call_id);  // participant order is different for administrators
-      }
     }
   }
 
