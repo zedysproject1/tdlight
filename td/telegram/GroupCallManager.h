@@ -52,7 +52,9 @@ class GroupCallManager : public Actor {
 
   void get_group_call_join_as(DialogId dialog_id, Promise<td_api::object_ptr<td_api::messageSenders>> &&promise);
 
-  void create_voice_chat(DialogId dialog_id, Promise<GroupCallId> &&promise);
+  void set_group_call_default_join_as(DialogId dialog_id, DialogId as_dialog_id, Promise<Unit> &&promise);
+
+  void create_voice_chat(DialogId dialog_id, string title, int32 start_date, Promise<GroupCallId> &&promise);
 
   void get_group_call(GroupCallId group_call_id, Promise<td_api::object_ptr<td_api::groupCall>> &&promise);
 
@@ -64,11 +66,15 @@ class GroupCallManager : public Actor {
   void get_group_call_stream_segment(GroupCallId group_call_id, int64 time_offset, int32 scale,
                                      Promise<string> &&promise);
 
+  void start_scheduled_group_call(GroupCallId group_call_id, Promise<Unit> &&promise);
+
   void join_group_call(GroupCallId group_call_id, DialogId as_dialog_id,
                        td_api::object_ptr<td_api::groupCallPayload> &&payload, int32 audio_source, bool is_muted,
                        const string &invite_hash, Promise<td_api::object_ptr<td_api::GroupCallJoinResponse>> &&promise);
 
   void set_group_call_title(GroupCallId group_call_id, string title, Promise<Unit> &&promise);
+
+  void toggle_group_call_start_subscribed(GroupCallId group_call_id, bool start_subscribed, Promise<Unit> &&promise);
 
   void toggle_group_call_mute_new_participants(GroupCallId group_call_id, bool mute_new_participants,
                                                Promise<Unit> &&promise);
@@ -166,6 +172,8 @@ class GroupCallManager : public Actor {
 
   bool can_manage_group_call(InputGroupCallId input_group_call_id) const;
 
+  bool get_group_call_can_self_unmute(InputGroupCallId input_group_call_id) const;
+
   bool get_group_call_joined_date_asc(InputGroupCallId input_group_call_id) const;
 
   void on_voice_chat_created(DialogId dialog_id, InputGroupCallId input_group_call_id, Promise<GroupCallId> &&promise);
@@ -180,6 +188,8 @@ class GroupCallManager : public Actor {
                                          Result<Unit> &&result);
 
   static const string &get_group_call_title(const GroupCall *group_call);
+
+  static bool get_group_call_start_subscribed(const GroupCall *group_call);
 
   static bool get_group_call_mute_new_participants(const GroupCall *group_call);
 
@@ -197,7 +207,7 @@ class GroupCallManager : public Actor {
 
   void on_sync_group_call_participants_failed(InputGroupCallId input_group_call_id);
 
-  GroupCallParticipantOrder get_real_participant_order(bool can_manage, const GroupCallParticipant &participant,
+  GroupCallParticipantOrder get_real_participant_order(bool can_self_unmute, const GroupCallParticipant &participant,
                                                        const GroupCallParticipants *participants) const;
 
   void process_my_group_call_participant(InputGroupCallId input_group_call_id, GroupCallParticipant &&participant);
@@ -241,6 +251,11 @@ class GroupCallManager : public Actor {
 
   void on_edit_group_call_title(InputGroupCallId input_group_call_id, const string &title, Result<Unit> &&result);
 
+  void send_toggle_group_call_start_subscription_query(InputGroupCallId input_group_call_id, bool start_subscribed);
+
+  void on_toggle_group_call_start_subscription(InputGroupCallId input_group_call_id, bool start_subscribed,
+                                               Result<Unit> &&result);
+
   void send_toggle_group_call_mute_new_participants_query(InputGroupCallId input_group_call_id,
                                                           bool mute_new_participants);
 
@@ -282,7 +297,7 @@ class GroupCallManager : public Actor {
   static Result<td_api::object_ptr<td_api::GroupCallJoinResponse>> get_group_call_join_response_object(
       string json_response);
 
-  void try_clear_group_call_participants(InputGroupCallId input_group_call_id);
+  bool try_clear_group_call_participants(InputGroupCallId input_group_call_id);
 
   bool set_group_call_participant_count(GroupCall *group_call, int32 count, const char *source,
                                         bool force_update = false);

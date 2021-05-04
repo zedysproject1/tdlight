@@ -9,6 +9,7 @@
 #include "td/telegram/DialogId.h"
 #include "td/telegram/files/FileId.h"
 #include "td/telegram/FullMessageId.h"
+#include "td/telegram/InputGroupCallId.h"
 #include "td/telegram/logevent/LogEvent.h"
 #include "td/telegram/MessageContentType.h"
 #include "td/telegram/MessageCopyOptions.h"
@@ -87,7 +88,7 @@ void store_message_content(const MessageContent *content, LogEventStorerUnsafe &
 void parse_message_content(unique_ptr<MessageContent> &content, LogEventParser &parser);
 
 InlineMessageContent create_inline_message_content(Td *td, FileId file_id,
-                                                   tl_object_ptr<telegram_api::BotInlineMessage> &&inline_message,
+                                                   tl_object_ptr<telegram_api::BotInlineMessage> &&bot_inline_message,
                                                    int32 allowed_media_content_id, Photo *photo, Game *game);
 
 unique_ptr<MessageContent> create_text_message_content(string text, vector<MessageEntity> entities,
@@ -122,6 +123,8 @@ tl_object_ptr<telegram_api::InputMedia> get_fake_input_media(Td *td, tl_object_p
 
 void delete_message_content_thumbnail(MessageContent *content, Td *td);
 
+Status can_send_message_content(DialogId dialog_id, const MessageContent *content, bool is_forward, const Td *td);
+
 bool can_forward_message_content(const MessageContent *content);
 
 bool update_opened_message_content(MessageContent *content);
@@ -130,7 +133,9 @@ int32 get_message_content_index_mask(const MessageContent *content, const Td *td
 
 MessageId get_message_content_pinned_message_id(const MessageContent *content);
 
-MessageId get_message_content_replied_message_id(const MessageContent *content);
+FullMessageId get_message_content_replied_message_id(DialogId dialog_id, const MessageContent *content);
+
+std::pair<InputGroupCallId, bool> get_message_content_group_call_info(const MessageContent *content);
 
 vector<UserId> get_message_content_added_user_ids(const MessageContent *content);
 
@@ -139,8 +144,6 @@ UserId get_message_content_deleted_user_id(const MessageContent *content);
 int32 get_message_content_live_location_period(const MessageContent *content);
 
 bool get_message_content_poll_is_closed(const Td *td, const MessageContent *content);
-
-bool get_message_content_poll_is_anonymous(const Td *td, const MessageContent *content);
 
 bool has_message_content_web_page(const MessageContent *content);
 
@@ -187,10 +190,12 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
                                                MessageContentDupType type, MessageCopyOptions &&copy_options);
 
 unique_ptr<MessageContent> get_action_message_content(Td *td, tl_object_ptr<telegram_api::MessageAction> &&action,
-                                                      DialogId owner_dialog_id, MessageId reply_to_message_id);
+                                                      DialogId owner_dialog_id, DialogId reply_in_dialog_id,
+                                                      MessageId reply_to_message_id);
 
 tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageContent *content, Td *td,
-                                                                 int32 message_date, bool is_content_secret);
+                                                                 DialogId dialog_id, int32 message_date,
+                                                                 bool is_content_secret);
 
 const FormattedText *get_message_content_text(const MessageContent *content);
 

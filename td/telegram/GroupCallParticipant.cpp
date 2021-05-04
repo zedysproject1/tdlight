@@ -39,9 +39,9 @@ GroupCallParticipant::GroupCallParticipant(const tl_object_ptr<telegram_api::gro
     if ((participant->flags_ & telegram_api::groupCallParticipant::ACTIVE_DATE_MASK) != 0) {
       active_date = participant->active_date_;
     }
-    if (joined_date < 0 || active_date < 0) {
+    if (joined_date <= 0 || active_date < 0) {
       LOG(ERROR) << "Receive invalid active_date/joined_date in " << to_string(participant);
-      joined_date = 0;
+      joined_date = 1;
       active_date = 0;
     }
     if ((participant->flags_ & telegram_api::groupCallParticipant::RAISE_HAND_RATING_MASK) != 0) {
@@ -62,13 +62,13 @@ bool GroupCallParticipant::is_versioned_update(const tl_object_ptr<telegram_api:
   return participant->just_joined_ || participant->left_ || participant->versioned_;
 }
 
-GroupCallParticipantOrder GroupCallParticipant::get_real_order(bool can_manage, bool joined_date_asc,
+GroupCallParticipantOrder GroupCallParticipant::get_real_order(bool can_self_unmute, bool joined_date_asc,
                                                                bool keep_active_date) const {
   auto sort_active_date = td::max(active_date, local_active_date);
   if (!keep_active_date && sort_active_date < G()->unix_time() - 300) {
     sort_active_date = 0;
   }
-  auto sort_raise_hand_rating = can_manage ? raise_hand_rating : 0;
+  auto sort_raise_hand_rating = can_self_unmute ? raise_hand_rating : 0;
   auto sort_joined_date = joined_date_asc ? std::numeric_limits<int32>::max() - joined_date : joined_date;
   return GroupCallParticipantOrder(sort_active_date, sort_raise_hand_rating, sort_joined_date);
 }

@@ -501,6 +501,8 @@ class MessagesManager : public Actor {
 
   tl_object_ptr<td_api::chatEvents> get_chat_events_object(int64 random_id);
 
+  string get_dialog_title(DialogId dialog_id) const;
+
   bool have_dialog(DialogId dialog_id) const;
   bool have_dialog_force(DialogId dialog_id, const char *source = "have_dialog_force");
 
@@ -915,16 +917,9 @@ class MessagesManager : public Actor {
   void stop_poll(FullMessageId full_message_id, td_api::object_ptr<td_api::ReplyMarkup> &&reply_markup,
                  Promise<Unit> &&promise);
 
-  void get_payment_form(FullMessageId full_message_id, Promise<tl_object_ptr<td_api::paymentForm>> &&promise);
+  Result<ServerMessageId> get_invoice_message_id(FullMessageId full_message_id);
 
-  void validate_order_info(FullMessageId full_message_id, tl_object_ptr<td_api::orderInfo> order_info, bool allow_save,
-                           Promise<tl_object_ptr<td_api::validatedOrderInfo>> &&promise);
-
-  void send_payment_form(FullMessageId full_message_id, const string &order_info_id, const string &shipping_option_id,
-                         const tl_object_ptr<td_api::InputCredentials> &credentials,
-                         Promise<tl_object_ptr<td_api::paymentResult>> &&promise);
-
-  void get_payment_receipt(FullMessageId full_message_id, Promise<tl_object_ptr<td_api::paymentReceipt>> &&promise);
+  Result<ServerMessageId> get_payment_successful_message_id(FullMessageId full_message_id);
 
   void get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const;
 
@@ -1179,6 +1174,7 @@ class MessagesManager : public Actor {
     std::unordered_set<MessageId, MessageIdHash> updated_read_history_message_ids;
     LogEventIdWithGeneration set_folder_id_log_event_id;
     InputGroupCallId active_group_call_id;
+    InputGroupCallId expected_active_group_call_id;
     DialogId default_join_group_call_as_dialog_id;
 
     FolderId folder_id;
@@ -1255,6 +1251,7 @@ class MessagesManager : public Actor {
     bool has_active_group_call = false;
     bool is_group_call_empty = false;
     bool is_message_ttl_setting_inited = false;
+    bool has_expected_active_group_call_id = false;
 
     bool increment_view_counter = false;
 
@@ -1784,9 +1781,6 @@ class MessagesManager : public Actor {
   int64 begin_send_message(DialogId dialog_id, const Message *m);
 
   Status can_send_message(DialogId dialog_id) const TD_WARN_UNUSED_RESULT;
-
-  Status can_send_message_content(DialogId dialog_id, const MessageContent *content,
-                                  bool is_forward) const TD_WARN_UNUSED_RESULT;
 
   bool can_resend_message(const Message *m) const;
 
@@ -2701,8 +2695,6 @@ class MessagesManager : public Actor {
 
   const DialogPhoto *get_dialog_photo(DialogId dialog_id) const;
 
-  string get_dialog_title(DialogId dialog_id) const;
-
   string get_dialog_username(DialogId dialog_id) const;
 
   RestrictedRights get_dialog_permissions(DialogId dialog_id) const;
@@ -2899,6 +2891,8 @@ class MessagesManager : public Actor {
 
   void reget_message_from_server_if_needed(DialogId dialog_id, const Message *m);
 
+  void speculatively_update_active_group_call_id(Dialog *d, const Message *m);
+
   void speculatively_update_channel_participants(DialogId dialog_id, const Message *m);
 
   void update_sent_message_contents(DialogId dialog_id, const Message *m);
@@ -2980,8 +2974,6 @@ class MessagesManager : public Actor {
   void suffix_load_till_message_id(Dialog *d, MessageId message_id, Promise<> promise);
 
   Result<string> get_login_button_url(DialogId dialog_id, MessageId message_id, int32 button_id);
-
-  Result<ServerMessageId> get_invoice_message_id(FullMessageId full_message_id);
 
   bool is_broadcast_channel(DialogId dialog_id) const;
 
