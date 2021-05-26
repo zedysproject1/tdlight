@@ -13,13 +13,14 @@
 #include "td/net/HttpReader.h"
 
 #include "td/telegram/ClientActor.h"
-#include "td/telegram/Log.h"
+#include "td/telegram/Client.h"
 #include "td/telegram/Td.h"  // for VERBOSITY_NAME(td_requests)
 #include "td/telegram/td_api_json.h"
 
 #include "td/utils/algorithm.h"
 #include "td/utils/base64.h"
 #include "td/utils/buffer.h"
+#include "td/utils/CombinedLog.h"
 #include "td/utils/common.h"
 #include "td/utils/crypto.h"
 #include "td/utils/ExitGuard.h"
@@ -29,6 +30,7 @@
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
+#include "td/utils/NullLog.h"
 #include "td/utils/OptionParser.h"
 #include "td/utils/port/FileFd.h"
 #include "td/utils/port/PollFlags.h"
@@ -39,9 +41,11 @@
 #include "td/utils/Random.h"
 #include "td/utils/ScopeGuard.h"
 #include "td/utils/Slice.h"
+#include "td/utils/SliceBuilder.h"
 #include "td/utils/Status.h"
 #include "td/utils/StringBuilder.h"
 #include "td/utils/Time.h"
+#include "td/utils/TsLog.h"
 #include "td/utils/utf8.h"
 
 #ifndef USE_READLINE
@@ -188,27 +192,18 @@ static char **tg_cli_completion(const char *text, int start, int end) {
 #endif
 
 class CliLog : public LogInterface {
- public:
-  void append(CSlice slice, int log_level) override {
+  void do_append(int log_level, CSlice slice) final {
 #ifdef USE_READLINE
     deactivate_readline();
     SCOPE_EXIT {
       reactivate_readline();
     };
 #endif
-    if (log_level == VERBOSITY_NAME(PLAIN)) {
-#if TD_WINDOWS
-      TsCerr() << slice;
-#else
-      TsCerr() << TC_GREEN << slice << TC_EMPTY;
-#endif
-    } else {
-      default_log_interface->append(slice, log_level);
-    }
-  }
-  void rotate() override {
+    default_log_interface->do_append(log_level, slice);
   }
 };
+
+static CombinedLog combined_log;
 
 struct SendMessageInfo {
   double start_time = 0;
@@ -740,7 +735,7 @@ class CliClient final : public Actor {
       }
     }
 
-    if (id > 0 && GET_VERBOSITY_LEVEL() < VERBOSITY_NAME(td_requests)) {
+    if (id > 0 && combined_log.get_first_verbosity_level() < VERBOSITY_NAME(td_requests)) {
       LOG(ERROR) << "Receive result [" << generation << "][id=" << id << "] " << result_str;
     }
 
@@ -859,7 +854,7 @@ class CliClient final : public Actor {
   }
 
   void on_error(uint64 generation, uint64 id, td_api::object_ptr<td_api::error> error) {
-    if (id > 0 && GET_VERBOSITY_LEVEL() < VERBOSITY_NAME(td_requests)) {
+    if (id > 0 && combined_log.get_first_verbosity_level() < VERBOSITY_NAME(td_requests)) {
       LOG(ERROR) << "Receive error [" << generation << "][id=" << id << "] " << to_string(error);
     }
   }
@@ -1561,11 +1556,11 @@ class CliClient final : public Actor {
   }
 
   static td_api::object_ptr<td_api::Object> execute(td_api::object_ptr<td_api::Function> f) {
-    if (GET_VERBOSITY_LEVEL() < VERBOSITY_NAME(td_requests)) {
+    if (combined_log.get_first_verbosity_level() < VERBOSITY_NAME(td_requests)) {
       LOG(ERROR) << "Execute request: " << to_string(f);
     }
     auto res = ClientActor::execute(std::move(f));
-    if (GET_VERBOSITY_LEVEL() < VERBOSITY_NAME(td_requests)) {
+    if (combined_log.get_first_verbosity_level() < VERBOSITY_NAME(td_requests)) {
       LOG(ERROR) << "Execute response: " << to_string(res);
     }
     return res;
@@ -4165,12 +4160,10 @@ class CliClient final : public Actor {
                    << ", user ticks = " << stats.process_user_ticks_
                    << ", system ticks = " << stats.process_system_ticks_;
       }
-    } else if (op == "SetVerbosity" || op == "SV") {
-      Log::set_verbosity_level(to_integer<int>(args));
-    } else if (op[0] == 'v' && op[1] == 'v') {
-      Log::set_verbosity_level(static_cast<int>(op.size()));
-    } else if (op[0] == 'v' && ('0' <= op[1] && op[1] <= '9')) {
-      Log::set_verbosity_level(to_integer<int>(op.substr(1)));
+    } else if (op[0] == 'v' && (op[1] == 'v' || is_digit(op[1]))) {
+      int new_verbosity_level = op[1] == 'v' ? static_cast<int>(op.size()) : to_integer<int>(op.substr(1));
+      SET_VERBOSITY_LEVEL(td::max(new_verbosity_level, VERBOSITY_NAME(DEBUG)));
+      combined_log.set_first_verbosity_level(new_verbosity_level);
     } else if (op == "slse") {
       execute(td_api::make_object<td_api::setLogStream>(td_api::make_object<td_api::logStreamEmpty>()));
     } else if (op == "slsd") {
@@ -4370,8 +4363,11 @@ static void fail_signal(int sig) {
   }
 }
 
-static void on_fatal_error(const char *error) {
-  std::cerr << "Fatal error: " << error << std::endl;
+static void on_log_message(int verbosity_level, const char *message) {
+  if (verbosity_level == 0) {
+    std::cerr << "Fatal error: " << message;
+  }
+  std::cerr << "Log message: " << message;
 }
 
 void main(int argc, char **argv) {
@@ -4380,7 +4376,7 @@ void main(int argc, char **argv) {
   ignore_signal(SignalType::Pipe).ensure();
   set_signal_handler(SignalType::Error, fail_signal).ensure();
   set_signal_handler(SignalType::Abort, fail_signal).ensure();
-  Log::set_fatal_error_callback(on_fatal_error);
+  ClientManager::set_log_message_callback(0, on_log_message);
   init_openssl_threads();
 
   const char *locale_name = (std::setlocale(LC_ALL, "fr-FR") == nullptr ? "C" : "fr-FR");
@@ -4393,10 +4389,13 @@ void main(int argc, char **argv) {
   };
 
   CliLog cli_log;
-  log_interface = &cli_log;
 
   FileLog file_log;
   TsLog ts_log(&file_log);
+
+  combined_log.set_first(&cli_log);
+
+  log_interface = &combined_log;
 
   int new_verbosity_level = VERBOSITY_NAME(INFO);
   bool use_test_dc = false;
@@ -4432,7 +4431,7 @@ void main(int argc, char **argv) {
   options.add_option('l', "log", "Log to file", [&](Slice file_name) {
     if (file_log.init(file_name.str()).is_ok() && file_log.init(file_name.str()).is_ok() &&
         file_log.init(file_name.str(), 1000 << 20).is_ok()) {
-      log_interface = &ts_log;
+      combined_log.set_first(&ts_log);
     }
   });
   options.add_option('W', "", "Preload chat list", [&] { get_chat_list = true; });
@@ -4454,7 +4453,15 @@ void main(int argc, char **argv) {
     return;
   }
 
-  SET_VERBOSITY_LEVEL(new_verbosity_level);
+  SET_VERBOSITY_LEVEL(td::max(new_verbosity_level, VERBOSITY_NAME(DEBUG)));
+  combined_log.set_first_verbosity_level(new_verbosity_level);
+
+  if (combined_log.get_first() == &cli_log) {
+    file_log.init("tg_cli.log", 1000 << 20).ensure();
+    file_log.lazy_rotate();
+    combined_log.set_second(&ts_log);
+    combined_log.set_second_verbosity_level(VERBOSITY_NAME(DEBUG));
+  }
 
   {
     ConcurrentScheduler scheduler;

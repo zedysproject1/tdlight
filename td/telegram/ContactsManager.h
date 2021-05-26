@@ -1250,9 +1250,9 @@ class ContactsManager : public Actor {
   void on_update_channel_full_bot_user_ids(ChannelFull *channel_full, ChannelId channel_id,
                                            vector<UserId> &&bot_user_ids);
 
-  void on_channel_status_changed(Channel *c, ChannelId channel_id, const DialogParticipantStatus &old_status,
+  void on_channel_status_changed(const Channel *c, ChannelId channel_id, const DialogParticipantStatus &old_status,
                                  const DialogParticipantStatus &new_status);
-  void on_channel_username_changed(Channel *c, ChannelId channel_id, const string &old_username,
+  void on_channel_username_changed(const Channel *c, ChannelId channel_id, const string &old_username,
                                    const string &new_username);
 
   void remove_linked_channel_id(ChannelId channel_id);
@@ -1269,6 +1269,8 @@ class ContactsManager : public Actor {
   void drop_chat_full(ChatId chat_id);
 
   void drop_channel_photos(ChannelId channel_id, bool is_empty, bool drop_channel_full_photo, const char *source);
+
+  void do_invalidate_channel_full(ChannelFull *channel_full, bool need_drop_slow_mode_delay);
 
   void update_user_online_member_count(User *u);
   void update_chat_online_member_count(const ChatFull *chat_full, ChatId chat_id, bool is_from_server);
@@ -1595,6 +1597,7 @@ class ContactsManager : public Actor {
   std::unordered_map<ChannelId, unique_ptr<Channel>, ChannelIdHash> channels_;
   std::unordered_map<ChannelId, unique_ptr<ChannelFull>, ChannelIdHash> channels_full_;
   mutable std::unordered_set<ChannelId, ChannelIdHash> unknown_channels_;
+  std::unordered_set<ChannelId, ChannelIdHash> invalidated_channels_full_;
   std::unordered_map<ChannelId, FileSourceId, ChannelIdHash> channel_full_file_source_ids_;
 
   std::unordered_map<SecretChatId, unique_ptr<SecretChat>, SecretChatIdHash> secret_chats_;

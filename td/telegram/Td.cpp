@@ -96,6 +96,7 @@
 #include "td/telegram/TopDialogCategory.h"
 #include "td/telegram/TopDialogManager.h"
 #include "td/telegram/UpdatesManager.h"
+#include "td/telegram/Version.h"
 #include "td/telegram/VideoNotesManager.h"
 #include "td/telegram/VideosManager.h"
 #include "td/telegram/VoiceNotesManager.h"
@@ -131,6 +132,7 @@
 #include "td/utils/port/uname.h"
 #include "td/utils/Random.h"
 #include "td/utils/Slice.h"
+#include "td/utils/SliceBuilder.h"
 #include "td/utils/Status.h"
 #include "td/utils/Timer.h"
 #include "td/utils/tl_parsers.h"
@@ -3005,6 +3007,8 @@ class SetBackgroundRequest : public RequestActor<> {
 Td::Td(unique_ptr<TdCallback> callback, Options options)
     : callback_(std::move(callback)), td_options_(std::move(options)) {
   CHECK(callback_ != nullptr);
+  LOG(INFO) << "Create Td with layer " << MTPROTO_LAYER << ", database version " << current_db_version()
+            << " and version " << static_cast<int32>(Version::Next) - 1;
 }
 
 Td::~Td() = default;

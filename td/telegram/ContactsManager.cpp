@@ -62,6 +62,7 @@
 #include "td/utils/misc.h"
 #include "td/utils/Random.h"
 #include "td/utils/Slice.h"
+#include "td/utils/SliceBuilder.h"
 #include "td/utils/StringBuilder.h"
 #include "td/utils/Time.h"
 #include "td/utils/tl_helpers.h"
@@ -8597,6 +8598,7 @@ void ContactsManager::save_chat_to_database(Chat *c, ChatId chat_id) {
 void ContactsManager::save_chat_to_database_impl(Chat *c, ChatId chat_id, string value) {
   CHECK(c != nullptr);
   CHECK(load_chat_from_database_queries_.count(chat_id) == 0);
+  CHECK(!c->is_being_saved);
   c->is_being_saved = true;
   c->is_saved = true;
   LOG(INFO) << "Trying to save to database " << chat_id;
@@ -8833,6 +8835,7 @@ void ContactsManager::save_channel_to_database(Channel *c, ChannelId channel_id)
 void ContactsManager::save_channel_to_database_impl(Channel *c, ChannelId channel_id, string value) {
   CHECK(c != nullptr);
   CHECK(load_channel_from_database_queries_.count(channel_id) == 0);
+  CHECK(!c->is_being_saved);
   c->is_being_saved = true;
   c->is_saved = true;
   LOG(INFO) << "Trying to save to database " << channel_id;
@@ -8941,10 +8944,12 @@ void ContactsManager::on_load_channel_from_database(ChannelId channel_id, string
       temp_c.status.update_restrictions();
       if (temp_c.status != c->status) {
         on_channel_status_changed(c, channel_id, temp_c.status, c->status);
+        CHECK(!c->is_being_saved);
       }
 
       if (temp_c.username != c->username) {
         on_channel_username_changed(c, channel_id, temp_c.username, c->username);
+        CHECK(!c->is_being_saved);
       }
     }
     auto new_value = get_channel_database_value(c);
@@ -9083,6 +9088,7 @@ void ContactsManager::save_secret_chat_to_database(SecretChat *c, SecretChatId s
 void ContactsManager::save_secret_chat_to_database_impl(SecretChat *c, SecretChatId secret_chat_id, string value) {
   CHECK(c != nullptr);
   CHECK(load_secret_chat_from_database_queries_.count(secret_chat_id) == 0);
+  CHECK(!c->is_being_saved);
   c->is_being_saved = true;
   c->is_saved = true;
   LOG(INFO) << "Trying to save to database " << secret_chat_id;
@@ -9620,6 +9626,11 @@ void ContactsManager::on_load_channel_full_from_database(ChannelId channel_id, s
       c->is_changed = true;
       update_channel(c, channel_id);
     }
+  }
+
+  if (invalidated_channels_full_.erase(channel_id) > 0 ||
+      (!c->is_slow_mode_enabled && channel_full->slow_mode_delay != 0)) {
+    do_invalidate_channel_full(channel_full, !c->is_slow_mode_enabled);
   }
 
   td_->group_call_manager_->on_update_dialog_about(DialogId(channel_id), channel_full->description, false);
@@ -10456,6 +10467,8 @@ void ContactsManager::on_get_chat_full(tl_object_ptr<telegram_api::ChatFull> &&c
       LOG(ERROR) << "Receive invalid " << channel_id;
       return promise.set_value(Unit());
     }
+
+    invalidated_channels_full_.erase(channel_id);
 
     if (!G()->close_flag()) {
       auto channel_full = get_channel_full(channel_id, "on_get_channel_full");
@@ -12045,17 +12058,26 @@ void ContactsManager::drop_channel_photos(ChannelId channel_id, bool is_empty, b
 
 void ContactsManager::invalidate_channel_full(ChannelId channel_id, bool need_drop_slow_mode_delay) {
   LOG(INFO) << "Invalidate supergroup full for " << channel_id;
-  // drop channel full cache
-  auto channel_full = get_channel_full_force(channel_id, "invalidate_channel_full");
+  auto channel_full = get_channel_full(channel_id, "invalidate_channel_full");  // must not load ChannelFull
   if (channel_full != nullptr) {
-    channel_full->expires_at = 0.0;
-    if (need_drop_slow_mode_delay && channel_full->slow_mode_delay != 0) {
-      channel_full->slow_mode_delay = 0;
-      channel_full->slow_mode_next_send_date = 0;
-      channel_full->is_slow_mode_next_send_date_changed = true;
-      channel_full->is_changed = true;
-    }
+    do_invalidate_channel_full(channel_full, need_drop_slow_mode_delay);
     update_channel_full(channel_full, channel_id);
+  } else {
+    invalidated_channels_full_.insert(channel_id);
+  }
+}
+
+void ContactsManager::do_invalidate_channel_full(ChannelFull *channel_full, bool need_drop_slow_mode_delay) {
+  CHECK(channel_full != nullptr);
+  if (channel_full->expires_at >= Time::now()) {
+    channel_full->expires_at = 0.0;
+    channel_full->need_save_to_database = true;
+  }
+  if (need_drop_slow_mode_delay && channel_full->slow_mode_delay != 0) {
+    channel_full->slow_mode_delay = 0;
+    channel_full->slow_mode_next_send_date = 0;
+    channel_full->is_slow_mode_next_send_date_changed = true;
+    channel_full->is_changed = true;
   }
 }
 
@@ -13039,17 +13061,18 @@ void ContactsManager::on_update_channel_status(Channel *c, ChannelId channel_id,
   }
 }
 
-void ContactsManager::on_channel_status_changed(Channel *c, ChannelId channel_id,
+void ContactsManager::on_channel_status_changed(const Channel *c, ChannelId channel_id,
                                                 const DialogParticipantStatus &old_status,
                                                 const DialogParticipantStatus &new_status) {
   CHECK(c->is_update_supergroup_sent);
+  bool have_channel_full = get_channel_full(channel_id) != nullptr;
 
   bool need_reload_group_call = old_status.can_manage_calls() != new_status.can_manage_calls();
   if (old_status.can_manage_invite_links() && !new_status.can_manage_invite_links()) {
-    auto channel_full = get_channel_full_force(channel_id, "on_channel_status_changed");
-    if (channel_full != nullptr) {
+    auto channel_full = get_channel_full(channel_id, "on_channel_status_changed");
+    if (channel_full != nullptr) {  // otherwise invite_link will be dropped when the channel is loaded
       on_update_channel_full_invite_link(channel_full, nullptr);
-      invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
+      do_invalidate_channel_full(channel_full, !c->is_slow_mode_enabled);
       update_channel_full(channel_full, channel_id);
     }
   } else {
@@ -13078,6 +13101,9 @@ void ContactsManager::on_channel_status_changed(Channel *c, ChannelId channel_id
     send_closure_later(G()->messages_manager(), &MessagesManager::on_update_dialog_group_call_rights,
                        DialogId(channel_id));
   }
+
+  // must not load ChannelFull, because must not change the Channel
+  CHECK(have_channel_full == (get_channel_full(channel_id) != nullptr));
 }
 
 void ContactsManager::on_update_channel_default_permissions(Channel *c, ChannelId channel_id,
@@ -13119,12 +13145,16 @@ void ContactsManager::on_update_channel_username(Channel *c, ChannelId channel_i
   }
 }
 
-void ContactsManager::on_channel_username_changed(Channel *c, ChannelId channel_id, const string &old_username,
+void ContactsManager::on_channel_username_changed(const Channel *c, ChannelId channel_id, const string &old_username,
                                                   const string &new_username) {
+  bool have_channel_full = get_channel_full(channel_id) != nullptr;
   if (old_username.empty() || new_username.empty()) {
     // moving channel from private to public can change availability of chat members
     invalidate_channel_full(channel_id, !c->is_slow_mode_enabled);
   }
+
+  // must not load ChannelFull, because must not change the Channel
+  CHECK(have_channel_full == (get_channel_full(channel_id) != nullptr));
 }
 
 void ContactsManager::on_update_channel_description(ChannelId channel_id, string &&description) {
