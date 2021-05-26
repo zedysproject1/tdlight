@@ -12,6 +12,7 @@
 #include "td/utils/misc.h"
 #include "td/utils/Random.h"
 #include "td/utils/Slice.h"
+#include "td/utils/SliceBuilder.h"
 #include "td/utils/tests.h"
 #include "td/utils/utf8.h"
 
@@ -582,6 +583,7 @@ TEST(MessageEntities, url) {
   check_url("https://t…", {});
   check_url("👉http://ab.com/cdefgh-1IJ", {"http://ab.com/cdefgh-1IJ"});
   check_url("...👉http://ab.com/cdefgh-1IJ", {});  // TODO
+  check_url(".?", {});
 }
 
 static void check_fix_formatted_text(td::string str, td::vector<td::MessageEntity> entities,

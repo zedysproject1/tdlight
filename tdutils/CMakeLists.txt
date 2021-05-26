@@ -114,7 +114,9 @@ set(TDUTILS_SOURCE
   td/utils/TsFileLog.cpp
   td/utils/tl_parsers.cpp
   td/utils/translit.cpp
+  td/utils/TsCerr.cpp
   td/utils/TsFileLog.cpp
+  td/utils/TsLog.cpp
   td/utils/unicode.cpp
   td/utils/utf8.cpp
 
@@ -182,6 +184,7 @@ set(TDUTILS_SOURCE
   td/utils/ChangesProcessor.h
   td/utils/check.h
   td/utils/Closure.h
+  td/utils/CombinedLog.h
   td/utils/common.h
   td/utils/ConcurrentHashTable.h
   td/utils/Container.h
@@ -220,6 +223,7 @@ set(TDUTILS_SOURCE
   td/utils/MpscPollableQueue.h
   td/utils/MpscLinkQueue.h
   td/utils/Named.h
+  td/utils/NullLog.h
   td/utils/ObjectPool.h
   td/utils/Observer.h
   td/utils/optional.h
@@ -235,6 +239,7 @@ set(TDUTILS_SOURCE
   td/utils/SharedSlice.h
   td/utils/Slice-decl.h
   td/utils/Slice.h
+  td/utils/SliceBuilder.h
   td/utils/Span.h
   td/utils/SpinLock.h
   td/utils/StackAllocator.h
@@ -254,8 +259,10 @@ set(TDUTILS_SOURCE
   td/utils/tl_parsers.h
   td/utils/tl_storers.h
   td/utils/translit.h
+  td/utils/TsCerr.h
   td/utils/TsFileLog.h
   td/utils/TsList.h
+  td/utils/TsLog.h
   td/utils/type_traits.h
   td/utils/UInt.h
   td/utils/uint128.h

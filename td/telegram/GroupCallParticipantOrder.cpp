@@ -6,13 +6,17 @@
 //
 #include "td/telegram/GroupCallParticipantOrder.h"
 
-#include "td/utils/logging.h"
 #include "td/utils/misc.h"
+#include "td/utils/SliceBuilder.h"
 
 #include <limits>
 #include <tuple>
 
 namespace td {
+
+GroupCallParticipantOrder GroupCallParticipantOrder::min() {
+  return GroupCallParticipantOrder(0, 0, 1);
+}
 
 GroupCallParticipantOrder GroupCallParticipantOrder::max() {
   return GroupCallParticipantOrder(std::numeric_limits<int32>::max(), std::numeric_limits<int64>::max(),
