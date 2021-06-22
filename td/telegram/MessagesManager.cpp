@@ -6424,7 +6424,7 @@ void MessagesManager::memory_cleanup(bool full) {
     while (it != found_public_dialogs_.end() && found_public_dialogs_.size() > 1000) {
       auto search_string = it->first;
       found_on_server_dialogs_.erase(search_string);
-      it = it.erase(it);
+      it = found_public_dialogs_.erase(it);
     }
   }
   full_message_id_to_file_source_id_.clear();
