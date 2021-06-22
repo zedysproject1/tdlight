@@ -6413,10 +6413,20 @@ void MessagesManager::memory_cleanup(bool full) {
   } else {
     clear_recently_found_dialogs();
   }
-  found_public_dialogs_.clear();
-  found_public_dialogs_.rehash(0);
-  found_on_server_dialogs_.clear();
-  found_on_server_dialogs_.rehash(0);
+  if (full) {
+    found_public_dialogs_.clear();
+    found_public_dialogs_.rehash(0);
+    found_on_server_dialogs_.clear();
+    found_on_server_dialogs_.rehash(0);
+  } else {
+    auto it = found_public_dialogs_.begin();
+    // Keep only 1000 found public dialogs
+    while (it != found_public_dialogs_.end() && found_public_dialogs_.size() > 1000) {
+      auto search_string = it->first;
+      found_on_server_dialogs_.erase(search_string);
+      it = it.erase(it);
+    }
+  }
   full_message_id_to_file_source_id_.clear();
   full_message_id_to_file_source_id_.rehash(0);
 }
