@@ -10738,13 +10738,8 @@ void ContactsManager::on_update_user_photo(User *u, UserId user_id,
         profile_photo->stripped_thumb_ = BufferSlice();
       }
     }
-    auto find_old_photo = pending_user_photos_.find(user_id);
-    if (find_old_photo != pending_user_photos_.end()) {
-      auto &old_photo = find_old_photo->second;
-      if (!LOG_IS_STRIPPED(ERROR) && to_string(old_photo) == to_string(photo)) {
-        return;
-      }
-    } else {
+    auto &old_photo = pending_user_photos_[user_id];
+    if (!LOG_IS_STRIPPED(ERROR) && to_string(old_photo) == to_string(photo)) {
       return;
     }
 
@@ -16095,14 +16090,10 @@ void ContactsManager::memory_cleanup(bool full) {
   users_.rehash(0);
   users_full_.clear();
   users_full_.rehash(0);
-  bot_infos_.clear();
-  bot_infos_.rehash(0);
   user_photos_.clear();
   user_photos_.rehash(0);
   unknown_users_.clear();
   unknown_users_.rehash(0);
-  pending_user_photos_.clear();
-  pending_user_photos_.rehash(0);
   user_profile_photo_file_source_ids_.clear();
   user_profile_photo_file_source_ids_.rehash(0);
   my_photo_file_id_.clear();
@@ -16188,8 +16179,6 @@ void ContactsManager::memory_cleanup(bool full) {
   loaded_from_database_users_.rehash(0);
   unavailable_user_fulls_.clear();
   unavailable_user_fulls_.rehash(0);
-  unavailable_bot_infos_.clear();
-  unavailable_bot_infos_.rehash(0);
   load_chat_from_database_queries_.clear();
   load_chat_from_database_queries_.rehash(0);
   loaded_from_database_chats_.clear();
@@ -16241,8 +16230,6 @@ void ContactsManager::memory_stats(vector<string> &output) {
   output.push_back(",");
   output.push_back("\"users_full_\":"); output.push_back(std::to_string(users_full_.size()));
   output.push_back(",");
-  output.push_back("\"bot_infos_\":"); output.push_back(std::to_string(bot_infos_.size()));
-  output.push_back(",");
   output.push_back("\"user_photos_\":"); output.push_back(std::to_string(user_photos_.size()));
   output.push_back(",");
   output.push_back("\"unknown_users_\":"); output.push_back(std::to_string(unknown_users_.size()));
@@ -16286,8 +16273,6 @@ void ContactsManager::memory_stats(vector<string> &output) {
   output.push_back("\"loaded_from_database_users_\":"); output.push_back(std::to_string(loaded_from_database_users_.size()));
   output.push_back(",");
   output.push_back("\"unavailable_user_fulls_\":"); output.push_back(std::to_string(unavailable_user_fulls_.size()));
-  output.push_back(",");
-  output.push_back("\"unavailable_bot_infos_\":"); output.push_back(std::to_string(unavailable_bot_infos_.size()));
   output.push_back(",");
   output.push_back("\"load_chat_from_database_queries_\":"); output.push_back(std::to_string(load_chat_from_database_queries_.size()));
   output.push_back(",");
