@@ -135,13 +135,14 @@ vector<tl_object_ptr<td_api::textEntity>> get_text_entities_object(const vector<
 
 td_api::object_ptr<td_api::formattedText> get_formatted_text_object(const FormattedText &text);
 
-vector<MessageEntity> find_entities(Slice text, bool skip_bot_commands, bool only_urls = false);
+vector<MessageEntity> find_entities(Slice text, bool skip_bot_commands);
 
 vector<Slice> find_mentions(Slice str);
 vector<Slice> find_bot_commands(Slice str);
 vector<Slice> find_hashtags(Slice str);
 vector<Slice> find_cashtags(Slice str);
 vector<Slice> find_bank_card_numbers(Slice str);
+vector<Slice> find_tg_urls(Slice str);
 bool is_email_address(Slice str);
 vector<std::pair<Slice, bool>> find_urls(Slice str);  // slice + is_email_address
 

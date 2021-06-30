@@ -11,7 +11,6 @@
 
 #include "td/utils/buffer.h"
 #include "td/utils/format.h"
-#include "td/utils/logging.h"
 #include "td/utils/misc.h"
 #include "td/utils/port/Clocks.h"
 #include "td/utils/port/FileFd.h"
@@ -163,6 +162,8 @@ static int64 file_size(CSlice path) {
   return r_stat.ok().size_;
 }
 }  // namespace detail
+
+int32 VERBOSITY_NAME(binlog) = VERBOSITY_NAME(DEBUG) + 8;
 
 Binlog::Binlog() = default;
 
@@ -322,12 +323,13 @@ void Binlog::do_event(BinlogEvent &&event) {
   auto event_size = event.raw_event_.size();
 
   if (state_ == State::Run || state_ == State::Reindex) {
-    VLOG(binlog) << "Write binlog event: " << format::cond(state_ == State::Reindex, "[reindex] ");
     auto validate_status = event.validate();
     if (validate_status.is_error()) {
       LOG(FATAL) << "Failed to validate binlog event " << validate_status << " "
                  << format::as_hex_dump<4>(Slice(event.raw_event_.as_slice().truncate(28)));
     }
+    VLOG(binlog) << "Write binlog event: " << format::cond(state_ == State::Reindex, "[reindex] ")
+                 << event.public_to_string();
     switch (encryption_type_) {
       case EncryptionType::None: {
         buffer_writer_.append(event.raw_event_.clone());

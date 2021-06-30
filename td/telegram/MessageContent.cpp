@@ -50,7 +50,6 @@
 #include "td/telegram/PollId.hpp"
 #include "td/telegram/PollManager.h"
 #include "td/telegram/secret_api.hpp"
-#include "td/telegram/SecretChatActor.h"
 #include "td/telegram/SecureValue.h"
 #include "td/telegram/SecureValue.hpp"
 #include "td/telegram/StickersManager.h"
@@ -85,7 +84,6 @@
 #include "td/utils/tl_helpers.h"
 #include "td/utils/utf8.h"
 
-#include <limits>
 #include <utility>
 
 namespace td {
@@ -2061,12 +2059,12 @@ bool can_have_input_media(const Td *td, const MessageContent *content) {
 
 SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
                                         tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
-                                        BufferSlice thumbnail, int32 layer) {
+                                        BufferSlice thumbnail) {
   switch (content->get_type()) {
     case MessageContentType::Animation: {
       auto m = static_cast<const MessageAnimation *>(content);
       return td->animations_manager_->get_secret_input_media(m->file_id, std::move(input_file), m->caption.text,
-                                                             std::move(thumbnail), layer);
+                                                             std::move(thumbnail));
     }
     case MessageContentType::Audio: {
       auto m = static_cast<const MessageAudio *>(content);
@@ -2112,8 +2110,7 @@ SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
     }
     case MessageContentType::VideoNote: {
       auto m = static_cast<const MessageVideoNote *>(content);
-      return td->video_notes_manager_->get_secret_input_media(m->file_id, std::move(input_file), std::move(thumbnail),
-                                                              layer);
+      return td->video_notes_manager_->get_secret_input_media(m->file_id, std::move(input_file), std::move(thumbnail));
     }
     case MessageContentType::VoiceNote: {
       auto m = static_cast<const MessageVoiceNote *>(content);
@@ -2438,13 +2435,6 @@ void delete_message_content_thumbnail(MessageContent *content, Td *td) {
 
 Status can_send_message_content(DialogId dialog_id, const MessageContent *content, bool is_forward, const Td *td) {
   auto dialog_type = dialog_id.get_type();
-  int32 secret_chat_layer = std::numeric_limits<int32>::max();
-  if (dialog_type == DialogType::SecretChat) {
-    auto secret_chat_id = dialog_id.get_secret_chat_id();
-    secret_chat_layer = td->contacts_manager_->get_secret_chat_layer(secret_chat_id);
-  }
-
-  auto content_type = content->get_type();
   RestrictedRights permissions = [&] {
     switch (dialog_type) {
       case DialogType::User:
@@ -2462,6 +2452,7 @@ Status can_send_message_content(DialogId dialog_id, const MessageContent *conten
     }
   }();
 
+  auto content_type = content->get_type();
   switch (content_type) {
     case MessageContentType::Animation:
       if (!permissions.can_send_animations()) {
@@ -2492,8 +2483,8 @@ Status can_send_message_content(DialogId dialog_id, const MessageContent *conten
       }
       break;
     case MessageContentType::Game:
-      if (dialog_type == DialogType::Channel &&
-          td->contacts_manager_->get_channel_type(dialog_id.get_channel_id()) == ChannelType::Broadcast) {
+      if (dialog_type == DialogType::Channel && td->contacts_manager_->get_channel_type(dialog_id.get_channel_id()) ==
+                                                    ContactsManager::ChannelType::Broadcast) {
         // return Status::Error(400, "Games can't be sent to channel chats");
       }
       if (dialog_type == DialogType::SecretChat) {
@@ -2531,7 +2522,8 @@ Status can_send_message_content(DialogId dialog_id, const MessageContent *conten
         return Status::Error(400, "Not enough rights to send polls to the chat");
       }
       if (dialog_type == DialogType::Channel &&
-          td->contacts_manager_->get_channel_type(dialog_id.get_channel_id()) == ChannelType::Broadcast &&
+          td->contacts_manager_->get_channel_type(dialog_id.get_channel_id()) ==
+              ContactsManager::ChannelType::Broadcast &&
           !td->poll_manager_->get_poll_is_anonymous(static_cast<const MessagePoll *>(content)->poll_id)) {
         return Status::Error(400, "Non-anonymous polls can't be sent to channel chats");
       }
@@ -2566,10 +2558,6 @@ Status can_send_message_content(DialogId dialog_id, const MessageContent *conten
     case MessageContentType::VideoNote:
       if (!permissions.can_send_media()) {
         return Status::Error(400, "Not enough rights to send video notes to the chat");
-      }
-      if (secret_chat_layer < SecretChatActor::VIDEO_NOTES_LAYER) {
-        return Status::Error(400, PSLICE()
-                                      << "Video notes can't be sent to secret chat with layer " << secret_chat_layer);
       }
       break;
     case MessageContentType::VoiceNote:
@@ -3091,10 +3079,9 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
                          new_file_view.remote_location().get_file_reference() ||
                      old_file_view.main_remote_location().get_access_hash() !=
                          new_file_view.remote_location().get_access_hash()) {
-            auto volume_id = -new_file_view.remote_location().get_id();
             FileId file_id = td->file_manager_->register_remote(
                 FullRemoteFileLocation({FileType::Photo, 'i'}, new_file_view.remote_location().get_id(),
-                                       new_file_view.remote_location().get_access_hash(), 0, volume_id, DcId::invalid(),
+                                       new_file_view.remote_location().get_access_hash(), DcId::invalid(),
                                        new_file_view.remote_location().get_file_reference().str()),
                 FileLocationSource::FromServer, dialog_id, old_photo->photos.back().size, 0, "");
             LOG_STATUS(td->file_manager_->merge(file_id, old_file_id));
@@ -3592,16 +3579,6 @@ void unregister_message_content(Td *td, const MessageContent *content, FullMessa
 template <class ToT, class FromT>
 static tl_object_ptr<ToT> secret_to_telegram(FromT &from);
 
-// fileLocationUnavailable volume_id:long local_id:int secret:long = FileLocation;
-static auto secret_to_telegram(secret_api::fileLocationUnavailable &file_location) {
-  return make_tl_object<telegram_api::fileLocationToBeDeprecated>(file_location.volume_id_, file_location.local_id_);
-}
-
-// fileLocation dc_id:int volume_id:long local_id:int secret:long = FileLocation;
-static auto secret_to_telegram(secret_api::fileLocation &file_location) {
-  return make_tl_object<telegram_api::fileLocationToBeDeprecated>(file_location.volume_id_, file_location.local_id_);
-}
-
 // photoSizeEmpty type:string = PhotoSize;
 static auto secret_to_telegram(secret_api::photoSizeEmpty &empty) {
   if (!clean_input_string(empty.type_)) {
@@ -3615,9 +3592,7 @@ static auto secret_to_telegram(secret_api::photoSize &photo_size) {
   if (!clean_input_string(photo_size.type_)) {
     photo_size.type_.clear();
   }
-  return make_tl_object<telegram_api::photoSize>(
-      photo_size.type_, secret_to_telegram<telegram_api::fileLocationToBeDeprecated>(*photo_size.location_),
-      photo_size.w_, photo_size.h_, photo_size.size_);
+  return make_tl_object<telegram_api::photoSize>(photo_size.type_, photo_size.w_, photo_size.h_, photo_size.size_);
 }
 
 // photoCachedSize type:string location:FileLocation w:int h:int bytes:bytes = PhotoSize;
@@ -3625,9 +3600,8 @@ static auto secret_to_telegram(secret_api::photoCachedSize &photo_size) {
   if (!clean_input_string(photo_size.type_)) {
     photo_size.type_.clear();
   }
-  return make_tl_object<telegram_api::photoCachedSize>(
-      photo_size.type_, secret_to_telegram<telegram_api::fileLocationToBeDeprecated>(*photo_size.location_),
-      photo_size.w_, photo_size.h_, photo_size.bytes_.clone());
+  return make_tl_object<telegram_api::photoCachedSize>(photo_size.type_, photo_size.w_, photo_size.h_,
+                                                       photo_size.bytes_.clone());
 }
 
 // documentAttributeImageSize w:int h:int = DocumentAttribute;

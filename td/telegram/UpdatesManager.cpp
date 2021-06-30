@@ -223,7 +223,7 @@ void UpdatesManager::fill_get_difference_gap(void *td) {
 
 void UpdatesManager::fill_gap(void *td, const char *source) {
   CHECK(td != nullptr);
-  if (G()->close_flag()) {
+  if (G()->close_flag() || !static_cast<Td *>(td)->auth_manager_->is_authorized()) {
     return;
   }
   auto updates_manager = static_cast<Td *>(td)->updates_manager_.get();
@@ -236,15 +236,11 @@ void UpdatesManager::fill_gap(void *td, const char *source) {
 }
 
 void UpdatesManager::get_difference(const char *source) {
-  if (G()->close_flag()) {
+  if (G()->close_flag() || !td_->auth_manager_->is_authorized()) {
     return;
   }
   if (get_pts() == -1) {
     init_state();
-    return;
-  }
-
-  if (!td_->auth_manager_->is_authorized()) {
     return;
   }
 
@@ -881,7 +877,7 @@ void UpdatesManager::on_get_updates(tl_object_ptr<telegram_api::Updates> &&updat
 }
 
 void UpdatesManager::on_failed_get_updates_state(Status &&error) {
-  if (G()->close_flag()) {
+  if (G()->close_flag() || !td_->auth_manager_->is_authorized()) {
     return;
   }
   if (error.code() != 401) {
@@ -893,7 +889,7 @@ void UpdatesManager::on_failed_get_updates_state(Status &&error) {
 }
 
 void UpdatesManager::on_failed_get_difference(Status &&error) {
-  if (G()->close_flag()) {
+  if (G()->close_flag() || !td_->auth_manager_->is_authorized()) {
     return;
   }
   if (error.code() != 401) {
@@ -909,8 +905,12 @@ void UpdatesManager::on_failed_get_difference(Status &&error) {
 }
 
 void UpdatesManager::schedule_get_difference(const char *source) {
+  if (G()->close_flag() || !td_->auth_manager_->is_authorized()) {
+    return;
+  }
   if (!retry_timeout_.has_timeout()) {
-    LOG(WARNING) << "Schedule getDifference in " << retry_time_ << " seconds from " << source;
+    LOG(WARNING) << "Schedule getDifference in " << retry_time_ << " seconds with pts = " << get_pts()
+                 << ", qts = " << get_qts() << ", date = " << get_date() << " from " << source;
     retry_timeout_.set_callback(std::move(fill_get_difference_gap));
     retry_timeout_.set_callback_data(static_cast<void *>(td_));
     retry_timeout_.set_timeout_in(retry_time_);
@@ -969,6 +969,11 @@ const vector<tl_object_ptr<telegram_api::Update>> *UpdatesManager::get_updates(
   }
 }
 
+vector<tl_object_ptr<telegram_api::Update>> *UpdatesManager::get_updates(telegram_api::Updates *updates_ptr) {
+  return const_cast<vector<tl_object_ptr<telegram_api::Update>> *>(
+      get_updates(static_cast<const telegram_api::Updates *>(updates_ptr)));
+}
+
 std::unordered_set<int64> UpdatesManager::get_sent_messages_random_ids(const telegram_api::Updates *updates_ptr) {
   std::unordered_set<int64> random_ids;
   auto updates = get_updates(updates_ptr);
@@ -1024,6 +1029,20 @@ vector<InputGroupCallId> UpdatesManager::get_update_new_group_call_ids(const tel
     }
   }
   return input_group_call_ids;
+}
+
+string UpdatesManager::extract_join_group_call_presentation_params(telegram_api::Updates *updates_ptr) {
+  auto updates = get_updates(updates_ptr);
+  for (auto it = updates->begin(); it != updates->end(); ++it) {
+    auto *update = it->get();
+    if (update->get_id() == telegram_api::updateGroupCallConnection::ID &&
+        static_cast<const telegram_api::updateGroupCallConnection *>(update)->presentation_) {
+      string result = std::move(static_cast<telegram_api::updateGroupCallConnection *>(update)->params_->data_);
+      updates->erase(it);
+      return result;
+    }
+  }
+  return string();
 }
 
 vector<DialogId> UpdatesManager::get_update_notify_settings_dialog_ids(const telegram_api::Updates *updates_ptr) {
@@ -1128,7 +1147,7 @@ int32 UpdatesManager::get_update_edit_message_pts(const telegram_api::Updates *u
 }
 
 void UpdatesManager::init_state() {
-  if (!td_->auth_manager_->is_authorized()) {
+  if (G()->close_flag() || !td_->auth_manager_->is_authorized()) {
     return;
   }
 
@@ -1737,6 +1756,12 @@ void UpdatesManager::process_updates(vector<tl_object_ptr<telegram_api::Update>>
         continue;
       }
 
+      // updateGroupCallConnection must be processed before updateGroupCall
+      if (constructor_id == telegram_api::updateGroupCallConnection::ID) {
+        on_update(move_tl_object_as<telegram_api::updateGroupCallConnection>(update), mpas.get_promise());
+        continue;
+      }
+
       // updatePtsChanged forces get difference, so process it last
       if (constructor_id == telegram_api::updatePtsChanged::ID) {
         update_pts_changed = move_tl_object_as<telegram_api::updatePtsChanged>(update);
@@ -1975,6 +2000,13 @@ void UpdatesManager::process_qts_update(tl_object_ptr<telegram_api::Update> &&up
       auto update = move_tl_object_as<telegram_api::updateNewEncryptedMessage>(update_ptr);
       send_closure(td_->secret_chats_manager_, &SecretChatsManager::on_new_message, std::move(update->message_),
                    add_qts(qts));
+      break;
+    }
+    case telegram_api::updateMessagePollVote::ID: {
+      auto update = move_tl_object_as<telegram_api::updateMessagePollVote>(update_ptr);
+      td_->poll_manager_->on_get_poll_vote(PollId(update->poll_id_), UserId(update->user_id_),
+                                           std::move(update->options_));
+      add_qts(qts).set_value(Unit());
       break;
     }
     case telegram_api::updateBotStopped::ID: {
@@ -2494,6 +2526,7 @@ int32 UpdatesManager::get_update_pts(const telegram_api::Update *update) {
 bool UpdatesManager::is_qts_update(const telegram_api::Update *update) {
   switch (update->get_id()) {
     case telegram_api::updateNewEncryptedMessage::ID:
+    case telegram_api::updateMessagePollVote::ID:
     case telegram_api::updateBotStopped::ID:
     case telegram_api::updateChatParticipant::ID:
     case telegram_api::updateChannelParticipant::ID:
@@ -2507,6 +2540,8 @@ int32 UpdatesManager::get_update_qts(const telegram_api::Update *update) {
   switch (update->get_id()) {
     case telegram_api::updateNewEncryptedMessage::ID:
       return static_cast<const telegram_api::updateNewEncryptedMessage *>(update)->qts_;
+    case telegram_api::updateMessagePollVote::ID:
+      return static_cast<const telegram_api::updateMessagePollVote *>(update)->qts_;
     case telegram_api::updateBotStopped::ID:
       return static_cast<const telegram_api::updateBotStopped *>(update)->qts_;
     case telegram_api::updateChatParticipant::ID:
@@ -2824,6 +2859,16 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updatePhoneCallSignal
   promise.set_value(Unit());
 }
 
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateGroupCallConnection> update, Promise<Unit> &&promise) {
+  if (update->presentation_) {
+    LOG(ERROR) << "Receive unexpected updateGroupCallConnection";
+  } else {
+    send_closure(G()->group_call_manager(), &GroupCallManager::on_update_group_call_connection,
+                 std::move(update->params_->data_));
+  }
+  promise.set_value(Unit());
+}
+
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateGroupCall> update, Promise<Unit> &&promise) {
   DialogId dialog_id(ChatId(update->chat_id_));
   if (!td_->messages_manager_->have_dialog_force(dialog_id, "updateGroupCall")) {
@@ -2872,8 +2917,8 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateMessagePoll> up
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateMessagePollVote> update, Promise<Unit> &&promise) {
-  td_->poll_manager_->on_get_poll_vote(PollId(update->poll_id_), UserId(update->user_id_), std::move(update->options_));
-  promise.set_value(Unit());
+  auto qts = update->qts_;
+  add_pending_qts_update(std::move(update), qts, std::move(promise));
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateNewScheduledMessage> update, Promise<Unit> &&promise) {

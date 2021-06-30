@@ -8,7 +8,6 @@
 
 #include "td/telegram/net/NetQuery.h"
 #include "td/telegram/SecureStorage.h"
-
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
 

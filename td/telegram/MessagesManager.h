@@ -28,6 +28,7 @@
 #include "td/telegram/MessageContentType.h"
 #include "td/telegram/MessageCopyOptions.h"
 #include "td/telegram/MessageId.h"
+#include "td/telegram/MessageLinkInfo.h"
 #include "td/telegram/MessageReplyInfo.h"
 #include "td/telegram/MessagesDb.h"
 #include "td/telegram/MessageSearchFilter.h"
@@ -369,6 +370,8 @@ class MessagesManager : public Actor {
 
   DialogId search_public_dialog(const string &username_to_search, bool force, Promise<Unit> &&promise);
 
+  void reload_voice_chat_on_search(const string &username);
+
   Result<MessageId> send_message(
       DialogId dialog_id, MessageId top_thread_message_id, MessageId reply_to_message_id,
       tl_object_ptr<td_api::messageSendOptions> &&options, tl_object_ptr<td_api::ReplyMarkup> &&reply_markup,
@@ -585,18 +588,6 @@ class MessagesManager : public Actor {
 
   void on_get_public_message_link(FullMessageId full_message_id, bool for_group, string url, string html);
 
-  struct MessageLinkInfo {
-    string username;
-    // or
-    ChannelId channel_id;
-
-    MessageId message_id;
-    bool is_single = false;
-
-    DialogId comment_dialog_id;
-    MessageId comment_message_id;
-    bool for_comment = false;
-  };
   void get_message_link_info(Slice url, Promise<MessageLinkInfo> &&promise);
 
   td_api::object_ptr<td_api::messageLinkInfo> get_message_link_info_object(const MessageLinkInfo &info) const;
@@ -802,17 +793,6 @@ class MessagesManager : public Actor {
   void get_dialog_statistics_url(DialogId dialog_id, const string &parameters, bool is_dark,
                                  Promise<td_api::object_ptr<td_api::httpUrl>> &&promise);
 
-  void get_login_url_info(DialogId dialog_id, MessageId message_id, int32 button_id,
-                          Promise<td_api::object_ptr<td_api::LoginUrlInfo>> &&promise);
-
-  void get_login_url(DialogId dialog_id, MessageId message_id, int32 button_id, bool allow_write_access,
-                     Promise<td_api::object_ptr<td_api::httpUrl>> &&promise);
-
-  void get_link_login_url_info(const string &url, Promise<td_api::object_ptr<td_api::LoginUrlInfo>> &&promise);
-
-  void get_link_login_url(const string &url, bool allow_write_access,
-                          Promise<td_api::object_ptr<td_api::httpUrl>> &&promise);
-
   void on_authorization_success();
 
   void before_get_difference();
@@ -916,6 +896,8 @@ class MessagesManager : public Actor {
 
   void stop_poll(FullMessageId full_message_id, td_api::object_ptr<td_api::ReplyMarkup> &&reply_markup,
                  Promise<Unit> &&promise);
+
+  Result<string> get_login_button_url(FullMessageId full_message_id, int32 button_id);
 
   Result<ServerMessageId> get_invoice_message_id(FullMessageId full_message_id);
 
@@ -1657,7 +1639,7 @@ class MessagesManager : public Actor {
   static constexpr int32 MAX_GET_HISTORY = 100;                    // server side limit
   static constexpr int32 MAX_SEARCH_MESSAGES = 100;                // server side limit
   static constexpr int32 MIN_SEARCH_PUBLIC_DIALOG_PREFIX_LEN = 4;  // server side limit
-  static constexpr int32 MIN_CHANNEL_DIFFERENCE = 10;
+  static constexpr int32 MIN_CHANNEL_DIFFERENCE = 1;
   static constexpr int32 MAX_BOT_CHANNEL_DIFFERENCE = 1000000;   // server side limit
   static constexpr int32 MAX_CHANNEL_DIFFERENCE = MAX_BOT_CHANNEL_DIFFERENCE;
   static constexpr int32 MAX_RECENTLY_FOUND_DIALOGS = 30;       // some reasonable value
@@ -2638,8 +2620,6 @@ class MessagesManager : public Actor {
   void ttl_db_loop(double server_now);
   void ttl_db_on_result(Result<std::pair<std::vector<std::pair<DialogId, BufferSlice>>, int32>> r_result, bool dummy);
 
-  static Result<MessageLinkInfo> get_message_link_info(Slice url);
-
   void on_get_message_link_dialog(MessageLinkInfo &&info, Promise<MessageLinkInfo> &&promise);
 
   void on_get_message_link_message(MessageLinkInfo &&info, DialogId dialog_id, Promise<MessageLinkInfo> &&promise);
@@ -2975,8 +2955,6 @@ class MessagesManager : public Actor {
   void suffix_load_till_date(Dialog *d, int32 date, Promise<> promise);
   void suffix_load_till_message_id(Dialog *d, MessageId message_id, Promise<> promise);
 
-  Result<string> get_login_button_url(DialogId dialog_id, MessageId message_id, int32 button_id);
-
   bool is_broadcast_channel(DialogId dialog_id) const;
 
   bool is_deleted_secret_chat(const Dialog *d) const;
@@ -3286,6 +3264,7 @@ class MessagesManager : public Actor {
 
   std::unordered_map<string, ResolvedUsername> resolved_usernames_;
   std::unordered_map<string, DialogId> inaccessible_resolved_usernames_;
+  std::unordered_set<string> reload_voice_chat_on_search_usernames_;
 
   struct PendingOnGetDialogs {
     FolderId folder_id;
@@ -3349,6 +3328,8 @@ class MessagesManager : public Actor {
   std::unordered_map<DialogId, MessageId, DialogIdHash> previous_repaired_read_inbox_max_message_id_;
 
   uint32 scheduled_messages_sync_generation_ = 1;
+
+  int64 authorization_date_ = 0;
 
   DialogId removed_sponsored_dialog_id_;
   DialogId sponsored_dialog_id_;

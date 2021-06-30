@@ -104,6 +104,8 @@ class UpdatesManager : public Actor {
 
   static vector<InputGroupCallId> get_update_new_group_call_ids(const telegram_api::Updates *updates_ptr);
 
+  static string extract_join_group_call_presentation_params(telegram_api::Updates *updates_ptr);
+
   static vector<DialogId> get_update_notify_settings_dialog_ids(const telegram_api::Updates *updates_ptr);
 
   static vector<DialogId> get_chat_dialog_ids(const telegram_api::Updates *updates_ptr);
@@ -308,6 +310,8 @@ class UpdatesManager : public Actor {
 
   static const vector<tl_object_ptr<telegram_api::Update>> *get_updates(const telegram_api::Updates *updates_ptr);
 
+  static vector<tl_object_ptr<telegram_api::Update>> *get_updates(telegram_api::Updates *updates_ptr);
+
   bool is_acceptable_user(UserId user_id) const;
 
   bool is_acceptable_chat(ChatId chat_id) const;
@@ -434,6 +438,7 @@ class UpdatesManager : public Actor {
   void on_update(tl_object_ptr<telegram_api::updatePhoneCall> update, Promise<Unit> &&promise);
   void on_update(tl_object_ptr<telegram_api::updatePhoneCallSignalingData> update, Promise<Unit> &&promise);
 
+  void on_update(tl_object_ptr<telegram_api::updateGroupCallConnection> update, Promise<Unit> &&promise);
   void on_update(tl_object_ptr<telegram_api::updateGroupCall> update, Promise<Unit> &&promise);
   void on_update(tl_object_ptr<telegram_api::updateGroupCallParticipants> update, Promise<Unit> &&promise);
 

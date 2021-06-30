@@ -52,7 +52,7 @@ authenticationCodeTypeSms length:int32 = AuthenticationCodeType;
 //@description An authentication code is delivered via a phone call to the specified phone number @length Length of the code
 authenticationCodeTypeCall length:int32 = AuthenticationCodeType;
 
-//@description An authentication code is delivered by an immediately cancelled call to the specified phone number. The number from which the call was made is the code @pattern Pattern of the phone number from which the call will be made
+//@description An authentication code is delivered by an immediately canceled call to the specified phone number. The number from which the call was made is the code @pattern Pattern of the phone number from which the call will be made
 authenticationCodeTypeFlashCall pattern:string = AuthenticationCodeType;
 
 
@@ -350,8 +350,8 @@ userTypeUnknown = UserType;
 //@description Represents a command supported by a bot @command Text of the bot command @param_description Description of the bot command
 botCommand command:string description:string = BotCommand;
 
-//@description Provides information about a bot and its supported commands @param_description Long description shown on the user info page @commands A list of commands supported by the bot
-botInfo description:string commands:vector<botCommand> = BotInfo;
+//@description Contains a list of bot commands @bot_user_id Bot's user identifier @commands List of bot commands
+botCommands bot_user_id:int32 commands:vector<botCommand> = BotCommands;
 
 
 //@description Represents a location to which a chat is connected @location The location @address Location address; 1-64 characters, as defined by the chat owner
@@ -418,10 +418,12 @@ user id:int32 first_name:string last_name:string username:string phone_number:st
 //@supports_video_calls True, if a video call can be created with the user
 //@has_private_calls True, if the user can't be called due to their privacy settings
 //@need_phone_number_privacy_exception True, if the current user needs to explicitly allow to share their phone number with the user when the method addContact is used
-//@bio A short user bio @share_text For bots, the text that is included with the link when users share the bot
+//@bio A short user bio
+//@share_text For bots, the text that is shown on the bot's profile page and is sent together with the link when users share the bot
+//@param_description For bots, the text shown in the chat with the bot if the chat is empty
 //@group_in_common_count Number of group chats where both the other user and the current user are a member; 0 for the current user
-//@bot_info If the user is a bot, information about the bot; may be null
-userFullInfo photo:chatPhoto is_blocked:Bool can_be_called:Bool supports_video_calls:Bool has_private_calls:Bool need_phone_number_privacy_exception:Bool bio:string share_text:string group_in_common_count:int32 bot_info:botInfo = UserFullInfo;
+//@commands For bots, list of the bot commands
+userFullInfo photo:chatPhoto is_blocked:Bool can_be_called:Bool supports_video_calls:Bool has_private_calls:Bool need_phone_number_privacy_exception:Bool bio:string share_text:string description:string group_in_common_count:int32 commands:vector<botCommand> = UserFullInfo;
 
 //@description Represents a list of users @total_count Approximate total count of users found @user_ids A list of user identifiers
 users total_count:int32 user_ids:vector<int32> = Users;
@@ -448,13 +450,13 @@ chatPermissions can_send_messages:Bool can_send_media_messages:Bool can_send_pol
 
 //@class ChatMemberStatus @description Provides information about the status of a member in a chat
 
-//@description The user is the owner of a chat and has all the administrator privileges
+//@description The user is the owner of the chat and has all the administrator privileges
 //@custom_title A custom title of the owner; 0-16 characters without emojis; applicable to supergroups only
 //@is_anonymous True, if the creator isn't shown in the chat member list and sends messages anonymously; applicable to supergroups only
 //@is_member True, if the user is a member of the chat
 chatMemberStatusCreator custom_title:string is_anonymous:Bool is_member:Bool = ChatMemberStatus;
 
-//@description The user is a member of a chat and has some additional privileges. In basic groups, administrators can edit and delete messages sent by others, add new members, ban unprivileged members, and manage voice chats. In supergroups and channels, there are more detailed options for administrator privileges
+//@description The user is a member of the chat and has some additional privileges. In basic groups, administrators can edit and delete messages sent by others, add new members, ban unprivileged members, and manage voice chats. In supergroups and channels, there are more detailed options for administrator privileges
 //@custom_title A custom title of the administrator; 0-16 characters without emojis; applicable to supergroups only
 //@can_be_edited True, if the current user can edit the administrator privileges for the called user
 //@can_manage_chat True, if the administrator can get chat event log, get chat statistics, get message statistics in channels, get channel members, see anonymous administrators in supergroups and ignore slow mode. Implied by any other privilege; applicable to supergroups and channels only
@@ -470,7 +472,7 @@ chatMemberStatusCreator custom_title:string is_anonymous:Bool is_member:Bool = C
 //@is_anonymous True, if the administrator isn't shown in the chat member list and sends messages anonymously; applicable to supergroups only
 chatMemberStatusAdministrator custom_title:string can_be_edited:Bool can_manage_chat:Bool can_change_info:Bool can_post_messages:Bool can_edit_messages:Bool can_delete_messages:Bool can_invite_users:Bool can_restrict_members:Bool can_pin_messages:Bool can_promote_members:Bool can_manage_voice_chats:Bool is_anonymous:Bool = ChatMemberStatus;
 
-//@description The user is a member of a chat, without any additional privileges or restrictions
+//@description The user is a member of the chat, without any additional privileges or restrictions
 chatMemberStatusMember = ChatMemberStatus;
 
 //@description The user is under certain restrictions in the chat. Not supported in basic groups and channels
@@ -492,8 +494,7 @@ chatMemberStatusBanned banned_until_date:int32 = ChatMemberStatus;
 //@inviter_user_id Identifier of a user that invited/promoted/banned this member in the chat; 0 if unknown
 //@joined_chat_date Point in time (Unix timestamp) when the user joined the chat
 //@status Status of the member in the chat
-//@bot_info If the user is a bot, information about the bot; may be null. Can be null even for a bot if the bot is not the chat member
-chatMember member_id:MessageSender inviter_user_id:int32 joined_chat_date:int32 status:ChatMemberStatus bot_info:botInfo = ChatMember;
+chatMember member_id:MessageSender inviter_user_id:int32 joined_chat_date:int32 status:ChatMemberStatus = ChatMember;
 
 //@description Contains a list of chat members @total_count Approximate total count of chat members found @members A list of chat members
 chatMembers total_count:int32 members:vector<chatMember> = ChatMembers;
@@ -604,7 +605,8 @@ basicGroup id:int32 member_count:int32 status:ChatMemberStatus is_active:Bool up
 //@creator_user_id User identifier of the creator of the group; 0 if unknown
 //@members Group members
 //@invite_link Primary invite link for this group; may be null. For chat administrators with can_invite_users right only. Updated only after the basic group is opened
-basicGroupFullInfo photo:chatPhoto description:string creator_user_id:int32 members:vector<chatMember> invite_link:chatInviteLink = BasicGroupFullInfo;
+//@bot_commands List of commands of bots in the group
+basicGroupFullInfo photo:chatPhoto description:string creator_user_id:int32 members:vector<chatMember> invite_link:chatInviteLink bot_commands:vector<botCommands> = BasicGroupFullInfo;
 
 
 //@description Represents a supergroup or channel with zero or more members (subscribers in the case of channels). From the point of view of the system, a channel is a special kind of a supergroup: only administrators can post and see the list of members, and posts from all administrators use the name and photo of the channel instead of individual names and profile photos. Unlike supergroups, channels can have an unlimited number of subscribers
@@ -644,9 +646,10 @@ supergroup id:int32 username:string date:int32 status:ChatMemberStatus member_co
 //@sticker_set_id Identifier of the supergroup sticker set; 0 if none
 //@location Location to which the supergroup is connected; may be null
 //@invite_link Primary invite link for this chat; may be null. For chat administrators with can_invite_users right only
+//@bot_commands List of commands of bots in the group
 //@upgraded_from_basic_group_id Identifier of the basic group from which supergroup was upgraded; 0 if none
 //@upgraded_from_max_message_id Identifier of the last message in the basic group from which supergroup was upgraded; 0 if none
-supergroupFullInfo photo:chatPhoto description:string member_count:int32 administrator_count:int32 restricted_count:int32 banned_count:int32 linked_chat_id:int53 slow_mode_delay:int32 slow_mode_delay_expires_in:double can_get_members:Bool can_set_username:Bool can_set_sticker_set:Bool can_set_location:Bool can_get_statistics:Bool is_all_history_available:Bool sticker_set_id:int64 location:chatLocation invite_link:chatInviteLink upgraded_from_basic_group_id:int32 upgraded_from_max_message_id:int53 = SupergroupFullInfo;
+supergroupFullInfo photo:chatPhoto description:string member_count:int32 administrator_count:int32 restricted_count:int32 banned_count:int32 linked_chat_id:int53 slow_mode_delay:int32 slow_mode_delay_expires_in:double can_get_members:Bool can_set_username:Bool can_set_sticker_set:Bool can_set_location:Bool can_get_statistics:Bool is_all_history_available:Bool sticker_set_id:int64 location:chatLocation invite_link:chatInviteLink bot_commands:vector<botCommands> upgraded_from_basic_group_id:int32 upgraded_from_max_message_id:int53 = SupergroupFullInfo;
 
 
 //@class SecretChatState @description Describes the current secret chat state
@@ -668,7 +671,7 @@ secretChatStateClosed = SecretChatState;
 //@is_outbound True, if the chat was created by the current user; otherwise false
 //@key_hash Hash of the currently used key for comparison with the hash of the chat partner's key. This is a string of 36 little-endian bytes, which must be split into groups of 2 bits, each denoting a pixel of one of 4 colors FFFFFF, D5E6F3, 2D5775, and 2F99C9.
 //-The pixels must be used to make a 12x12 square image filled from left to right, top to bottom. Alternatively, the first 32 bytes of the hash can be converted to the hexadecimal format and printed as 32 2-digit hex numbers
-//@layer Secret chat layer; determines features supported by the chat partner's application. Video notes are supported if the layer >= 66; nested text entities and underline and strikethrough entities are supported if the layer >= 101
+//@layer Secret chat layer; determines features supported by the chat partner's application. Nested text entities and underline and strikethrough entities are supported if the layer >= 101
 secretChat id:int32 user_id:int32 state:SecretChatState is_outbound:Bool key_hash:bytes layer:int32 = SecretChat;
 
 
@@ -781,7 +784,7 @@ messages total_count:int32 messages:vector<message> = Messages;
 foundMessages total_count:int32 messages:vector<message> next_offset:string = FoundMessages;
 
 
-//@class NotificationSettingsScope @description Describes the types of chats to which notification settings are applied
+//@class NotificationSettingsScope @description Describes the types of chats to which notification settings are relevant
 
 //@description Notification settings applied to all private and secret chats when the corresponding chat setting has a default value
 notificationSettingsScopePrivateChats = NotificationSettingsScope;
@@ -1028,14 +1031,16 @@ replyMarkupRemoveKeyboard is_personal:Bool = ReplyMarkup;
 
 //@description Instructs application to force a reply to this message
 //@is_personal True, if a forced reply must automatically be shown to the current user. For outgoing messages, specify true to show the forced reply only for the mentioned users and for the target user of a reply
-replyMarkupForceReply is_personal:Bool = ReplyMarkup;
+//@input_field_placeholder If non-empty, the placeholder to be shown in the input field when the reply is active; 0-64 characters
+replyMarkupForceReply is_personal:Bool input_field_placeholder:string = ReplyMarkup;
 
 //@description Contains a custom keyboard layout to quickly reply to bots
 //@rows A list of rows of bot keyboard buttons
 //@resize_keyboard True, if the application needs to resize the keyboard vertically
 //@one_time True, if the application needs to hide the keyboard after use
 //@is_personal True, if the keyboard must automatically be shown to the current user. For outgoing messages, specify true to show the keyboard only for the mentioned users and for the target user of a reply
-replyMarkupShowKeyboard rows:vector<vector<keyboardButton>> resize_keyboard:Bool one_time:Bool is_personal:Bool = ReplyMarkup;
+//@input_field_placeholder If non-empty, the placeholder to be shown in the input field when the keyboard is active; 0-64 characters
+replyMarkupShowKeyboard rows:vector<vector<keyboardButton>> resize_keyboard:Bool one_time:Bool is_personal:Bool input_field_placeholder:string = ReplyMarkup;
 
 //@description Contains an inline keyboard layout
 //@rows A list of rows of inline keyboard buttons
@@ -2028,7 +2033,7 @@ chatActionStartPlayingGame = ChatAction;
 chatActionRecordingVideoNote = ChatAction;
 //@description The user is uploading a video note @progress Upload progress, as a percentage
 chatActionUploadingVideoNote progress:int32 = ChatAction;
-//@description The user has cancelled the previous action
+//@description The user has canceled the previous action
 chatActionCancel = ChatAction;
 
 
@@ -2084,7 +2089,7 @@ stickerSets total_count:int32 sets:vector<stickerSetInfo> = StickerSets;
 //@description The call wasn't discarded, or the reason is unknown
 callDiscardReasonEmpty = CallDiscardReason;
 
-//@description The call was ended before the conversation started. It was cancelled by the caller or missed by the other party
+//@description The call was ended before the conversation started. It was canceled by the caller or missed by the other party
 callDiscardReasonMissed = CallDiscardReason;
 
 //@description The call was ended before the conversation started. It was declined by the other party
@@ -2162,50 +2167,42 @@ groupCallRecentSpeaker participant_id:MessageSender is_speaking:Bool = GroupCall
 //@participant_count Number of participants in the group call
 //@loaded_all_participants True, if all group call participants are loaded
 //@recent_speakers Recently speaking users in the group call
+//@is_my_video_enabled True, if the current user's video is enabled
+//@is_my_video_paused True, if the current user's video is paused
+//@can_start_video True, if video can be enabled by group call participants. This flag is generally useless after the user has already joined the group call
 //@mute_new_participants True, if only group call administrators can unmute new participants
 //@can_change_mute_new_participants True, if the current user can enable or disable mute_new_participants setting
 //@record_duration Duration of the ongoing group call recording, in seconds; 0 if none. An updateGroupCall update is not triggered when value of this field changes, but the same recording goes on
 //@duration Call duration; for ended calls only
-groupCall id:int32 title:string scheduled_start_date:int32 enabled_start_notification:Bool is_active:Bool is_joined:Bool need_rejoin:Bool can_be_managed:Bool participant_count:int32 loaded_all_participants:Bool recent_speakers:vector<groupCallRecentSpeaker> mute_new_participants:Bool can_change_mute_new_participants:Bool record_duration:int32 duration:int32 = GroupCall;
+groupCall id:int32 title:string scheduled_start_date:int32 enabled_start_notification:Bool is_active:Bool is_joined:Bool need_rejoin:Bool can_be_managed:Bool participant_count:int32 loaded_all_participants:Bool recent_speakers:vector<groupCallRecentSpeaker> is_my_video_enabled:Bool is_my_video_paused:Bool can_start_video:Bool mute_new_participants:Bool can_change_mute_new_participants:Bool record_duration:int32 duration:int32 = GroupCall;
 
-//@description Describes a payload fingerprint for interaction with tgcalls @hash Value of the field hash @setup Value of the field setup @fingerprint Value of the field fingerprint
-groupCallPayloadFingerprint hash:string setup:string fingerprint:string = GroupCallPayloadFingerprint;
+//@description Describes a group of video synchronization source identifiers @semantics The semantics of sources, one of "SIM" or "FID" @source_ids The list of synchronization source identifiers
+groupCallVideoSourceGroup semantics:string source_ids:vector<int32> = GroupCallVideoSourceGroup;
 
-//@description Describes a payload for interaction with tgcalls @ufrag Value of the field ufrag @pwd Value of the field pwd @fingerprints The list of fingerprints
-groupCallPayload ufrag:string pwd:string fingerprints:vector<groupCallPayloadFingerprint> = GroupCallPayload;
-
-//@description Describes a join response candidate for interaction with tgcalls @port Value of the field port @protocol Value of the field protocol @network Value of the field network
-//@generation Value of the field generation @id Value of the field id @component Value of the field component @foundation Value of the field foundation @priority Value of the field priority
-//@ip Value of the field ip @type Value of the field type @tcp_type Value of the field tcp_type @rel_addr Value of the field rel_addr @rel_port Value of the field rel_port
-groupCallJoinResponseCandidate port:string protocol:string network:string generation:string id:string component:string foundation:string priority:string ip:string type:string tcp_type:string rel_addr:string rel_port:string = GroupCallJoinResponseCandidate;
-
-
-//@class GroupCallJoinResponse @description Describes a group call join response
-
-//@description Contains data needed to join the group call with WebRTC @payload Group call payload to pass to tgcalls @candidates Join response candidates to pass to tgcalls
-groupCallJoinResponseWebrtc payload:groupCallPayload candidates:vector<groupCallJoinResponseCandidate> = GroupCallJoinResponse;
-
-//@description Describes that group call needs to be joined as a stream
-groupCallJoinResponseStream = GroupCallJoinResponse;
-
+//@description Contains information about a group call participant's video channel @source_groups List of synchronization source groups of the video @endpoint_id Video channel endpoint identifier
+//@is_paused True if the video is paused. This flag needs to be ignored, if new video frames are received
+groupCallParticipantVideoInfo source_groups:vector<groupCallVideoSourceGroup> endpoint_id:string is_paused:Bool = GroupCallParticipantVideoInfo;
 
 //@description Represents a group call participant
 //@participant_id Identifier of the group call participant
-//@source User's synchronization source
+//@audio_source_id User's audio channel synchronization source identifier
+//@can_enable_video True, if the user can broadcast video or share screen
+//@video_info Information about user's video channel; may be null if there is no active video
+//@screen_sharing_video_info Information about user's screen sharing video channel; may be null if there is no active screen sharing video
 //@bio The participant user's bio or the participant chat's description
 //@is_current_user True, if the participant is the current user
 //@is_speaking True, if the participant is speaking as set by setGroupCallParticipantIsSpeaking
 //@is_hand_raised True, if the participant hand is raised
 //@can_be_muted_for_all_users True, if the current user can mute the participant for all other group call participants
-//@can_be_unmuted_for_all_users True, if the current user can allow the participant to unmute themself or unmute the participant (if the participant is the current user)
+//@can_be_unmuted_for_all_users True, if the current user can allow the participant to unmute themselves or unmute the participant (if the participant is the current user)
 //@can_be_muted_for_current_user True, if the current user can mute the participant only for self
 //@can_be_unmuted_for_current_user True, if the current user can unmute the participant for self
 //@is_muted_for_all_users True, if the participant is muted for all users
 //@is_muted_for_current_user True, if the participant is muted for the current user
-//@can_unmute_self True, if the participant is muted for all users, but can unmute themself
+//@can_unmute_self True, if the participant is muted for all users, but can unmute themselves
 //@volume_level Participant's volume level; 1-20000 in hundreds of percents
 //@order User's order in the group call participant list. Orders must be compared lexicographically. The bigger is order, the higher is user in the list. If order is empty, the user must be removed from the participant list
-groupCallParticipant participant_id:MessageSender source:int32 bio:string is_current_user:Bool is_speaking:Bool is_hand_raised:Bool can_be_muted_for_all_users:Bool can_be_unmuted_for_all_users:Bool can_be_muted_for_current_user:Bool can_be_unmuted_for_current_user:Bool is_muted_for_all_users:Bool is_muted_for_current_user:Bool can_unmute_self:Bool volume_level:int32 order:string = GroupCallParticipant;
+groupCallParticipant participant_id:MessageSender audio_source_id:int32 can_enable_video:Bool video_info:groupCallParticipantVideoInfo screen_sharing_video_info:groupCallParticipantVideoInfo bio:string is_current_user:Bool is_speaking:Bool is_hand_raised:Bool can_be_muted_for_all_users:Bool can_be_unmuted_for_all_users:Bool can_be_muted_for_current_user:Bool can_be_unmuted_for_current_user:Bool is_muted_for_all_users:Bool is_muted_for_current_user:Bool can_unmute_self:Bool volume_level:int32 order:string = GroupCallParticipant;
 
 
 //@class CallProblem @description Describes the exact type of a problem with a call
@@ -2627,6 +2624,9 @@ backgroundFillSolid color:int32 = BackgroundFill;
 //@rotation_angle Clockwise rotation angle of the gradient, in degrees; 0-359. Should be always divisible by 45
 backgroundFillGradient top_color:int32 bottom_color:int32 rotation_angle:int32 = BackgroundFill;
 
+//@description Describes a freeform gradient fill of a background @colors A list of 3 or 4 colors of the freeform gradients in the RGB24 format
+backgroundFillFreeformGradient colors:vector<int32> = BackgroundFill;
+
 
 //@class BackgroundType @description Describes the type of a background
 
@@ -2637,7 +2637,7 @@ backgroundTypeWallpaper is_blurred:Bool is_moving:Bool = BackgroundType;
 
 //@description A PNG or TGV (gzipped subset of SVG with MIME type "application/x-tgwallpattern") pattern to be combined with the background fill chosen by the user
 //@fill Description of the background fill
-//@intensity Intensity of the pattern when it is shown above the filled background; 0-100
+//@intensity Intensity of the pattern when it is shown above the filled background; -100-100. If negative, the pattern color and the filled background colors needs to be inverted
 //@is_moving True, if the background needs to be slightly moved when device is tilted
 backgroundTypePattern fill:BackgroundFill intensity:int32 is_moving:Bool = BackgroundType;
 
@@ -2703,6 +2703,18 @@ checkChatUsernameResultPublicChatsTooMuch = CheckChatUsernameResult;
 
 //@description The user can't be a member of a public supergroup
 checkChatUsernameResultPublicGroupsUnavailable = CheckChatUsernameResult;
+
+
+//@class CheckStickerSetNameResult @description Represents result of checking whether a name can be used for a new sticker set
+
+//@description The name can be set
+checkStickerSetNameResultOk = CheckStickerSetNameResult;
+
+//@description The name is invalid
+checkStickerSetNameResultNameInvalid = CheckStickerSetNameResult;
+
+//@description The name is occupied
+checkStickerSetNameResultNameOccupied = CheckStickerSetNameResult;
 
 
 //@class MessageFileType @description Contains information about a file with messages exported from another app
@@ -2777,7 +2789,7 @@ pushMessageContentVoiceNote voice_note:voiceNote is_pinned:Bool = PushMessageCon
 pushMessageContentBasicGroupChatCreate = PushMessageContent;
 
 //@description New chat members were invited to a group @member_name Name of the added member @is_current_user True, if the current user was added to the group
-//@is_returned True, if the user has returned to the group themself
+//@is_returned True, if the user has returned to the group themselves
 pushMessageContentChatAddMembers member_name:string is_current_user:Bool is_returned:Bool = PushMessageContent;
 
 //@description A chat photo was edited
@@ -2787,7 +2799,7 @@ pushMessageContentChatChangePhoto = PushMessageContent;
 pushMessageContentChatChangeTitle title:string = PushMessageContent;
 
 //@description A chat member was deleted @member_name Name of the deleted member @is_current_user True, if the current user was deleted from the group
-//@is_left True, if the user has left the group themself
+//@is_left True, if the user has left the group themselves
 pushMessageContentChatDeleteMember member_name:string is_current_user:Bool is_left:Bool = PushMessageContent;
 
 //@description A new member joined the chat by invite link
@@ -3003,6 +3015,90 @@ chatReportReasonFake = ChatReportReason;
 chatReportReasonCustom = ChatReportReason;
 
 
+//@class InternalLinkType @description Describes an internal https://t.me or tg: link, which must be processed by the app in a special way
+
+//@description The link is a link to the active sessions section of the app. Use getActiveSessions to handle the link
+internalLinkTypeActiveSessions = InternalLinkType;
+
+//@description The link contains an authentication code. Call checkAuthenticationCode with the code if the current authorization state is authorizationStateWaitCode @code The authentication code
+internalLinkTypeAuthenticationCode code:string = InternalLinkType;
+
+//@description The link is a link to a background. Call searchBackground with the given background name to process the link @background_name Name of the background
+internalLinkTypeBackground background_name:string = InternalLinkType;
+
+//@description The link is a link to a chat with a Telegram bot. Call searchPublicChat with the given bot username, check that the user is a bot, show START button in the chat with the bot,
+//-and then call sendBotStartMessage with the given start parameter after the button is pressed
+//@bot_username Username of the bot @start_parameter The parameter to be passed to sendBotStartMessage
+internalLinkTypeBotStart bot_username:string start_parameter:string = InternalLinkType;
+
+//@description The link is a link to a Telegram bot, which is supposed to be added to a group chat. Call searchPublicChat with the given bot username, check that the user is a bot and can be added to groups,
+//-ask the current user to select a group to add the bot to, and then call sendBotStartMessage with the given start parameter and the chosen group chat. Bots can be added to a public group only by administrators of the group
+//@bot_username Username of the bot @start_parameter The parameter to be passed to sendBotStartMessage
+internalLinkTypeBotStartInGroup bot_username:string start_parameter:string = InternalLinkType;
+
+//@description The link is a link to the change phone number section of the app
+internalLinkTypeChangePhoneNumber = InternalLinkType;
+
+//@description The link is a chat invite link. Call checkChatInviteLink to process the link
+internalLinkTypeChatInvite = InternalLinkType;
+
+//@description The link is a link to the filter settings section of the app
+internalLinkTypeFilterSettings = InternalLinkType;
+
+//@description The link is a link to a game. Call searchPublicChat with the given bot username, check that the user is a bot, ask the current user to select a group to send the game, and then call sendMessage with inputMessageGame
+//@bot_username Username of the bot that owns the game @game_short_name Short name of the game
+internalLinkTypeGame bot_username:string game_short_name:string = InternalLinkType;
+
+//@description The link is a link to a language pack. Call getLanguagePackInfo with the given language pack identifier to process the link @language_pack_id Language pack identifier
+internalLinkTypeLanguagePack language_pack_id:string = InternalLinkType;
+
+//@description The link is a link to a Telegram message. Call getMessageLinkInfo to process the link
+internalLinkTypeMessage = InternalLinkType;
+
+//@description The link contains a message draft text. A share screen needs to be shown to the user, then the chosen chat should be open and the text should be added to the input field
+//@text Message draft text @contains_link True, if the first line of the text contains a link. If true, the input field needs to be focused and the text after the link should be selected
+internalLinkTypeMessageDraft text:formattedText contains_link:Bool = InternalLinkType;
+
+//@description The link contains a request of Telegram passport data. Call getPassportAuthorizationForm to process the link if the link was received outside of the app, otherwise ignore it
+//@bot_user_id User identifier of the service's bot @scope Telegram Passport element types requested by the service @public_key Service's public key @nonce Unique request identifier provided by the service
+//@callback_url An HTTP URL to open once the request is finished or canceled with the parameter tg_passport=success or tg_passport=cancel respectively. If empty, then the link tgbot{bot_user_id}://passport/success or tgbot{bot_user_id}://passport/cancel needs to be opened instead
+internalLinkTypePassportDataRequest bot_user_id:int32 scope:string public_key:string nonce:string callback_url:string = InternalLinkType;
+
+//@description The link can be used to confirm ownership of a phone number to prevent account deletion. Call sendPhoneNumberConfirmationCode with the given hash and phone number to process the link
+//@hash Hash value from the link @phone_number Phone number value from the link
+internalLinkTypePhoneNumberConfirmation hash:string phone_number:string = InternalLinkType;
+
+//@description The link is a link to a proxy. Call addProxy to process the link and add the proxy
+//@server Proxy server IP address @port Proxy server port @type Type of the proxy
+internalLinkTypeProxy server:string port:int32 type:ProxyType = InternalLinkType;
+
+//@description The link is a link to a chat by its username. Call searchPublicChat with the given chat username to process the link @chat_username Username of the chat
+internalLinkTypePublicChat chat_username:string = InternalLinkType;
+
+//@description The link can be used to login the current user on another device, but it must be scanned from QR-code using in-app camera. An alert similar to
+//-"This code can be used to allow someone to log in to your Telegram account. To confirm Telegram login, please go to Settings > Devices > Scan QR and scan the code" needs to be shown
+internalLinkTypeQrCodeAuthentication = InternalLinkType;
+
+//@description The link is a link to app settings
+internalLinkTypeSettings = InternalLinkType;
+
+//@description The link is a link to a sticker set. Call searchStickerSet with the given sticker set name to process the link and show the sticker set @sticker_set_name Name of the sticker set
+internalLinkTypeStickerSet sticker_set_name:string = InternalLinkType;
+
+//@description The link is a link to a theme. TDLib has no theme support yet @theme_name Name of the theme
+internalLinkTypeTheme theme_name:string = InternalLinkType;
+
+//@description The link is a link to the theme settings section of the app
+internalLinkTypeThemeSettings = InternalLinkType;
+
+//@description The link is an unknown tg: link. Call getDeepLinkInfo to process the link
+internalLinkTypeUnknownDeepLink = InternalLinkType;
+
+//@description The link is a link to a voice chat. Call searchPublicChat with the given chat username, and then joinGoupCall with the given invite hash to process the link
+//@chat_username Username of the chat with the voice chat @invite_hash If non-empty, invite hash to be used to join the voice chat without being muted by administrators
+internalLinkTypeVoiceChat chat_username:string invite_hash:string = InternalLinkType;
+
+
 //@description Contains an HTTPS link to a message in a supergroup or channel @link Message link @is_public True, if the link will work for non-members of the chat
 messageLink link:string is_public:Bool = MessageLink;
 
@@ -3210,7 +3306,10 @@ tMeUrls urls:vector<tMeUrl> = TMeUrls;
 //@description Suggests the user to enable "archive_and_mute_new_chats_from_unknown_users" option
 suggestedActionEnableArchiveAndMuteNewChats = SuggestedAction;
 
-//@description Suggests the user to check authorization phone number and change the phone number if it is inaccessible
+//@description Suggests the user to check whether 2-step verification password is still remembered
+suggestedActionCheckPassword = SuggestedAction;
+
+//@description Suggests the user to check whether authorization phone number is correct and change the phone number if it is inaccessible
 suggestedActionCheckPhoneNumber = SuggestedAction;
 
 //@description Suggests the user to see a hint about meaning of one and two ticks on sent message
@@ -3230,7 +3329,7 @@ text text:string = Text;
 seconds seconds:double = Seconds;
 
 
-//@description Contains information about a tg:// deep link @text Text to be shown to the user @need_update_application True, if user should be asked to update the application
+//@description Contains information about a tg: deep link @text Text to be shown to the user @need_update_application True, if user should be asked to update the application
 deepLinkInfo text:formattedText need_update_application:Bool = DeepLinkInfo;
 
 
@@ -3377,6 +3476,30 @@ vectorPathCommandLine end_point:point = VectorPathCommand;
 
 //@description A cubic Bézier curve to a given point @start_control_point The start control point of the curve @end_control_point The end control point of the curve @end_point The end point of the curve
 vectorPathCommandCubicBezierCurve start_control_point:point end_control_point:point end_point:point = VectorPathCommand;
+
+
+//@class BotCommandScope @description Represents the scope to which bot commands are relevant
+
+//@description A scope covering all users
+botCommandScopeDefault = BotCommandScope;
+
+//@description A scope covering all private chats
+botCommandScopeAllPrivateChats = BotCommandScope;
+
+//@description A scope covering all group and supergroup chats
+botCommandScopeAllGroupChats = BotCommandScope;
+
+//@description A scope covering all group and supergroup chat administrators
+botCommandScopeAllChatAdministrators = BotCommandScope;
+
+//@description A scope covering all members of a chat @chat_id Chat identifier
+botCommandScopeChat chat_id:int53 = BotCommandScope;
+
+//@description A scope covering all administrators of a chat @chat_id Chat identifier
+botCommandScopeChatAdministrators chat_id:int53 = BotCommandScope;
+
+//@description A scope covering a member of a chat @chat_id Chat identifier @user_id User identifier
+botCommandScopeChatMember chat_id:int53 user_id:int32 = BotCommandScope;
 
 
 //@class Update @description Contains notifications about data changes
@@ -3912,7 +4035,7 @@ removeRecentlyFoundChat chat_id:int53 = Ok;
 //@description Clears the list of recently found chats
 clearRecentlyFoundChats = Ok;
 
-//@description Checks whether a username can be set for a chat @chat_id Chat identifier; should be identifier of a supergroup chat, or a channel chat, or a private chat with self, or zero if chat is being created @username Username to be checked
+//@description Checks whether a username can be set for a chat @chat_id Chat identifier; should be identifier of a supergroup chat, or a channel chat, or a private chat with self, or zero if the chat is being created @username Username to be checked
 checkChatUsername chat_id:int53 username:string = CheckChatUsernameResult;
 
 //@description Returns a list of public chats of the specified type, owned by the user @type Type of the public chats to return
@@ -4041,7 +4164,7 @@ getMessageLink chat_id:int53 message_id:int53 for_album:Bool for_comment:Bool = 
 //@for_album Pass true to return an HTML code for embedding of the whole media album
 getMessageEmbeddingCode chat_id:int53 message_id:int53 for_album:Bool = Text;
 
-//@description Returns information about a public or private message link @url The message link in the format "https://t.me/c/...", or "tg://privatepost?...", or "https://t.me/username/...", or "tg://resolve?..."
+//@description Returns information about a public or private message link @url The message link
 getMessageLinkInfo url:string = MessageLinkInfo;
 
 
@@ -4280,7 +4403,10 @@ viewMessages chat_id:int53 message_thread_id:int53 message_ids:vector<int53> for
 //@description Informs TDLib that the message content has been opened (e.g., the user has opened a photo, video, document, location or venue, or has listened to an audio file or voice note message). An updateMessageContentOpened update will be generated if something has changed @chat_id Chat identifier of the message @message_id Identifier of the message with the opened content
 openMessageContent chat_id:int53 message_id:int53 = Ok;
 
-//@description Returns information about an action to be done when the current user clicks an HTTP link. This method can be used to automatically authorize the current user on a website. Don't use this method for links from secret chats if link preview is disabled in secret chats @link The HTTP link
+//@description Returns information about the type of an internal link. Returns a 404 error if the link is not internal. Can be called before authorization @link The link
+getInternalLinkType link:string = InternalLinkType;
+
+//@description Returns information about an action to be done when the current user clicks an external link. Don't use this method for links from secret chats if link preview is disabled in secret chats @link The link
 getExternalLinkInfo link:string = LoginUrlInfo;
 
 //@description Returns an HTTP URL which can be used to automatically authorize the current user on a website after clicking an HTTP link. Use the method getExternalLinkInfo to find whether a prior user confirmation is needed
@@ -4482,9 +4608,9 @@ setPinnedChats chat_list:ChatList chat_ids:vector<int53> = Ok;
 //@file_id Identifier of the file to download
 //@priority Priority of the download (1-32). The higher the priority, the earlier the file will be downloaded. If the priorities of two files are equal, then the last one for which downloadFile was called will be downloaded first
 //@offset The starting position from which the file should be downloaded
-//@limit Number of bytes which should be downloaded starting from the "offset" position before the download will be automatically cancelled; use 0 to download without a limit
+//@limit Number of bytes which should be downloaded starting from the "offset" position before the download will be automatically canceled; use 0 to download without a limit
 //@synchronous If false, this request returns file state just after the download has been started. If true, this request returns file state only after
-//-the download has succeeded, has failed, has been cancelled or a new downloadFile request with different offset/limit parameters was sent
+//-the download has succeeded, has failed, has been canceled or a new downloadFile request with different offset/limit parameters was sent
 downloadFile file_id:int32 priority:int32 offset:int32 limit:int32 synchronous:Bool = File;
 
 //@description Returns file downloaded prefix size from a given offset @file_id Identifier of the file @offset Offset from which downloaded prefix size should be calculated
@@ -4590,11 +4716,10 @@ deleteRevokedChatInviteLink chat_id:int53 invite_link:string = Ok;
 //@creator_user_id User identifier of a chat administrator, which links will be deleted. Must be an identifier of the current user for non-owner
 deleteAllRevokedChatInviteLinks chat_id:int53 creator_user_id:int32 = Ok;
 
-//@description Checks the validity of an invite link for a chat and returns information about the corresponding chat @invite_link Invite link to be checked; must have URL "t.me", "telegram.me", or "telegram.dog" and query beginning with "/joinchat/" or "/+"
+//@description Checks the validity of an invite link for a chat and returns information about the corresponding chat @invite_link Invite link to be checked
 checkChatInviteLink invite_link:string = ChatInviteLinkInfo;
 
-//@description Uses an invite link to add the current user to the chat if possible
-//@invite_link Invite link to import; must have URL "t.me", "telegram.me", or "telegram.dog" and query beginning with "/joinchat/" or "/+"
+//@description Uses an invite link to add the current user to the chat if possible @invite_link Invite link to use
 joinChatByInviteLink invite_link:string = Chat;
 
 
@@ -4639,14 +4764,24 @@ startScheduledGroupCall group_call_id:int32 = Ok;
 //@group_call_id Group call identifier @enabled_start_notification New value of the enabled_start_notification setting
 toggleGroupCallEnabledStartNotification group_call_id:int32 enabled_start_notification:Bool = Ok;
 
-//@description Joins an active group call
+//@description Joins an active group call. Returns join response payload for tgcalls
 //@group_call_id Group call identifier
 //@participant_id Identifier of a group call participant, which will be used to join the call; voice chats only
-//@payload Group join payload; received from tgcalls
-//@source Caller synchronization source identifier; received from tgcalls
+//@audio_source_id Caller audio channel synchronization source identifier; received from tgcalls
+//@payload Group call join payload; received from tgcalls
 //@is_muted True, if the user's microphone is muted
+//@is_my_video_enabled True, if the user's video is enabled
 //@invite_hash If non-empty, invite hash to be used to join the group call without being muted by administrators
-joinGroupCall group_call_id:int32 participant_id:MessageSender payload:groupCallPayload source:int32 is_muted:Bool invite_hash:string = GroupCallJoinResponse;
+joinGroupCall group_call_id:int32 participant_id:MessageSender audio_source_id:int32 payload:string is_muted:Bool is_my_video_enabled:Bool invite_hash:string = Text;
+
+//@description Starts screen sharing in a joined group call. Returns join response payload for tgcalls @group_call_id Group call identifier @payload Group call join payload; received from tgcalls
+startGroupCallScreenSharing group_call_id:int32 payload:string = Text;
+
+//@description Pauses or unpauses screen sharing in a joined group call @group_call_id Group call identifier @is_paused True if screen sharing is paused
+toggleGroupCallScreenSharingIsPaused group_call_id:int32 is_paused:Bool = Ok;
+
+//@description Ends screen sharing in a joined group call @group_call_id Group call identifier
+endGroupCallScreenSharing group_call_id:int32 = Ok;
 
 //@description Sets group call title. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier @title New group call title; 1-64 characters
 setGroupCallTitle group_call_id:int32 title:string = Ok;
@@ -4664,7 +4799,7 @@ inviteGroupCallParticipants group_call_id:int32 user_ids:vector<int32> = Ok;
 
 //@description Returns invite link to a voice chat in a public chat
 //@group_call_id Group call identifier
-//@can_self_unmute Pass true if the invite_link should contain an invite hash, passing which to joinGroupCall would allow the invited user to unmute themself. Requires groupCall.can_be_managed group call flag
+//@can_self_unmute Pass true if the invite_link should contain an invite hash, passing which to joinGroupCall would allow the invited user to unmute themselves. Requires groupCall.can_be_managed group call flag
 getGroupCallInviteLink group_call_id:int32 can_self_unmute:Bool = HttpUrl;
 
 //@description Starts recording of an active group call. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier @title Group call recording title; 0-64 characters
@@ -4673,11 +4808,17 @@ startGroupCallRecording group_call_id:int32 title:string = Ok;
 //@description Ends recording of an active group call. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier
 endGroupCallRecording group_call_id:int32 = Ok;
 
-//@description Informs TDLib that a participant of an active group call speaking state has changed @group_call_id Group call identifier
-//@source Group call participant's synchronization source identifier, or 0 for the current user @is_speaking True, if the user is speaking
-setGroupCallParticipantIsSpeaking group_call_id:int32 source:int32 is_speaking:Bool = Ok;
+//@description Toggles whether current user's video is paused @group_call_id Group call identifier @is_my_video_paused Pass true if the current user's video is paused
+toggleGroupCallIsMyVideoPaused group_call_id:int32 is_my_video_paused:Bool = Ok;
 
-//@description Toggles whether a participant of an active group call is muted, unmuted, or allowed to unmute themself
+//@description Toggles whether current user's video is enabled @group_call_id Group call identifier @is_my_video_enabled Pass true if the current user's video is enabled
+toggleGroupCallIsMyVideoEnabled group_call_id:int32 is_my_video_enabled:Bool = Ok;
+
+//@description Informs TDLib that speaking state of a participant of an active group has changed @group_call_id Group call identifier
+//@audio_source Group call participant's synchronization audio source identifier, or 0 for the current user @is_speaking True, if the user is speaking
+setGroupCallParticipantIsSpeaking group_call_id:int32 audio_source:int32 is_speaking:Bool = Ok;
+
+//@description Toggles whether a participant of an active group call is muted, unmuted, or allowed to unmute themselves
 //@group_call_id Group call identifier @participant_id Participant identifier @is_muted Pass true if the user must be muted and false otherwise
 toggleGroupCallParticipantIsMuted group_call_id:int32 participant_id:MessageSender is_muted:Bool = Ok;
 
@@ -4888,8 +5029,19 @@ resendChangePhoneNumberCode = AuthenticationCodeInfo;
 //@description Checks the authentication code sent to confirm a new phone number of the user @code Verification code received by SMS, phone call or flash call
 checkChangePhoneNumberCode code:string = Ok;
 
-//@description Sets the list of commands supported by the bot; for bots only @commands List of the bot's commands
-setCommands commands:vector<botCommand> = Ok;
+
+//@description Sets the list of commands supported by the bot for the given user scope and language; for bots only @scope The scope to which the commands are relevant
+//@language_code A two-letter ISO 639-1 country code. If empty, the commands will be applied to all users from the given scope, for which language there are no dedicated commands
+//@commands List of the bot's commands
+setCommands scope:BotCommandScope language_code:string commands:vector<botCommand> = Ok;
+
+//@description Deletes commands supported by the bot for the given user scope and language; for bots only @scope The scope to which the commands are relevant
+//@language_code A two-letter ISO 639-1 country code or an empty string
+deleteCommands scope:BotCommandScope language_code:string = Ok;
+
+//@description Returns the list of commands supported by the bot for the given user scope and language; for bots only @scope The scope to which the commands are relevant
+//@language_code A two-letter ISO 639-1 country code or an empty string
+getCommands scope:BotCommandScope language_code:string = BotCommands;
 
 
 //@description Returns all active sessions of the current user
@@ -4983,8 +5135,8 @@ getBackgroundUrl name:string type:BackgroundType = HttpUrl;
 searchBackground name:string = Background;
 
 //@description Changes the background selected by the user; adds background to the list of installed backgrounds
-//@background The input background to use, null for filled backgrounds
-//@type Background type; null for default background. The method will return error 404 if type is null
+//@background The input background to use. Pass null to create a new filled backgrounds. Pass null to remove the current background
+//@type Background type. Pass null to use default type of the remote background. Pass null to remove the current background
 //@for_dark_theme True, if the background is chosen for dark theme
 setBackground background:InputBackground type:BackgroundType for_dark_theme:Bool = Background;
 
@@ -5075,7 +5227,7 @@ reportChat chat_id:int53 message_ids:vector<int53> reason:ChatReportReason text:
 //@chat_id Chat identifier @file_id Identifier of the photo to report. Only full photos from chatPhoto can be reported @reason The reason for reporting the chat photo @text Additional report details; 0-1024 characters
 reportChatPhoto chat_id:int53 file_id:int32 reason:ChatReportReason text:string = Ok;
 
-//@description Returns an HTTP URL with the chat statistics. Currently this method of getting the statistics are disabled and can be deleted in the future @chat_id Chat identifier @parameters Parameters from "tg://statsrefresh?params=******" link @is_dark Pass true if a URL with the dark theme must be returned
+//@description Returns an HTTP URL with the chat statistics. Currently this method of getting the statistics are disabled and can be deleted in the future @chat_id Chat identifier @parameters Parameters for the request @is_dark Pass true if a URL with the dark theme must be returned
 getChatStatisticsUrl chat_id:int53 parameters:string is_dark:Bool = HttpUrl;
 
 //@description Returns detailed statistics about a chat. Currently this method can be used only for supergroups and channels. Can be used only if SupergroupFullInfo.can_get_statistics == true @chat_id Chat identifier @is_dark Pass true if a dark theme is used by the application
@@ -5134,7 +5286,7 @@ resetNetworkStatistics = Ok;
 //@description Returns auto-download settings presets for the current user
 getAutoDownloadSettingsPresets = AutoDownloadSettingsPresets;
 
-//@description Sets auto-download settings @settings New user auto-download settings @type Type of the network for which the new settings are applied
+//@description Sets auto-download settings @settings New user auto-download settings @type Type of the network for which the new settings are relevant
 setAutoDownloadSettings settings:autoDownloadSettings type:NetworkType = Ok;
 
 
@@ -5183,7 +5335,7 @@ resendEmailAddressVerificationCode = EmailAddressAuthenticationCodeInfo;
 checkEmailAddressVerificationCode code:string = Ok;
 
 
-//@description Returns a Telegram Passport authorization form for sharing data with a service @bot_user_id User identifier of the service's bot @scope Telegram Passport element types requested by the service @public_key Service's public_key @nonce Authorization form nonce provided by the service
+//@description Returns a Telegram Passport authorization form for sharing data with a service @bot_user_id User identifier of the service's bot @scope Telegram Passport element types requested by the service @public_key Service's public key @nonce Unique request identifier provided by the service
 getPassportAuthorizationForm bot_user_id:int32 scope:string public_key:string nonce:string = PassportAuthorizationForm;
 
 //@description Returns already available Telegram Passport elements suitable for completing a Telegram Passport authorization form. Result can be received only once for each authorization form @autorization_form_id Authorization form identifier @password Password of the current user
@@ -5194,8 +5346,7 @@ getPassportAuthorizationFormAvailableElements autorization_form_id:int32 passwor
 sendPassportAuthorizationForm autorization_form_id:int32 types:vector<PassportElementType> = Ok;
 
 
-//@description Sends phone number confirmation code. Should be called when user presses "https://t.me/confirmphone?phone=*******&hash=**********" or "tg://confirmphone?phone=*******&hash=**********" link @hash Value of the "hash" parameter from the link
-//@phone_number Value of the "phone" parameter from the link @settings Settings for the authentication of the user's phone number
+//@description Sends phone number confirmation code to handle links of the type internalLinkTypePhoneNumberConfirmation @hash Hash value from the link @phone_number Phone number value from the link @settings Settings for the authentication of the user's phone number
 sendPhoneNumberConfirmationCode hash:string phone_number:string settings:phoneNumberAuthenticationSettings = AuthenticationCodeInfo;
 
 //@description Resends phone number confirmation code
@@ -5209,17 +5360,23 @@ checkPhoneNumberConfirmationCode code:string = Ok;
 setBotUpdatesStatus pending_update_count:int32 error_message:string = Ok;
 
 
-//@description Uploads a PNG image with a sticker; for bots only; returns the uploaded file
-//@user_id Sticker file owner @png_sticker PNG image with the sticker; must be up to 512 KB in size and fit in 512x512 square
-uploadStickerFile user_id:int32 png_sticker:InputFile = File;
+//@description Uploads a PNG image with a sticker; returns the uploaded file @user_id Sticker file owner; ignored for regular users @sticker Sticker file to upload
+uploadStickerFile user_id:int32 sticker:InputSticker = File;
 
-//@description Creates a new sticker set; for bots only. Returns the newly created sticker set
-//@user_id Sticker set owner
+//@description Returns a suggested name for a new sticker set with a given title @title Sticker set title; 1-64 characters
+getSuggestedStickerSetName title:string = Text;
+
+//@description Checks whether a name can be used for a new sticker set @name Name to be checked
+checkStickerSetName name:string = CheckStickerSetNameResult;
+
+//@description Creates a new sticker set. Returns the newly created sticker set
+//@user_id Sticker set owner; ignored for regular users
 //@title Sticker set title; 1-64 characters
-//@name Sticker set name. Can contain only English letters, digits and underscores. Must end with *"_by_<bot username>"* (*<bot_username>* is case insensitive); 1-64 characters
+//@name Sticker set name. Can contain only English letters, digits and underscores. Must end with *"_by_<bot username>"* (*<bot_username>* is case insensitive) for bots; 1-64 characters
 //@is_masks True, if stickers are masks. Animated stickers can't be masks
-//@stickers List of stickers to be added to the set; must be non-empty. All stickers must be of the same type
-createNewStickerSet user_id:int32 title:string name:string is_masks:Bool stickers:vector<InputSticker> = StickerSet;
+//@stickers List of stickers to be added to the set; must be non-empty. All stickers must be of the same type. For animated stickers, uploadStickerFile must be used before the sticker is shown
+//@source Source of the sticker set; may be empty if unknown
+createNewStickerSet user_id:int32 title:string name:string is_masks:Bool stickers:vector<InputSticker> source:string = StickerSet;
 
 //@description Adds a new sticker to a set; for bots only. Returns the sticker set
 //@user_id Sticker set owner @name Sticker set name @sticker Sticker to add to the set
@@ -5266,8 +5423,8 @@ getCountryCode = Text;
 //@description Returns information about a phone number by its prefix. Can be called before authorization @phone_number_prefix The phone number prefix
 getPhoneNumberInfo phone_number_prefix:string = PhoneNumberInfo;
 
-//@description Returns the default text for invitation messages to be used as a placeholder when the current user invites friends to Telegram
-getInviteText = Text;
+//@description Returns the link for downloading official Telegram application to be used when the current user invites friends to Telegram
+getApplicationDownloadLink = HttpUrl;
 
 //@description Returns information about a tg:// deep link. Use "tg://need_update_for_some_feature" or "tg:some_unsupported_feature" for testing. Returns a 404 error for unknown links. Can be called before authorization @link The link
 getDeepLinkInfo link:string = DeepLinkInfo;

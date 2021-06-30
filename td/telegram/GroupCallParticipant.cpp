@@ -25,6 +25,7 @@ GroupCallParticipant::GroupCallParticipant(const tl_object_ptr<telegram_api::gro
   server_is_muted_by_themselves = participant->can_self_unmute_;
   server_is_muted_by_admin = participant->muted_ && !participant->can_self_unmute_;
   server_is_muted_locally = participant->muted_by_you_;
+  can_enable_video = participant->video_joined_;
   is_self = participant->self_;
   if ((participant->flags_ & telegram_api::groupCallParticipant::VOLUME_MASK) != 0) {
     volume_level = participant->volume_;
@@ -55,6 +56,13 @@ GroupCallParticipant::GroupCallParticipant(const tl_object_ptr<telegram_api::gro
   is_just_joined = participant->just_joined_;
   is_min = participant->min_;
   version = call_version;
+
+  if (participant->video_ != nullptr) {
+    video_payload = get_group_call_video_payload(participant->video_.get());
+  }
+  if (participant->presentation_ != nullptr) {
+    presentation_payload = get_group_call_video_payload(participant->presentation_.get());
+  }
 }
 
 bool GroupCallParticipant::is_versioned_update(const tl_object_ptr<telegram_api::groupCallParticipant> &participant) {
@@ -247,16 +255,19 @@ td_api::object_ptr<td_api::groupCallParticipant> GroupCallParticipant::get_group
   }
 
   return td_api::make_object<td_api::groupCallParticipant>(
-      td->messages_manager_->get_message_sender_object(dialog_id), audio_source, about, is_self, is_speaking,
+      td->messages_manager_->get_message_sender_object(dialog_id), audio_source, can_enable_video,
+      get_group_call_participant_video_info_object(video_payload),
+      get_group_call_participant_video_info_object(presentation_payload), about, is_self, is_speaking,
       get_is_hand_raised(), can_be_muted_for_all_users, can_be_unmuted_for_all_users, can_be_muted_only_for_self,
       can_be_unmuted_only_for_self, get_is_muted_for_all_users(), get_is_muted_locally(), get_is_muted_by_themselves(),
       get_volume_level(), order.get_group_call_participant_order_object());
 }
 
 bool operator==(const GroupCallParticipant &lhs, const GroupCallParticipant &rhs) {
-  return lhs.dialog_id == rhs.dialog_id && lhs.audio_source == rhs.audio_source && lhs.about == rhs.about &&
-         lhs.is_self == rhs.is_self && lhs.is_speaking == rhs.is_speaking &&
-         lhs.get_is_hand_raised() == rhs.get_is_hand_raised() &&
+  return lhs.dialog_id == rhs.dialog_id && lhs.audio_source == rhs.audio_source &&
+         lhs.can_enable_video == rhs.can_enable_video && lhs.video_payload == rhs.video_payload &&
+         lhs.presentation_payload == rhs.presentation_payload && lhs.about == rhs.about && lhs.is_self == rhs.is_self &&
+         lhs.is_speaking == rhs.is_speaking && lhs.get_is_hand_raised() == rhs.get_is_hand_raised() &&
          lhs.can_be_muted_for_all_users == rhs.can_be_muted_for_all_users &&
          lhs.can_be_unmuted_for_all_users == rhs.can_be_unmuted_for_all_users &&
          lhs.can_be_muted_only_for_self == rhs.can_be_muted_only_for_self &&

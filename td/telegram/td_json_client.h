@@ -94,8 +94,11 @@ TDJSON_EXPORT const char *td_json_client_execute(void *client, const char *reque
  */
 TDJSON_EXPORT void td_json_client_destroy(void *client);
 
-/*
- * New TDLib JSON interface.
+/**
+ * \file
+ * Alternatively, you can use new TDLib JSON interface, which will replace the current JSON interface in TDLib 2.0.0.
+ *
+ * Objects and functions serialization to JSON is the same for both JSON interfaces.
  *
  * The main TDLib interface is asynchronous. To match requests with a corresponding response, the field "@extra" can
  * be added to the request object. The corresponding response will have an "@extra" field with exactly the same value.
@@ -171,7 +174,7 @@ typedef void (*td_log_message_callback_ptr)(int verbosity_level, const char *mes
  * None of the TDLib methods can be called from the callback.
  * By default the callback is not set.
  *
- * \param[in] max_verbosity_level Maximum verbosity level of messages for which the callback will be called.
+ * \param[in] max_verbosity_level The maximum verbosity level of messages for which the callback will be called.
  * \param[in] callback Callback that will be called when a message is added to the internal TDLib log.
  *                     Pass nullptr to remove the callback.
  */

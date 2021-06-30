@@ -167,10 +167,19 @@ class StickersManager : public Actor {
   void reorder_installed_sticker_sets(bool is_masks, const vector<StickerSetId> &sticker_set_ids,
                                       Promise<Unit> &&promise);
 
-  FileId upload_sticker_file(UserId user_id, const tl_object_ptr<td_api::InputFile> &sticker, Promise<Unit> &&promise);
+  FileId upload_sticker_file(UserId user_id, tl_object_ptr<td_api::InputSticker> &&sticker, Promise<Unit> &&promise);
+
+  void get_suggested_sticker_set_name(string short_name, Promise<string> &&promise);
+
+  enum class CheckStickerSetNameResult : uint8 { Ok, Invalid, Occupied };
+  void check_sticker_set_name(const string &name, Promise<CheckStickerSetNameResult> &&promise);
+
+  static td_api::object_ptr<td_api::CheckStickerSetNameResult> get_check_sticker_set_name_result_object(
+      CheckStickerSetNameResult result);
 
   void create_new_sticker_set(UserId user_id, string &title, string &short_name, bool is_masks,
-                              vector<tl_object_ptr<td_api::InputSticker>> &&stickers, Promise<Unit> &&promise);
+                              vector<tl_object_ptr<td_api::InputSticker>> &&stickers, string software,
+                              Promise<Unit> &&promise);
 
   void add_sticker_to_set(UserId user_id, string &short_name, tl_object_ptr<td_api::InputSticker> &&sticker,
                           Promise<Unit> &&promise);
@@ -369,6 +378,7 @@ class StickersManager : public Actor {
     bool is_animated;
     vector<FileId> file_ids;
     vector<tl_object_ptr<td_api::InputSticker>> stickers;
+    string software;
     Promise<> promise;
   };
 
