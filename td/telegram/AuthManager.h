@@ -42,7 +42,8 @@ class AuthManager : public NetActor {
   void check_bot_token(uint64 query_id, string bot_token);
   void check_password(uint64 query_id, string password);
   void request_password_recovery(uint64 query_id);
-  void recover_password(uint64 query_id, string code);
+  void check_password_recovery_code(uint64 query_id, string code);
+  void recover_password(uint64 query_id, string code, string new_password, string new_hint);
   void log_out(uint64 query_id);
   void delete_account(uint64 query_id, const string &reason);
 
@@ -79,6 +80,7 @@ class AuthManager : public NetActor {
     GetPassword,
     CheckPassword,
     RequestPasswordRecovery,
+    CheckPasswordRecoveryCode,
     RecoverPassword,
     BotAuthentication,
     Authentication,
@@ -197,6 +199,10 @@ class AuthManager : public NetActor {
 
   WaitPasswordState wait_password_state_;
 
+  string recovery_code_;
+  string new_password_;
+  string new_hint_;
+
   int32 login_code_retry_delay_ = 0;
   Timeout poll_export_login_code_timeout_;
 
@@ -225,6 +231,7 @@ class AuthManager : public NetActor {
   void on_request_qr_code_result(NetQueryPtr &result, bool is_import);
   void on_get_password_result(NetQueryPtr &result);
   void on_request_password_recovery_result(NetQueryPtr &result);
+  void on_check_password_recovery_code_result(NetQueryPtr &result);
   void on_authentication_result(NetQueryPtr &result, bool expected_flag);
   void on_log_out_result(NetQueryPtr &result);
   void on_delete_account_result(NetQueryPtr &result);

@@ -2613,6 +2613,12 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updatePeerBlocked> up
   promise.set_value(Unit());
 }
 
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateBotCommands> update, Promise<Unit> &&promise) {
+  td_->contacts_manager_->on_update_bot_commands(DialogId(update->peer_), UserId(update->bot_id_),
+                                                 std::move(update->commands_));
+  promise.set_value(Unit());
+}
+
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateChatParticipants> update, Promise<Unit> &&promise) {
   td_->contacts_manager_->on_get_chat_participants(std::move(update->participants_), true);
   promise.set_value(Unit());

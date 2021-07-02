@@ -3223,6 +3223,7 @@ bool Td::is_authentication_request(int32 id) {
     case td_api::requestQrCodeAuthentication::ID:
     case td_api::checkAuthenticationPassword::ID:
     case td_api::requestAuthenticationPasswordRecovery::ID:
+    case td_api::checkAuthenticationPasswordRecoveryCode::ID:
     case td_api::recoverAuthenticationPassword::ID:
     case td_api::deleteAccount::ID:
     case td_api::logOut::ID:
@@ -4816,9 +4817,17 @@ void Td::on_request(uint64 id, const td_api::requestAuthenticationPasswordRecove
   send_closure(auth_manager_actor_, &AuthManager::request_password_recovery, id);
 }
 
+void Td::on_request(uint64 id, td_api::checkAuthenticationPasswordRecoveryCode &request) {
+  CLEAN_INPUT_STRING(request.recovery_code_);
+  send_closure(auth_manager_actor_, &AuthManager::check_password_recovery_code, id, std::move(request.recovery_code_));
+}
+
 void Td::on_request(uint64 id, td_api::recoverAuthenticationPassword &request) {
   CLEAN_INPUT_STRING(request.recovery_code_);
-  send_closure(auth_manager_actor_, &AuthManager::recover_password, id, std::move(request.recovery_code_));
+  CLEAN_INPUT_STRING(request.new_password_);
+  CLEAN_INPUT_STRING(request.new_hint_);
+  send_closure(auth_manager_actor_, &AuthManager::recover_password, id, std::move(request.recovery_code_),
+               std::move(request.new_password_), std::move(request.new_hint_));
 }
 
 void Td::on_request(uint64 id, const td_api::logOut &request) {
@@ -4958,12 +4967,34 @@ void Td::on_request(uint64 id, td_api::requestPasswordRecovery &request) {
   send_closure(password_manager_, &PasswordManager::request_password_recovery, std::move(promise));
 }
 
+void Td::on_request(uint64 id, td_api::checkPasswordRecoveryCode &request) {
+  CHECK_IS_USER();
+  CLEAN_INPUT_STRING(request.recovery_code_);
+  CREATE_OK_REQUEST_PROMISE();
+  send_closure(password_manager_, &PasswordManager::check_password_recovery_code, std::move(request.recovery_code_),
+               std::move(promise));
+}
+
 void Td::on_request(uint64 id, td_api::recoverPassword &request) {
   CHECK_IS_USER();
   CLEAN_INPUT_STRING(request.recovery_code_);
+  CLEAN_INPUT_STRING(request.new_password_);
+  CLEAN_INPUT_STRING(request.new_hint_);
   CREATE_REQUEST_PROMISE();
   send_closure(password_manager_, &PasswordManager::recover_password, std::move(request.recovery_code_),
-               std::move(promise));
+               std::move(request.new_password_), std::move(request.new_hint_), std::move(promise));
+}
+
+void Td::on_request(uint64 id, const td_api::resetPassword &request) {
+  CHECK_IS_USER();
+  CREATE_REQUEST_PROMISE();
+  send_closure(password_manager_, &PasswordManager::reset_password, std::move(promise));
+}
+
+void Td::on_request(uint64 id, const td_api::cancelPasswordReset &request) {
+  CHECK_IS_USER();
+  CREATE_OK_REQUEST_PROMISE();
+  send_closure(password_manager_, &PasswordManager::cancel_password_reset, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::getTemporaryPasswordState &request) {

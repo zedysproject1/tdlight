@@ -7,6 +7,7 @@
 #pragma once
 
 #include "td/telegram/net/NetQuery.h"
+#include "td/telegram/NewPasswordState.h"
 #include "td/telegram/SecureStorage.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
@@ -52,6 +53,8 @@ class PasswordManager : public NetQueryCallback {
  public:
   using State = tl_object_ptr<td_api::passwordState>;
   using TempState = tl_object_ptr<td_api::temporaryPasswordState>;
+  using ResetPasswordResult = tl_object_ptr<td_api::ResetPasswordResult>;
+  using PasswordInputSettings = tl_object_ptr<telegram_api::account_passwordInputSettings>;
 
   explicit PasswordManager(ActorShared<> parent) : parent_(std::move(parent)) {
   }
@@ -59,6 +62,9 @@ class PasswordManager : public NetQueryCallback {
   static tl_object_ptr<telegram_api::InputCheckPasswordSRP> get_input_check_password(Slice password, Slice client_salt,
                                                                                      Slice server_salt, int32 g,
                                                                                      Slice p, Slice B, int64 id);
+
+  static Result<PasswordInputSettings> get_password_input_settings(string new_password, string new_hint,
+                                                                   const NewPasswordState &state);
 
   void get_state(Promise<State> promise);
   void set_password(string current_password, string new_password, string new_hint, bool set_recovery_email_address,
@@ -75,7 +81,11 @@ class PasswordManager : public NetQueryCallback {
   void check_email_address_verification_code(string code, Promise<Unit> promise);
 
   void request_password_recovery(Promise<td_api::object_ptr<td_api::emailAddressAuthenticationCodeInfo>> promise);
-  void recover_password(string code, Promise<State> promise);
+  void check_password_recovery_code(string code, Promise<Unit> promise);
+  void recover_password(string code, string new_password, string new_hint, Promise<State> promise);
+
+  void reset_password(Promise<ResetPasswordResult> promise);
+  void cancel_password_reset(Promise<Unit> promise);
 
   void get_secure_secret(string password, Promise<secure_storage::Secret> promise);
   void get_input_check_password_srp(string password,
@@ -89,9 +99,6 @@ class PasswordManager : public NetQueryCallback {
   static TempPasswordState get_temp_password_state_sync();
 
  private:
-  static constexpr size_t MIN_NEW_SALT_SIZE = 8;
-  static constexpr size_t MIN_NEW_SECURE_SALT_SIZE = 8;
-
   ActorShared<> parent_;
 
   struct PasswordState {
@@ -101,6 +108,7 @@ class PasswordManager : public NetQueryCallback {
     bool has_secure_values = false;
     string unconfirmed_recovery_email_address_pattern;
     int32 code_length = 0;
+    int32 pending_reset_date = 0;
 
     string current_client_salt;
     string current_server_salt;
@@ -108,12 +116,8 @@ class PasswordManager : public NetQueryCallback {
     string current_srp_p;
     string current_srp_B;
     int64 current_srp_id;
-    string new_client_salt;
-    string new_server_salt;
-    int32 new_srp_g;
-    string new_srp_p;
 
-    string new_secure_salt;
+    NewPasswordState new_state;
 
     State get_password_state_object() const {
       td_api::object_ptr<td_api::emailAddressAuthenticationCodeInfo> code_info;
@@ -122,7 +126,7 @@ class PasswordManager : public NetQueryCallback {
             unconfirmed_recovery_email_address_pattern, code_length);
       }
       return td_api::make_object<td_api::passwordState>(has_password, password_hint, has_recovery_email_address,
-                                                        has_secure_values, std::move(code_info));
+                                                        has_secure_values, std::move(code_info), pending_reset_date);
     }
   };
 
@@ -169,6 +173,12 @@ class PasswordManager : public NetQueryCallback {
 
   static tl_object_ptr<telegram_api::InputCheckPasswordSRP> get_input_check_password(Slice password,
                                                                                      const PasswordState &state);
+
+  static Result<PasswordInputSettings> get_password_input_settings(const UpdateSettings &update_settings,
+                                                                   bool has_password, const NewPasswordState &state,
+                                                                   const PasswordPrivateState *private_state);
+
+  void do_recover_password(string code, PasswordInputSettings &&new_settings, Promise<State> &&promise);
 
   void update_password_settings(UpdateSettings update_settings, Promise<State> promise);
   void do_update_password_settings(UpdateSettings update_settings, PasswordFullState full_state, Promise<bool> promise);
