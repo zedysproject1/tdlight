@@ -16094,6 +16094,8 @@ void ContactsManager::memory_cleanup(bool full) {
   user_photos_.rehash(0);
   unknown_users_.clear();
   unknown_users_.rehash(0);
+  pending_user_photos_.clear();
+  pending_user_photos_.rehash(0);
   user_profile_photo_file_source_ids_.clear();
   user_profile_photo_file_source_ids_.rehash(0);
   my_photo_file_id_.clear();
