@@ -150,14 +150,14 @@ Status from_json(std::vector<T> &to, JsonValue from) {
 }
 
 template <class T>
-class DowncastHelper : public T {
+class DowncastHelper final : public T {
  public:
   explicit DowncastHelper(int32 constructor) : constructor_(constructor) {
   }
-  int32 get_id() const override {
+  int32 get_id() const final {
     return constructor_;
   }
-  void store(TlStorerToString &s, const char *field_name) const override {
+  void store(TlStorerToString &s, const char *field_name) const final {
   }
 
  private:

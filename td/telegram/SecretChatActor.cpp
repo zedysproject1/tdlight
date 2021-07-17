@@ -440,8 +440,9 @@ void SecretChatActor::binlog_replay_finish() {
   LOG(INFO) << "Binlog replay is finished with PfsState " << pfs_state_;
   binlog_replay_finish_flag_ = true;
   if (auth_state_.state == State::Ready) {
-    if (config_state_.my_layer < MY_LAYER) {
-      send_action(secret_api::make_object<secret_api::decryptedMessageActionNotifyLayer>(MY_LAYER), SendFlag::None,
+    auto my_layer = static_cast<int32>(SecretChatLayer::Current);
+    if (config_state_.my_layer < my_layer) {
+      send_action(secret_api::make_object<secret_api::decryptedMessageActionNotifyLayer>(my_layer), SendFlag::None,
                   Promise<>());
     }
   }
@@ -845,7 +846,8 @@ Status SecretChatActor::do_inbound_message_encrypted(unique_ptr<log_event::Inbou
     parser.fetch_end();
     if (!parser.get_error()) {
       auto layer = message_with_layer->layer_;
-      if (layer < DEFAULT_LAYER && false /* old Android app could send such messages */) {
+      if (layer < static_cast<int32>(SecretChatLayer::Default) &&
+          false /* old Android app could send such messages */) {
         LOG(ERROR) << "Layer " << layer << " is not supported, drop message " << to_string(message_with_layer);
         return Status::OK();
       }
@@ -854,7 +856,7 @@ Status SecretChatActor::do_inbound_message_encrypted(unique_ptr<log_event::Inbou
         context_->secret_chat_db()->set_value(config_state_);
         send_update_secret_chat();
       }
-      if (layer >= MTPROTO_2_LAYER && mtproto_version < 2) {
+      if (layer >= static_cast<int32>(SecretChatLayer::Mtproto2) && mtproto_version < 2) {
         return Status::Error(PSLICE() << "MTProto 1.0 encryption is forbidden for this layer");
       }
       if (message_with_layer->in_seq_no_ < 0) {
@@ -871,8 +873,9 @@ Status SecretChatActor::do_inbound_message_encrypted(unique_ptr<log_event::Inbou
 
   // support for older layer
   LOG(WARNING) << "Failed to fetch update: " << status;
-  send_action(secret_api::make_object<secret_api::decryptedMessageActionNotifyLayer>(MY_LAYER), SendFlag::None,
-              Promise<>());
+  send_action(secret_api::make_object<secret_api::decryptedMessageActionNotifyLayer>(
+                  static_cast<int32>(SecretChatLayer::Current)),
+              SendFlag::None, Promise<>());
 
   if (config_state_.his_layer == 8) {
     TlBufferParser new_parser(&data_buffer);
@@ -1844,8 +1847,9 @@ Status SecretChatActor::on_update_chat(telegram_api::encryptedChat &update) {
   context_->secret_chat_db()->set_value(pfs_state_);
   context_->secret_chat_db()->set_value(auth_state_);
   send_update_secret_chat();
-  send_action(secret_api::make_object<secret_api::decryptedMessageActionNotifyLayer>(MY_LAYER), SendFlag::None,
-              Promise<>());
+  send_action(secret_api::make_object<secret_api::decryptedMessageActionNotifyLayer>(
+                  static_cast<int32>(SecretChatLayer::Current)),
+              SendFlag::None, Promise<>());
   return Status::OK();
 }
 Status SecretChatActor::on_update_chat(telegram_api::encryptedChatDiscarded &update) {
@@ -1938,7 +1942,8 @@ Status SecretChatActor::on_dh_config(NetQueryPtr query) {
   LOG(INFO) << "Got dh config";
   TRY_RESULT(config, fetch_result<telegram_api::messages_getDhConfig>(std::move(query)));
   downcast_call(*config, [&](auto &obj) { this->on_dh_config(obj); });
-  TRY_STATUS(DhHandshake::check_config(auth_state_.dh_config.g, auth_state_.dh_config.prime, context_->dh_callback()));
+  TRY_STATUS(mtproto::DhHandshake::check_config(auth_state_.dh_config.g, auth_state_.dh_config.prime,
+                                                context_->dh_callback()));
   auth_state_.handshake.set_config(auth_state_.dh_config.g, auth_state_.dh_config.prime);
   return Status::OK();
 }
@@ -2063,7 +2068,7 @@ void SecretChatActor::on_outbound_action(secret_api::decryptedMessageActionReque
 void SecretChatActor::on_outbound_action(secret_api::decryptedMessageActionAcceptKey &accept_key) {
   CHECK(pfs_state_.state == PfsState::WaitSendAccept || pfs_state_.state == PfsState::SendAccept);
   pfs_state_.state = PfsState::WaitAcceptResponse;
-  pfs_state_.handshake = DhHandshake();
+  pfs_state_.handshake = mtproto::DhHandshake();
   on_pfs_state_changed();
 }
 void SecretChatActor::on_outbound_action(secret_api::decryptedMessageActionAbortKey &abort_key) {
@@ -2112,7 +2117,7 @@ Status SecretChatActor::on_inbound_action(secret_api::decryptedMessageActionRequ
     return Status::Error("Unexpected RequestKey (old key is used)");
   }
   pfs_state_.state = PfsState::SendAccept;
-  pfs_state_.handshake = DhHandshake();
+  pfs_state_.handshake = mtproto::DhHandshake();
   pfs_state_.exchange_id = request_key.exchange_id_;
   pfs_state_.handshake.set_config(auth_state_.dh_config.g, auth_state_.dh_config.prime);
   pfs_state_.handshake.set_g_a(request_key.g_a_.as_slice());
@@ -2142,7 +2147,7 @@ Status SecretChatActor::on_inbound_action(secret_api::decryptedMessageActionAcce
     return Status::Error("AcceptKey: key_fingerprint mismatch");
   }
   pfs_state_.state = PfsState::SendCommit;
-  pfs_state_.handshake = DhHandshake();
+  pfs_state_.handshake = mtproto::DhHandshake();
   CHECK(pfs_state_.can_forget_other_key || static_cast<int64>(pfs_state_.other_auth_key.id()) == id_and_key.first);
   pfs_state_.other_auth_key = mtproto::AuthKey(id_and_key.first, std::move(id_and_key.second));
   pfs_state_.can_forget_other_key = false;
@@ -2161,7 +2166,7 @@ Status SecretChatActor::on_inbound_action(secret_api::decryptedMessageActionAbor
     return Status::Error("AbortKey: unexpected");
   }
   pfs_state_.state = PfsState::Empty;
-  pfs_state_.handshake = DhHandshake();
+  pfs_state_.handshake = mtproto::DhHandshake();
 
   on_pfs_state_changed();
   return Status::OK();
@@ -2244,7 +2249,7 @@ void SecretChatActor::request_new_key() {
   CHECK(!auth_state_.dh_config.empty());
 
   pfs_state_.state = PfsState::SendRequest;
-  pfs_state_.handshake = DhHandshake();
+  pfs_state_.handshake = mtproto::DhHandshake();
   pfs_state_.handshake.set_config(auth_state_.dh_config.g, auth_state_.dh_config.prime);
   pfs_state_.exchange_id = Random::secure_int64();
 

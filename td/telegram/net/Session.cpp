@@ -20,7 +20,7 @@
 #include "td/telegram/StateManager.h"
 #include "td/telegram/UniqueId.h"
 
-#include "td/mtproto/DhHandshake.h"
+#include "td/mtproto/DhCallback.h"
 #include "td/mtproto/Handshake.h"
 #include "td/mtproto/HandshakeActor.h"
 #include "td/mtproto/RawConnection.h"
@@ -47,7 +47,7 @@ namespace td {
 
 namespace detail {
 
-class GenAuthKeyActor : public Actor {
+class GenAuthKeyActor final : public Actor {
  public:
   GenAuthKeyActor(Slice name, unique_ptr<mtproto::AuthKeyHandshake> handshake,
                   unique_ptr<mtproto::AuthKeyHandshakeContext> context,
@@ -80,7 +80,7 @@ class GenAuthKeyActor : public Actor {
 
   ActorOwn<mtproto::HandshakeActor> child_;
 
-  void start_up() override {
+  void start_up() final {
     // Bug in Android clang and MSVC
     // std::tuple<Result<int>> b(std::forward_as_tuple(Result<int>()));
 
@@ -92,7 +92,7 @@ class GenAuthKeyActor : public Actor {
                      }));
   }
 
-  void hangup() override {
+  void hangup() final {
     if (connection_promise_) {
       connection_promise_.set_error(Status::Error(1, "Canceled"));
     }
@@ -190,15 +190,15 @@ bool Session::can_destroy_auth_key() const {
 }
 
 void Session::start_up() {
-  class StateCallback : public StateManager::Callback {
+  class StateCallback final : public StateManager::Callback {
    public:
     explicit StateCallback(ActorId<Session> session) : session_(std::move(session)) {
     }
-    bool on_network(NetType network_type, uint32 network_generation) override {
+    bool on_network(NetType network_type, uint32 network_generation) final {
       send_closure(session_, &Session::on_network, network_type != NetType::None, network_generation);
       return session_.is_alive();
     }
-    bool on_online(bool online_flag) override {
+    bool on_online(bool online_flag) final {
       send_closure(session_, &Session::on_online, online_flag);
       return session_.is_alive();
     }
@@ -725,7 +725,8 @@ Status Session::on_message_result_ok(uint64 id, BufferSlice packet, size_t origi
 
   auto it = sent_queries_.find(id);
   if (it == sent_queries_.end()) {
-    LOG(DEBUG) << "Drop result to " << tag("request_id", format::as_hex(id)) << tag("tl", format::as_hex(ID));
+    LOG(DEBUG) << "Drop result to " << tag("request_id", format::as_hex(id)) << tag("original_size", original_size)
+               << tag("tl", format::as_hex(ID));
 
     if (original_size > 16 * 1024) {
       dropped_size_ += original_size;
@@ -1254,21 +1255,22 @@ void Session::create_gen_auth_key_actor(HandshakeId handshake_id) {
   if (!info.handshake_) {
     info.handshake_ = make_unique<mtproto::AuthKeyHandshake>(dc_id_, is_main && !is_cdn_ ? 0 : 24 * 60 * 60);
   }
-  class AuthKeyHandshakeContext : public mtproto::AuthKeyHandshakeContext {
+  class AuthKeyHandshakeContext final : public mtproto::AuthKeyHandshakeContext {
    public:
-    AuthKeyHandshakeContext(DhCallback *dh_callback, std::shared_ptr<PublicRsaKeyInterface> public_rsa_key)
+    AuthKeyHandshakeContext(mtproto::DhCallback *dh_callback,
+                            std::shared_ptr<mtproto::PublicRsaKeyInterface> public_rsa_key)
         : dh_callback_(dh_callback), public_rsa_key_(std::move(public_rsa_key)) {
     }
-    DhCallback *get_dh_callback() override {
+    mtproto::DhCallback *get_dh_callback() final {
       return dh_callback_;
     }
-    PublicRsaKeyInterface *get_public_rsa_key_interface() override {
+    mtproto::PublicRsaKeyInterface *get_public_rsa_key_interface() final {
       return public_rsa_key_.get();
     }
 
    private:
-    DhCallback *dh_callback_;
-    std::shared_ptr<PublicRsaKeyInterface> public_rsa_key_;
+    mtproto::DhCallback *dh_callback_;
+    std::shared_ptr<mtproto::PublicRsaKeyInterface> public_rsa_key_;
   };
   info.actor_ = create_actor<detail::GenAuthKeyActor>(
       PSLICE() << get_name() << "::GenAuthKey", get_name(), std::move(info.handshake_),

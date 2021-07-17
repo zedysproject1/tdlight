@@ -6,14 +6,14 @@
 //
 #pragma once
 
-#include "td/utils/logging.h"
-#include "td/utils/Slice.h"
-
 namespace td {
 
-class NullLog final : public LogInterface {
-  void do_append(int /*log_level*/, CSlice /*slice*/) final {
-  }
+enum class SecretChatLayer : int32 {
+  Default = 73,
+  Mtproto2 = 73,
+  NewEntities = 101,
+  DeleteMessagesOnClose = 123,
+  Current = DeleteMessagesOnClose
 };
 
 }  // namespace td

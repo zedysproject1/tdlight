@@ -33,28 +33,28 @@ extern int VERBOSITY_NAME(get_difference);
 
 class Td;
 
-class dummyUpdate : public telegram_api::Update {
+class dummyUpdate final : public telegram_api::Update {
  public:
   static constexpr int32 ID = 1234567891;
-  int32 get_id() const override {
+  int32 get_id() const final {
     return ID;
   }
 
-  void store(TlStorerUnsafe &s) const override {
+  void store(TlStorerUnsafe &s) const final {
     UNREACHABLE();
   }
 
-  void store(TlStorerCalcLength &s) const override {
+  void store(TlStorerCalcLength &s) const final {
     UNREACHABLE();
   }
 
-  void store(TlStorerToString &s, const char *field_name) const override {
+  void store(TlStorerToString &s, const char *field_name) const final {
     s.store_class_begin(field_name, "dummyUpdate");
     s.store_class_end();
   }
 };
 
-class updateSentMessage : public telegram_api::Update {
+class updateSentMessage final : public telegram_api::Update {
  public:
   int64 random_id_;
   MessageId message_id_;
@@ -66,19 +66,19 @@ class updateSentMessage : public telegram_api::Update {
   }
 
   static constexpr int32 ID = 1234567890;
-  int32 get_id() const override {
+  int32 get_id() const final {
     return ID;
   }
 
-  void store(TlStorerUnsafe &s) const override {
+  void store(TlStorerUnsafe &s) const final {
     UNREACHABLE();
   }
 
-  void store(TlStorerCalcLength &s) const override {
+  void store(TlStorerCalcLength &s) const final {
     UNREACHABLE();
   }
 
-  void store(TlStorerToString &s, const char *field_name) const override {
+  void store(TlStorerToString &s, const char *field_name) const final {
     s.store_class_begin(field_name, "updateSentMessage");
     s.store_field("random_id", random_id_);
     s.store_field("message_id", message_id_.get());
@@ -88,7 +88,7 @@ class updateSentMessage : public telegram_api::Update {
   }
 };
 
-class UpdatesManager : public Actor {
+class UpdatesManager final : public Actor {
  public:
   UpdatesManager(Td *td, ActorShared<> parent);
 
@@ -200,7 +200,7 @@ class UpdatesManager : public Actor {
   int32 min_postponed_update_pts_ = 0;
   int32 min_postponed_update_qts_ = 0;
 
-  void tear_down() override;
+  void tear_down() final;
 
   int32 get_pts() const {
     return pts_manager_.mem_pts();

@@ -53,7 +53,7 @@
 
 namespace td {
 
-class GetWebPagePreviewQuery : public Td::ResultHandler {
+class GetWebPagePreviewQuery final : public Td::ResultHandler {
   Promise<Unit> promise_;
   int64 request_id_;
   string url_;
@@ -76,7 +76,7 @@ class GetWebPagePreviewQuery : public Td::ResultHandler {
         G()->net_query_creator().create(telegram_api::messages_getWebPagePreview(flags, text, std::move(entities))));
   }
 
-  void on_result(uint64 id, BufferSlice packet) override {
+  void on_result(uint64 id, BufferSlice packet) final {
     auto result_ptr = fetch_result<telegram_api::messages_getWebPagePreview>(packet);
     if (result_ptr.is_error()) {
       return on_error(id, result_ptr.move_as_error());
@@ -87,12 +87,12 @@ class GetWebPagePreviewQuery : public Td::ResultHandler {
     td->web_pages_manager_->on_get_web_page_preview_success(request_id_, url_, std::move(ptr), std::move(promise_));
   }
 
-  void on_error(uint64 id, Status status) override {
+  void on_error(uint64 id, Status status) final {
     td->web_pages_manager_->on_get_web_page_preview_fail(request_id_, url_, std::move(status), std::move(promise_));
   }
 };
 
-class GetWebPageQuery : public Td::ResultHandler {
+class GetWebPageQuery final : public Td::ResultHandler {
   Promise<Unit> promise_;
   WebPageId web_page_id_;
   string url_;
@@ -107,7 +107,7 @@ class GetWebPageQuery : public Td::ResultHandler {
     send_query(G()->net_query_creator().create(telegram_api::messages_getWebPage(url, hash)));
   }
 
-  void on_result(uint64 id, BufferSlice packet) override {
+  void on_result(uint64 id, BufferSlice packet) final {
     auto result_ptr = fetch_result<telegram_api::messages_getWebPage>(packet);
     if (result_ptr.is_error()) {
       return on_error(id, result_ptr.move_as_error());
@@ -133,7 +133,7 @@ class GetWebPageQuery : public Td::ResultHandler {
     promise_.set_value(Unit());
   }
 
-  void on_error(uint64 id, Status status) override {
+  void on_error(uint64 id, Status status) final {
     promise_.set_error(std::move(status));
   }
 };
@@ -544,7 +544,7 @@ WebPageId WebPagesManager::on_get_web_page(tl_object_ptr<telegram_api::WebPage> 
 
 void WebPagesManager::update_web_page(unique_ptr<WebPage> web_page, WebPageId web_page_id, bool from_binlog,
                                       bool from_database) {
-  LOG(INFO) << "Update " << web_page_id;
+  LOG(INFO) << "Update " << web_page_id << (from_database ? " from database" : (from_binlog ? " from binlog" : ""));
   if (web_page == nullptr) {
       return;
   }
@@ -1422,7 +1422,7 @@ void WebPagesManager::on_pending_web_page_timeout(WebPageId web_page_id) {
     }
     if (!full_message_ids.empty()) {
       send_closure_later(G()->messages_manager(), &MessagesManager::get_messages_from_server,
-                         std::move(full_message_ids), Promise<Unit>(), nullptr);
+                         std::move(full_message_ids), Promise<Unit>(), "on_pending_web_page_timeout", nullptr);
     }
   }
   auto get_it = pending_get_web_pages_.find(web_page_id);

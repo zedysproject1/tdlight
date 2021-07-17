@@ -190,7 +190,7 @@ static char **tg_cli_completion(const char *text, int start, int end) {
 }
 #endif
 
-class CliLog : public LogInterface {
+class CliLog final : public LogInterface {
   void do_append(int log_level, CSlice slice) final {
 #ifdef USE_READLINE
     deactivate_readline();
@@ -236,7 +236,7 @@ class CliClient final : public Actor {
   }
 
  private:
-  void start_up() override {
+  void start_up() final {
     yield();
   }
 
@@ -916,21 +916,21 @@ class CliClient final : public Actor {
     }
 
     LOG(WARNING) << "Creating new TD " << name << " with generation " << generation_ + 1;
-    class TdCallbackImpl : public TdCallback {
+    class TdCallbackImpl final : public TdCallback {
      public:
       TdCallbackImpl(CliClient *client, uint64 generation) : client_(client), generation_(generation) {
       }
-      void on_result(uint64 id, td_api::object_ptr<td_api::Object> result) override {
+      void on_result(uint64 id, td_api::object_ptr<td_api::Object> result) final {
         client_->on_result(generation_, id, std::move(result));
       }
-      void on_error(uint64 id, td_api::object_ptr<td_api::error> error) override {
+      void on_error(uint64 id, td_api::object_ptr<td_api::error> error) final {
         client_->on_error(generation_, id, std::move(error));
       }
       TdCallbackImpl(const TdCallbackImpl &) = delete;
       TdCallbackImpl &operator=(const TdCallbackImpl &) = delete;
       TdCallbackImpl(TdCallbackImpl &&) = delete;
       TdCallbackImpl &operator=(TdCallbackImpl &&) = delete;
-      ~TdCallbackImpl() override {
+      ~TdCallbackImpl() final {
         client_->on_closed(generation_);
       }
 
@@ -2806,8 +2806,8 @@ class CliClient final : public Actor {
             sim_sources + ",\"semantics\":\"SIM\"},{\"sources\":" + fid_sources + ",\"semantics\":\"FID\"}]}";
       }
       if (op == "sgcss") {
-        send_request(td_api::make_object<td_api::startGroupCallScreenSharing>(as_group_call_id(group_call_id),
-                                                                              std::move(payload)));
+        send_request(td_api::make_object<td_api::startGroupCallScreenSharing>(
+            as_group_call_id(group_call_id), group_call_source_ + 1, std::move(payload)));
       } else {
         send_request(td_api::make_object<td_api::joinGroupCall>(as_group_call_id(group_call_id),
                                                                 as_message_sender(participant_id), group_call_source_,
@@ -3114,7 +3114,7 @@ class CliClient final : public Actor {
     } else if (op == "smt" || op == "smtp" || op == "smtf" || op == "smtpf") {
       const string &chat_id = args;
       for (int i = 1; i <= 200; i++) {
-        string message = PSTRING() << "#" << i;
+        string message = PSTRING() << (Random::fast(0, 3) == 0 && i > 90 ? "sleep " : "") << "#" << i;
         if (i == 6 || (op.back() == 'f' && i % 2 == 0)) {
           message = string(4097, 'a');
         }
@@ -4352,7 +4352,7 @@ class CliClient final : public Actor {
   }
 
   bool is_inited_ = false;
-  void loop() override {
+  void loop() final {
     if (!is_inited_) {
       is_inited_ = true;
       init();
@@ -4388,7 +4388,7 @@ class CliClient final : public Actor {
     }
   }
 
-  void timeout_expired() override {
+  void timeout_expired() final {
     if (close_flag_) {
       return;
     }
@@ -4429,12 +4429,12 @@ class CliClient final : public Actor {
     }
   }
 
-  void notify() override {
+  void notify() final {
     auto guard = scheduler_->get_send_guard();
     send_event_later(actor_id(), Event::yield());
   }
 
-  void hangup_shared() override {
+  void hangup_shared() final {
     CHECK(get_link_token() == 1);
     LOG(INFO) << "StdinReader stopped";
     is_stdin_reader_stopped_ = true;
@@ -4597,7 +4597,7 @@ void main(int argc, char **argv) {
     ConcurrentScheduler scheduler;
     scheduler.init(3);
 
-    class CreateClient : public Actor {
+    class CreateClient final : public Actor {
      public:
       CreateClient(ConcurrentScheduler *scheduler, bool use_test_dc, bool get_chat_list, bool disable_network,
                    int32 api_id, std::string api_hash)
@@ -4610,7 +4610,7 @@ void main(int argc, char **argv) {
       }
 
      private:
-      void start_up() override {
+      void start_up() final {
         create_actor<CliClient>("CliClient", scheduler_, use_test_dc_, get_chat_list_, disable_network_, api_id_,
                                 api_hash_)
             .release();

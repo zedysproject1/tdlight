@@ -35,7 +35,7 @@ class Td;
 
 class Game;
 
-class InlineQueriesManager : public Actor {
+class InlineQueriesManager final : public Actor {
  public:
   InlineQueriesManager(Td *td, ActorShared<> parent);
 
@@ -113,9 +113,9 @@ class InlineQueriesManager : public Actor {
 
   static void on_drop_inline_query_result_timeout_callback(void *inline_queries_manager_ptr, int64 query_hash);
 
-  void loop() override;
+  void loop() final;
 
-  void tear_down() override;
+  void tear_down() final;
 
   void memory_cleanup(bool full);
 

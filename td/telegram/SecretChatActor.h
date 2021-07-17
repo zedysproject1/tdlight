@@ -14,10 +14,12 @@
 #include "td/telegram/secret_api.h"
 #include "td/telegram/SecretChatDb.h"
 #include "td/telegram/SecretChatId.h"
+#include "td/telegram/SecretChatLayer.h"
 #include "td/telegram/telegram_api.h"
 #include "td/telegram/UserId.h"
 
 #include "td/mtproto/AuthKey.h"
+#include "td/mtproto/DhCallback.h"
 #include "td/mtproto/DhHandshake.h"
 
 #include "td/actor/actor.h"
@@ -46,23 +48,15 @@ namespace td {
 class BinlogInterface;
 class NetQueryCreator;
 
-class SecretChatActor : public NetQueryCallback {
+class SecretChatActor final : public NetQueryCallback {
  public:
-  enum : int32 {
-    DEFAULT_LAYER = 73,
-    MTPROTO_2_LAYER = 73,
-    NEW_ENTITIES_LAYER = 101,
-    DELETE_MESSAGES_ON_CLOSE_LAYER = 123,
-    MY_LAYER = DELETE_MESSAGES_ON_CLOSE_LAYER
-  };
-
   class Context {
    public:
     Context() = default;
     Context(const Context &) = delete;
     Context &operator=(const Context &) = delete;
     virtual ~Context() = default;
-    virtual DhCallback *dh_callback() = 0;
+    virtual mtproto::DhCallback *dh_callback() = 0;
     virtual BinlogInterface *binlog() = 0;
     virtual SecretChatDb *secret_chat_db() = 0;
 
@@ -249,7 +243,7 @@ class SecretChatActor : public NetQueryCallback {
     int32 last_message_id = 0;
     double last_timestamp = 0;
     int32 last_out_seq_no = 0;
-    DhHandshake handshake;
+    mtproto::DhHandshake handshake;
 
     static Slice key() {
       return Slice("pfs_state");
@@ -380,7 +374,7 @@ class SecretChatActor : public NetQueryCallback {
     FolderId initial_folder_id;
 
     DhConfig dh_config;
-    DhHandshake handshake;
+    mtproto::DhHandshake handshake;
 
     static Slice key() {
       return Slice("auth_state");
@@ -646,12 +640,12 @@ class SecretChatActor : public NetQueryCallback {
   Status save_common_info(T &update);
 
   int32 current_layer() const {
-    int32 layer = MY_LAYER;
+    int32 layer = static_cast<int32>(SecretChatLayer::Current);
     if (config_state_.his_layer < layer) {
       layer = config_state_.his_layer;
     }
-    if (layer < DEFAULT_LAYER) {
-      layer = DEFAULT_LAYER;
+    if (layer < static_cast<int32>(SecretChatLayer::Default)) {
+      layer = static_cast<int32>(SecretChatLayer::Default);
     }
     return layer;
   }
@@ -659,12 +653,12 @@ class SecretChatActor : public NetQueryCallback {
   void ask_on_binlog_replay_finish();
 
   void check_status(Status status);
-  void start_up() override;
-  void loop() override;
+  void start_up() final;
+  void loop() final;
   Status do_loop();
-  void tear_down() override;
+  void tear_down() final;
 
-  void on_result_resendable(NetQueryPtr net_query, Promise<NetQueryPtr> promise) override;
+  void on_result_resendable(NetQueryPtr net_query, Promise<NetQueryPtr> promise) final;
 
   Status run_auth();
   void run_pfs();

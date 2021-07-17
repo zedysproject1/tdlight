@@ -25,7 +25,6 @@ GroupCallParticipant::GroupCallParticipant(const tl_object_ptr<telegram_api::gro
   server_is_muted_by_themselves = participant->can_self_unmute_;
   server_is_muted_by_admin = participant->muted_ && !participant->can_self_unmute_;
   server_is_muted_locally = participant->muted_by_you_;
-  can_enable_video = participant->video_joined_;
   is_self = participant->self_;
   if ((participant->flags_ & telegram_api::groupCallParticipant::VOLUME_MASK) != 0) {
     volume_level = participant->volume_;
@@ -58,10 +57,17 @@ GroupCallParticipant::GroupCallParticipant(const tl_object_ptr<telegram_api::gro
   version = call_version;
 
   if (participant->video_ != nullptr) {
-    video_payload = get_group_call_video_payload(participant->video_.get());
+    video_payload = GroupCallVideoPayload(participant->video_.get());
   }
   if (participant->presentation_ != nullptr) {
-    presentation_payload = get_group_call_video_payload(participant->presentation_.get());
+    if (participant->presentation_->flags_ & telegram_api::groupCallParticipantVideo::AUDIO_SOURCE_MASK) {
+      presentation_audio_source = participant->presentation_->audio_source_;
+    }
+    presentation_payload = GroupCallVideoPayload(participant->presentation_.get());
+  }
+
+  if (is_just_joined && get_has_video()) {
+    video_diff++;
   }
 }
 
@@ -78,7 +84,8 @@ GroupCallParticipantOrder GroupCallParticipant::get_real_order(bool can_self_unm
   }
   auto sort_raise_hand_rating = can_self_unmute ? raise_hand_rating : 0;
   auto sort_joined_date = joined_date_asc ? std::numeric_limits<int32>::max() - joined_date : joined_date;
-  return GroupCallParticipantOrder(sort_active_date, sort_raise_hand_rating, sort_joined_date);
+  bool has_video = !video_payload.is_empty() || !presentation_payload.is_empty();
+  return GroupCallParticipantOrder(has_video, sort_active_date, sort_raise_hand_rating, sort_joined_date);
 }
 
 bool GroupCallParticipant::get_is_muted_by_themselves() const {
@@ -103,6 +110,10 @@ int32 GroupCallParticipant::get_volume_level() const {
 
 bool GroupCallParticipant::get_is_hand_raised() const {
   return have_pending_is_hand_raised ? pending_is_hand_raised : raise_hand_rating != 0;
+}
+
+int32 GroupCallParticipant::get_has_video() const {
+  return video_payload.is_empty() && presentation_payload.is_empty() ? 0 : 1;
 }
 
 void GroupCallParticipant::update_from(const GroupCallParticipant &old_participant) {
@@ -255,9 +266,9 @@ td_api::object_ptr<td_api::groupCallParticipant> GroupCallParticipant::get_group
   }
 
   return td_api::make_object<td_api::groupCallParticipant>(
-      td->messages_manager_->get_message_sender_object(dialog_id), audio_source, can_enable_video,
-      get_group_call_participant_video_info_object(video_payload),
-      get_group_call_participant_video_info_object(presentation_payload), about, is_self, is_speaking,
+      td->messages_manager_->get_message_sender_object(dialog_id), audio_source, presentation_audio_source,
+      video_payload.get_group_call_participant_video_info_object(),
+      presentation_payload.get_group_call_participant_video_info_object(), about, is_self, is_speaking,
       get_is_hand_raised(), can_be_muted_for_all_users, can_be_unmuted_for_all_users, can_be_muted_only_for_self,
       can_be_unmuted_only_for_self, get_is_muted_for_all_users(), get_is_muted_locally(), get_is_muted_by_themselves(),
       get_volume_level(), order.get_group_call_participant_order_object());
@@ -265,7 +276,7 @@ td_api::object_ptr<td_api::groupCallParticipant> GroupCallParticipant::get_group
 
 bool operator==(const GroupCallParticipant &lhs, const GroupCallParticipant &rhs) {
   return lhs.dialog_id == rhs.dialog_id && lhs.audio_source == rhs.audio_source &&
-         lhs.can_enable_video == rhs.can_enable_video && lhs.video_payload == rhs.video_payload &&
+         lhs.presentation_audio_source == rhs.presentation_audio_source && lhs.video_payload == rhs.video_payload &&
          lhs.presentation_payload == rhs.presentation_payload && lhs.about == rhs.about && lhs.is_self == rhs.is_self &&
          lhs.is_speaking == rhs.is_speaking && lhs.get_is_hand_raised() == rhs.get_is_hand_raised() &&
          lhs.can_be_muted_for_all_users == rhs.can_be_muted_for_all_users &&

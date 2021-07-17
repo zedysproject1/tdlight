@@ -65,7 +65,7 @@ inline StringBuilder &operator<<(StringBuilder &stream, const MsgInfo &id) {
                 << "] [seq_no:" << format::as_hex(id.seq_no) << "]";
 }
 
-class SessionConnection
+class SessionConnection final
     : public Named
     , private RawConnection::Callback {
  public:
@@ -264,10 +264,10 @@ class SessionConnection
   Status init() TD_WARN_UNUSED_RESULT;
   Status do_flush() TD_WARN_UNUSED_RESULT;
 
-  Status before_write() override TD_WARN_UNUSED_RESULT;
-  Status on_raw_packet(const PacketInfo &info, BufferSlice packet) override;
-  Status on_quick_ack(uint64 quick_ack_token) override;
-  void on_read(size_t size) override;
+  Status before_write() final TD_WARN_UNUSED_RESULT;
+  Status on_raw_packet(const PacketInfo &info, BufferSlice packet) final;
+  Status on_quick_ack(uint64 quick_ack_token) final;
+  void on_read(size_t size) final;
 };
 
 }  // namespace mtproto

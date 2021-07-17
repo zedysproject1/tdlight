@@ -384,11 +384,11 @@ class SslStreamImpl {
     return size;
   }
 
-  class SslReadByteFlow : public ByteFlowBase {
+  class SslReadByteFlow final : public ByteFlowBase {
    public:
     explicit SslReadByteFlow(SslStreamImpl *stream) : stream_(stream) {
     }
-    bool loop() override {
+    bool loop() final {
       auto to_read = output_.prepare_append();
       auto r_size = stream_->read(to_read);
       if (r_size.is_error()) {
@@ -411,11 +411,11 @@ class SslStreamImpl {
     SslStreamImpl *stream_;
   };
 
-  class SslWriteByteFlow : public ByteFlowBase {
+  class SslWriteByteFlow final : public ByteFlowBase {
    public:
     explicit SslWriteByteFlow(SslStreamImpl *stream) : stream_(stream) {
     }
-    bool loop() override {
+    bool loop() final {
       auto to_write = input_->prepare_read();
       auto r_size = stream_->write(to_write);
       if (r_size.is_error()) {

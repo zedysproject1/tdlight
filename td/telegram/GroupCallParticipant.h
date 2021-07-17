@@ -25,11 +25,11 @@ struct GroupCallParticipant {
   GroupCallVideoPayload video_payload;
   GroupCallVideoPayload presentation_payload;
   int32 audio_source = 0;
+  int32 presentation_audio_source = 0;
   int32 joined_date = 0;
   int32 active_date = 0;
   int32 volume_level = 10000;
   int64 raise_hand_rating = 0;
-  bool can_enable_video = false;
   bool is_volume_level_local = false;
   bool server_is_muted_by_themselves = false;
   bool server_is_muted_by_admin = false;
@@ -45,6 +45,7 @@ struct GroupCallParticipant {
   bool is_fake = false;
   bool is_just_joined = false;
   bool is_speaking = false;
+  int32 video_diff = 0;
   int32 local_active_date = 0;
   GroupCallParticipantOrder order;
   int32 version = 0;
@@ -94,6 +95,8 @@ struct GroupCallParticipant {
   int32 get_volume_level() const;
 
   bool get_is_hand_raised() const;
+
+  int32 get_has_video() const;
 
   td_api::object_ptr<td_api::groupCallParticipant> get_group_call_participant_object(Td *td) const;
 };

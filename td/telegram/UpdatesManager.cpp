@@ -86,7 +86,7 @@ class OnUpdate {
   }
 };
 
-class GetUpdatesStateQuery : public Td::ResultHandler {
+class GetUpdatesStateQuery final : public Td::ResultHandler {
   Promise<tl_object_ptr<telegram_api::updates_state>> promise_;
 
  public:
@@ -98,7 +98,7 @@ class GetUpdatesStateQuery : public Td::ResultHandler {
     send_query(G()->net_query_creator().create(telegram_api::updates_getState()));
   }
 
-  void on_result(uint64 id, BufferSlice packet) override {
+  void on_result(uint64 id, BufferSlice packet) final {
     auto result_ptr = fetch_result<telegram_api::updates_getState>(packet);
     if (result_ptr.is_error()) {
       return on_error(id, result_ptr.move_as_error());
@@ -107,12 +107,12 @@ class GetUpdatesStateQuery : public Td::ResultHandler {
     promise_.set_value(result_ptr.move_as_ok());
   }
 
-  void on_error(uint64 id, Status status) override {
+  void on_error(uint64 id, Status status) final {
     promise_.set_error(std::move(status));
   }
 };
 
-class PingServerQuery : public Td::ResultHandler {
+class PingServerQuery final : public Td::ResultHandler {
   Promise<tl_object_ptr<telegram_api::updates_state>> promise_;
 
  public:
@@ -124,7 +124,7 @@ class PingServerQuery : public Td::ResultHandler {
     send_query(G()->net_query_creator().create(telegram_api::updates_getState()));
   }
 
-  void on_result(uint64 id, BufferSlice packet) override {
+  void on_result(uint64 id, BufferSlice packet) final {
     auto result_ptr = fetch_result<telegram_api::updates_getState>(packet);
     if (result_ptr.is_error()) {
       return on_error(id, result_ptr.move_as_error());
@@ -133,12 +133,12 @@ class PingServerQuery : public Td::ResultHandler {
     promise_.set_value(result_ptr.move_as_ok());
   }
 
-  void on_error(uint64 id, Status status) override {
+  void on_error(uint64 id, Status status) final {
     promise_.set_error(std::move(status));
   }
 };
 
-class GetDifferenceQuery : public Td::ResultHandler {
+class GetDifferenceQuery final : public Td::ResultHandler {
   Promise<tl_object_ptr<telegram_api::updates_Difference>> promise_;
 
  public:
@@ -150,7 +150,7 @@ class GetDifferenceQuery : public Td::ResultHandler {
     send_query(G()->net_query_creator().create(telegram_api::updates_getDifference(0, pts, 0, date, qts)));
   }
 
-  void on_result(uint64 id, BufferSlice packet) override {
+  void on_result(uint64 id, BufferSlice packet) final {
     VLOG(get_difference) << "Receive getDifference result of size " << packet.size();
     auto result_ptr = fetch_result<telegram_api::updates_getDifference>(packet);
     if (result_ptr.is_error()) {
@@ -160,12 +160,12 @@ class GetDifferenceQuery : public Td::ResultHandler {
     promise_.set_value(result_ptr.move_as_ok());
   }
 
-  void on_error(uint64 id, Status status) override {
+  void on_error(uint64 id, Status status) final {
     promise_.set_error(std::move(status));
   }
 };
 
-const double UpdatesManager::MAX_UNFILLED_GAP_TIME = 1.0;
+const double UpdatesManager::MAX_UNFILLED_GAP_TIME = 0.4;
 
 UpdatesManager::UpdatesManager(Td *td, ActorShared<> parent) : td_(td), parent_(std::move(parent)) {
   pts_manager_.init(-1);

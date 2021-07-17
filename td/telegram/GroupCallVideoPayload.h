@@ -13,22 +13,28 @@
 
 namespace td {
 
-struct GroupCallVideoSourceGroup {
-  string semantics;
-  vector<int32> source_ids;
-};
+class GroupCallVideoPayload {
+  struct GroupCallVideoSourceGroup {
+    string semantics_;
+    vector<int32> source_ids_;
+  };
 
-struct GroupCallVideoPayload {
-  vector<GroupCallVideoSourceGroup> source_groups;
-  string endpoint;
-  bool is_paused = false;
+  vector<GroupCallVideoSourceGroup> source_groups_;
+  string endpoint_;
+  bool is_paused_ = false;
+
+  friend bool operator==(const GroupCallVideoPayload &lhs, const GroupCallVideoPayload &rhs);
+
+ public:
+  GroupCallVideoPayload() = default;
+
+  explicit GroupCallVideoPayload(const telegram_api::groupCallParticipantVideo *video);
+
+  bool is_empty() const;
+
+  td_api::object_ptr<td_api::groupCallParticipantVideoInfo> get_group_call_participant_video_info_object() const;
 };
 
 bool operator==(const GroupCallVideoPayload &lhs, const GroupCallVideoPayload &rhs);
-
-td_api::object_ptr<td_api::groupCallParticipantVideoInfo> get_group_call_participant_video_info_object(
-    const GroupCallVideoPayload &payload);
-
-GroupCallVideoPayload get_group_call_video_payload(const telegram_api::groupCallParticipantVideo *video);
 
 }  // namespace td

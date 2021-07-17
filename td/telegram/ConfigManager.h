@@ -83,7 +83,7 @@ using FullConfig = tl_object_ptr<telegram_api::config>;
 ActorOwn<> get_full_config(DcId dc_id, IPAddress ip_address, Promise<FullConfig> promise);
 
 class ConfigRecoverer;
-class ConfigManager : public NetQueryCallback {
+class ConfigManager final : public NetQueryCallback {
  public:
   explicit ConfigManager(ActorShared<> parent);
 
@@ -136,13 +136,13 @@ class ConfigManager : public NetQueryCallback {
 
   static constexpr uint64 REFCNT_TOKEN = std::numeric_limits<uint64>::max() - 2;
 
-  void start_up() override;
-  void hangup_shared() override;
-  void hangup() override;
-  void loop() override;
+  void start_up() final;
+  void hangup_shared() final;
+  void hangup() final;
+  void loop() final;
   void try_stop();
 
-  void on_result(NetQueryPtr res) override;
+  void on_result(NetQueryPtr res) final;
 
   void request_config_from_dc_impl(DcId dc_id);
   void process_config(tl_object_ptr<telegram_api::config> config);

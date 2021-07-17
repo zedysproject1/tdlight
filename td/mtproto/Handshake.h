@@ -7,7 +7,6 @@
 #pragma once
 
 #include "td/mtproto/AuthKey.h"
-#include "td/mtproto/DhHandshake.h"
 #include "td/mtproto/RSA.h"
 
 #include "td/utils/buffer.h"
@@ -17,7 +16,14 @@
 #include "td/utils/UInt.h"
 
 namespace td {
+
+namespace mtproto_api {
+class Object;
+}  // namespace mtproto_api
+
 namespace mtproto {
+
+class DhCallback;
 
 class AuthKeyHandshakeContext {
  public:
@@ -107,16 +113,13 @@ class AuthKeyHandshake {
   double server_time_diff_ = 0;
   uint64 server_salt_ = 0;
 
-  UInt128 nonce;
-  UInt128 server_nonce;
-  UInt256 new_nonce;
-  UInt256 tmp_aes_key;
-  UInt256 tmp_aes_iv;
+  UInt128 nonce_;
+  UInt128 server_nonce_;
+  UInt256 new_nonce_;
 
   BufferSlice last_query_;
 
-  template <class DataT>
-  Result<size_t> fill_data_with_hash(uint8 *data_with_hash, const DataT &data) TD_WARN_UNUSED_RESULT;
+  static string store_object(const mtproto_api::Object &object);
 
   void send(Callback *connection, const Storer &storer);
   void do_send(Callback *connection, const Storer &storer);

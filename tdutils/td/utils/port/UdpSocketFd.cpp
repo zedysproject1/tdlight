@@ -98,7 +98,7 @@ class UdpSocketSendHelper {
   WSABUF buf_;
 };
 
-class UdpSocketFdImpl : private Iocp::Callback {
+class UdpSocketFdImpl final : private Iocp::Callback {
  public:
   explicit UdpSocketFdImpl(NativeFd fd) : info_(std::move(fd)) {
     get_poll_info().add_flags(PollFlags::Write());
@@ -240,7 +240,7 @@ class UdpSocketFdImpl : private Iocp::Callback {
     }
   }
 
-  void on_iocp(Result<size_t> r_size, WSAOVERLAPPED *overlapped) override {
+  void on_iocp(Result<size_t> r_size, WSAOVERLAPPED *overlapped) final {
     // called from other thread
     if (dec_refcnt() || close_flag_) {
       VLOG(fd) << "Ignore IOCP (UDP socket is closing)";

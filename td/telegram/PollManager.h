@@ -33,7 +33,7 @@ struct BinlogEvent;
 
 class Td;
 
-class PollManager : public Actor {
+class PollManager final : public Actor {
  public:
   PollManager(Td *td, ActorShared<> parent);
 
@@ -41,7 +41,7 @@ class PollManager : public Actor {
   PollManager &operator=(const PollManager &) = delete;
   PollManager(PollManager &&) = delete;
   PollManager &operator=(PollManager &&) = delete;
-  ~PollManager() override;
+  ~PollManager() final;
 
   void memory_cleanup();
 
@@ -142,8 +142,8 @@ class PollManager : public Actor {
   class SetPollAnswerLogEvent;
   class StopPollLogEvent;
 
-  void start_up() override;
-  void tear_down() override;
+  void start_up() final;
+  void tear_down() final;
 
   void memory_cleanup(bool full);
 

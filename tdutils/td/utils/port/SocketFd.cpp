@@ -41,7 +41,7 @@
 namespace td {
 namespace detail {
 #if TD_PORT_WINDOWS
-class SocketFdImpl : private Iocp::Callback {
+class SocketFdImpl final : private Iocp::Callback {
  public:
   explicit SocketFdImpl(NativeFd native_fd) : info(std::move(native_fd)) {
     VLOG(fd) << get_native_fd() << " create from native_fd";
@@ -254,7 +254,7 @@ class SocketFdImpl : private Iocp::Callback {
     }
   }
 
-  void on_iocp(Result<size_t> r_size, WSAOVERLAPPED *overlapped) override {
+  void on_iocp(Result<size_t> r_size, WSAOVERLAPPED *overlapped) final {
     // called from other thread
     if (dec_refcnt() || close_flag_) {
       VLOG(fd) << "Ignore IOCP (socket is closing)";

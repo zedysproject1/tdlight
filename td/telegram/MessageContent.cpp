@@ -88,7 +88,7 @@
 
 namespace td {
 
-class MessageText : public MessageContent {
+class MessageText final : public MessageContent {
  public:
   FormattedText text;
   WebPageId web_page_id;
@@ -97,12 +97,12 @@ class MessageText : public MessageContent {
   MessageText(FormattedText text, WebPageId web_page_id) : text(std::move(text)), web_page_id(web_page_id) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Text;
   }
 };
 
-class MessageAnimation : public MessageContent {
+class MessageAnimation final : public MessageContent {
  public:
   FileId file_id;
 
@@ -112,12 +112,12 @@ class MessageAnimation : public MessageContent {
   MessageAnimation(FileId file_id, FormattedText &&caption) : file_id(file_id), caption(std::move(caption)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Animation;
   }
 };
 
-class MessageAudio : public MessageContent {
+class MessageAudio final : public MessageContent {
  public:
   FileId file_id;
 
@@ -127,12 +127,12 @@ class MessageAudio : public MessageContent {
   MessageAudio(FileId file_id, FormattedText &&caption) : file_id(file_id), caption(std::move(caption)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Audio;
   }
 };
 
-class MessageDocument : public MessageContent {
+class MessageDocument final : public MessageContent {
  public:
   FileId file_id;
 
@@ -142,12 +142,12 @@ class MessageDocument : public MessageContent {
   MessageDocument(FileId file_id, FormattedText &&caption) : file_id(file_id), caption(std::move(caption)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Document;
   }
 };
 
-class MessagePhoto : public MessageContent {
+class MessagePhoto final : public MessageContent {
  public:
   Photo photo;
 
@@ -157,12 +157,12 @@ class MessagePhoto : public MessageContent {
   MessagePhoto(Photo &&photo, FormattedText &&caption) : photo(std::move(photo)), caption(std::move(caption)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Photo;
   }
 };
 
-class MessageSticker : public MessageContent {
+class MessageSticker final : public MessageContent {
  public:
   FileId file_id;
 
@@ -170,12 +170,12 @@ class MessageSticker : public MessageContent {
   explicit MessageSticker(FileId file_id) : file_id(file_id) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Sticker;
   }
 };
 
-class MessageVideo : public MessageContent {
+class MessageVideo final : public MessageContent {
  public:
   FileId file_id;
 
@@ -185,12 +185,12 @@ class MessageVideo : public MessageContent {
   MessageVideo(FileId file_id, FormattedText &&caption) : file_id(file_id), caption(std::move(caption)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Video;
   }
 };
 
-class MessageVoiceNote : public MessageContent {
+class MessageVoiceNote final : public MessageContent {
  public:
   FileId file_id;
 
@@ -202,12 +202,12 @@ class MessageVoiceNote : public MessageContent {
       : file_id(file_id), caption(std::move(caption)), is_listened(is_listened) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::VoiceNote;
   }
 };
 
-class MessageContact : public MessageContent {
+class MessageContact final : public MessageContent {
  public:
   Contact contact;
 
@@ -215,12 +215,12 @@ class MessageContact : public MessageContent {
   explicit MessageContact(Contact &&contact) : contact(std::move(contact)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Contact;
   }
 };
 
-class MessageLocation : public MessageContent {
+class MessageLocation final : public MessageContent {
  public:
   Location location;
 
@@ -228,12 +228,12 @@ class MessageLocation : public MessageContent {
   explicit MessageLocation(Location &&location) : location(std::move(location)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Location;
   }
 };
 
-class MessageVenue : public MessageContent {
+class MessageVenue final : public MessageContent {
  public:
   Venue venue;
 
@@ -241,12 +241,12 @@ class MessageVenue : public MessageContent {
   explicit MessageVenue(Venue &&venue) : venue(std::move(venue)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Venue;
   }
 };
 
-class MessageChatCreate : public MessageContent {
+class MessageChatCreate final : public MessageContent {
  public:
   string title;
   vector<UserId> participant_user_ids;
@@ -256,12 +256,12 @@ class MessageChatCreate : public MessageContent {
       : title(std::move(title)), participant_user_ids(std::move(participant_user_ids)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatCreate;
   }
 };
 
-class MessageChatChangeTitle : public MessageContent {
+class MessageChatChangeTitle final : public MessageContent {
  public:
   string title;
 
@@ -269,12 +269,12 @@ class MessageChatChangeTitle : public MessageContent {
   explicit MessageChatChangeTitle(string &&title) : title(std::move(title)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatChangeTitle;
   }
 };
 
-class MessageChatChangePhoto : public MessageContent {
+class MessageChatChangePhoto final : public MessageContent {
  public:
   Photo photo;
 
@@ -282,26 +282,26 @@ class MessageChatChangePhoto : public MessageContent {
   explicit MessageChatChangePhoto(Photo &&photo) : photo(std::move(photo)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatChangePhoto;
   }
 };
 
-class MessageChatDeletePhoto : public MessageContent {
+class MessageChatDeletePhoto final : public MessageContent {
  public:
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatDeletePhoto;
   }
 };
 
-class MessageChatDeleteHistory : public MessageContent {
+class MessageChatDeleteHistory final : public MessageContent {
  public:
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatDeleteHistory;
   }
 };
 
-class MessageChatAddUsers : public MessageContent {
+class MessageChatAddUsers final : public MessageContent {
  public:
   vector<UserId> user_ids;
 
@@ -309,19 +309,19 @@ class MessageChatAddUsers : public MessageContent {
   explicit MessageChatAddUsers(vector<UserId> &&user_ids) : user_ids(std::move(user_ids)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatAddUsers;
   }
 };
 
-class MessageChatJoinedByLink : public MessageContent {
+class MessageChatJoinedByLink final : public MessageContent {
  public:
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatJoinedByLink;
   }
 };
 
-class MessageChatDeleteUser : public MessageContent {
+class MessageChatDeleteUser final : public MessageContent {
  public:
   UserId user_id;
 
@@ -329,12 +329,12 @@ class MessageChatDeleteUser : public MessageContent {
   explicit MessageChatDeleteUser(UserId user_id) : user_id(user_id) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatDeleteUser;
   }
 };
 
-class MessageChatMigrateTo : public MessageContent {
+class MessageChatMigrateTo final : public MessageContent {
  public:
   ChannelId migrated_to_channel_id;
 
@@ -342,12 +342,12 @@ class MessageChatMigrateTo : public MessageContent {
   explicit MessageChatMigrateTo(ChannelId migrated_to_channel_id) : migrated_to_channel_id(migrated_to_channel_id) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatMigrateTo;
   }
 };
 
-class MessageChannelCreate : public MessageContent {
+class MessageChannelCreate final : public MessageContent {
  public:
   string title;
 
@@ -355,12 +355,12 @@ class MessageChannelCreate : public MessageContent {
   explicit MessageChannelCreate(string &&title) : title(std::move(title)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChannelCreate;
   }
 };
 
-class MessageChannelMigrateFrom : public MessageContent {
+class MessageChannelMigrateFrom final : public MessageContent {
  public:
   string title;
   ChatId migrated_from_chat_id;
@@ -370,12 +370,12 @@ class MessageChannelMigrateFrom : public MessageContent {
       : title(std::move(title)), migrated_from_chat_id(migrated_from_chat_id) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChannelMigrateFrom;
   }
 };
 
-class MessagePinMessage : public MessageContent {
+class MessagePinMessage final : public MessageContent {
  public:
   MessageId message_id;
 
@@ -383,12 +383,12 @@ class MessagePinMessage : public MessageContent {
   explicit MessagePinMessage(MessageId message_id) : message_id(message_id) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::PinMessage;
   }
 };
 
-class MessageGame : public MessageContent {
+class MessageGame final : public MessageContent {
  public:
   Game game;
 
@@ -396,12 +396,12 @@ class MessageGame : public MessageContent {
   explicit MessageGame(Game &&game) : game(std::move(game)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Game;
   }
 };
 
-class MessageGameScore : public MessageContent {
+class MessageGameScore final : public MessageContent {
  public:
   MessageId game_message_id;
   int64 game_id;
@@ -412,19 +412,19 @@ class MessageGameScore : public MessageContent {
       : game_message_id(game_message_id), game_id(game_id), score(score) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::GameScore;
   }
 };
 
-class MessageScreenshotTaken : public MessageContent {
+class MessageScreenshotTaken final : public MessageContent {
  public:
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ScreenshotTaken;
   }
 };
 
-class MessageChatSetTtl : public MessageContent {
+class MessageChatSetTtl final : public MessageContent {
  public:
   int32 ttl;
 
@@ -432,12 +432,12 @@ class MessageChatSetTtl : public MessageContent {
   explicit MessageChatSetTtl(int32 ttl) : ttl(ttl) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ChatSetTtl;
   }
 };
 
-class MessageUnsupported : public MessageContent {
+class MessageUnsupported final : public MessageContent {
  public:
   static constexpr int32 CURRENT_VERSION = 7;
   int32 version = CURRENT_VERSION;
@@ -446,12 +446,12 @@ class MessageUnsupported : public MessageContent {
   explicit MessageUnsupported(int32 version) : version(version) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Unsupported;
   }
 };
 
-class MessageCall : public MessageContent {
+class MessageCall final : public MessageContent {
  public:
   int64 call_id;
   int32 duration;
@@ -463,12 +463,12 @@ class MessageCall : public MessageContent {
       : call_id(call_id), duration(duration), discard_reason(discard_reason), is_video(is_video) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Call;
   }
 };
 
-class MessageInvoice : public MessageContent {
+class MessageInvoice final : public MessageContent {
  public:
   InputInvoice input_invoice;
 
@@ -476,12 +476,12 @@ class MessageInvoice : public MessageContent {
   explicit MessageInvoice(InputInvoice &&input_invoice) : input_invoice(std::move(input_invoice)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Invoice;
   }
 };
 
-class MessagePaymentSuccessful : public MessageContent {
+class MessagePaymentSuccessful final : public MessageContent {
  public:
   DialogId invoice_dialog_id;
   MessageId invoice_message_id;
@@ -504,12 +504,12 @@ class MessagePaymentSuccessful : public MessageContent {
       , total_amount(total_amount) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::PaymentSuccessful;
   }
 };
 
-class MessageVideoNote : public MessageContent {
+class MessageVideoNote final : public MessageContent {
  public:
   FileId file_id;
 
@@ -519,37 +519,37 @@ class MessageVideoNote : public MessageContent {
   MessageVideoNote(FileId file_id, bool is_viewed) : file_id(file_id), is_viewed(is_viewed) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::VideoNote;
   }
 };
 
-class MessageContactRegistered : public MessageContent {
+class MessageContactRegistered final : public MessageContent {
  public:
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ContactRegistered;
   }
 };
 
-class MessageExpiredPhoto : public MessageContent {
+class MessageExpiredPhoto final : public MessageContent {
  public:
   MessageExpiredPhoto() = default;
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ExpiredPhoto;
   }
 };
 
-class MessageExpiredVideo : public MessageContent {
+class MessageExpiredVideo final : public MessageContent {
  public:
   MessageExpiredVideo() = default;
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ExpiredVideo;
   }
 };
 
-class MessageLiveLocation : public MessageContent {
+class MessageLiveLocation final : public MessageContent {
  public:
   Location location;
   int32 period = 0;
@@ -574,12 +574,12 @@ class MessageLiveLocation : public MessageContent {
     }
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::LiveLocation;
   }
 };
 
-class MessageCustomServiceAction : public MessageContent {
+class MessageCustomServiceAction final : public MessageContent {
  public:
   string message;
 
@@ -587,12 +587,12 @@ class MessageCustomServiceAction : public MessageContent {
   explicit MessageCustomServiceAction(string &&message) : message(std::move(message)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::CustomServiceAction;
   }
 };
 
-class MessageWebsiteConnected : public MessageContent {
+class MessageWebsiteConnected final : public MessageContent {
  public:
   string domain_name;
 
@@ -600,12 +600,12 @@ class MessageWebsiteConnected : public MessageContent {
   explicit MessageWebsiteConnected(string &&domain_name) : domain_name(std::move(domain_name)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::WebsiteConnected;
   }
 };
 
-class MessagePassportDataSent : public MessageContent {
+class MessagePassportDataSent final : public MessageContent {
  public:
   vector<SecureValueType> types;
 
@@ -613,12 +613,12 @@ class MessagePassportDataSent : public MessageContent {
   explicit MessagePassportDataSent(vector<SecureValueType> &&types) : types(std::move(types)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::PassportDataSent;
   }
 };
 
-class MessagePassportDataReceived : public MessageContent {
+class MessagePassportDataReceived final : public MessageContent {
  public:
   vector<EncryptedSecureValue> values;
   EncryptedSecureCredentials credentials;
@@ -628,12 +628,12 @@ class MessagePassportDataReceived : public MessageContent {
       : values(std::move(values)), credentials(std::move(credentials)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::PassportDataReceived;
   }
 };
 
-class MessagePoll : public MessageContent {
+class MessagePoll final : public MessageContent {
  public:
   PollId poll_id;
 
@@ -641,12 +641,12 @@ class MessagePoll : public MessageContent {
   explicit MessagePoll(PollId poll_id) : poll_id(poll_id) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Poll;
   }
 };
 
-class MessageDice : public MessageContent {
+class MessageDice final : public MessageContent {
  public:
   string emoji;
   int32 dice_value = 0;
@@ -659,7 +659,7 @@ class MessageDice : public MessageContent {
       , dice_value(dice_value) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::Dice;
   }
 
@@ -676,7 +676,7 @@ class MessageDice : public MessageContent {
 
 constexpr const char *MessageDice::DEFAULT_EMOJI;
 
-class MessageProximityAlertTriggered : public MessageContent {
+class MessageProximityAlertTriggered final : public MessageContent {
  public:
   DialogId traveler_dialog_id;
   DialogId watcher_dialog_id;
@@ -687,12 +687,12 @@ class MessageProximityAlertTriggered : public MessageContent {
       : traveler_dialog_id(traveler_dialog_id), watcher_dialog_id(watcher_dialog_id), distance(distance) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::ProximityAlertTriggered;
   }
 };
 
-class MessageGroupCall : public MessageContent {
+class MessageGroupCall final : public MessageContent {
  public:
   InputGroupCallId input_group_call_id;
   int32 duration = -1;
@@ -703,12 +703,12 @@ class MessageGroupCall : public MessageContent {
       : input_group_call_id(input_group_call_id), duration(duration), schedule_date(schedule_date) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::GroupCall;
   }
 };
 
-class MessageInviteToGroupCall : public MessageContent {
+class MessageInviteToGroupCall final : public MessageContent {
  public:
   InputGroupCallId input_group_call_id;
   vector<UserId> user_ids;
@@ -718,7 +718,7 @@ class MessageInviteToGroupCall : public MessageContent {
       : input_group_call_id(input_group_call_id), user_ids(std::move(user_ids)) {
   }
 
-  MessageContentType get_type() const override {
+  MessageContentType get_type() const final {
     return MessageContentType::InviteToGroupCall;
   }
 };

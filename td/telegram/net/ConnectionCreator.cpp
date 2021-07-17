@@ -747,7 +747,7 @@ ActorOwn<> ConnectionCreator::prepare_connection(IPAddress ip_address, SocketFd 
                                                  Promise<ConnectionData> promise) {
   if (proxy.use_socks5_proxy() || proxy.use_http_tcp_proxy() || transport_type.secret.emulate_tls()) {
     VLOG(connections) << "Create new transparent proxy connection " << debug_str;
-    class Callback : public TransparentProxy::Callback {
+    class Callback final : public TransparentProxy::Callback {
      public:
       explicit Callback(Promise<ConnectionData> promise, IPAddress ip_address,
                         unique_ptr<mtproto::RawConnection::StatsCallback> stats_callback, bool use_connection_token,
@@ -758,7 +758,7 @@ ActorOwn<> ConnectionCreator::prepare_connection(IPAddress ip_address, SocketFd 
           , use_connection_token_(use_connection_token)
           , was_connected_(was_connected) {
       }
-      void set_result(Result<SocketFd> result) override {
+      void set_result(Result<SocketFd> result) final {
         if (result.is_error()) {
           if (use_connection_token_) {
             connection_token_ = StateManager::ConnectionToken();
@@ -776,7 +776,7 @@ ActorOwn<> ConnectionCreator::prepare_connection(IPAddress ip_address, SocketFd 
           promise_.set_value(std::move(data));
         }
       }
-      void on_connected() override {
+      void on_connected() final {
         if (use_connection_token_) {
           connection_token_ = StateManager::connection_proxy(G()->state_manager());
         }
@@ -1086,20 +1086,20 @@ void ConnectionCreator::update_mtproto_header(const Proxy &proxy) {
 }
 
 void ConnectionCreator::start_up() {
-  class StateCallback : public StateManager::Callback {
+  class StateCallback final : public StateManager::Callback {
    public:
     explicit StateCallback(ActorId<ConnectionCreator> connection_creator)
         : connection_creator_(std::move(connection_creator)) {
     }
-    bool on_network(NetType network_type, uint32 generation) override {
+    bool on_network(NetType network_type, uint32 generation) final {
       send_closure(connection_creator_, &ConnectionCreator::on_network, network_type != NetType::None, generation);
       return connection_creator_.is_alive();
     }
-    bool on_online(bool online_flag) override {
+    bool on_online(bool online_flag) final {
       send_closure(connection_creator_, &ConnectionCreator::on_online, online_flag);
       return connection_creator_.is_alive();
     }
-    bool on_logging_out(bool is_logging_out) override {
+    bool on_logging_out(bool is_logging_out) final {
       send_closure(connection_creator_, &ConnectionCreator::on_logging_out, is_logging_out);
       return connection_creator_.is_alive();
     }

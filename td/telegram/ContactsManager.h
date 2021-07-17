@@ -58,14 +58,14 @@ struct BinlogEvent;
 
 class Td;
 
-class ContactsManager : public Actor {
+class ContactsManager final : public Actor {
  public:
   ContactsManager(Td *td, ActorShared<> parent);
   ContactsManager(const ContactsManager &) = delete;
   ContactsManager &operator=(const ContactsManager &) = delete;
   ContactsManager(ContactsManager &&) = delete;
   ContactsManager &operator=(ContactsManager &&) = delete;
-  ~ContactsManager() override;
+  ~ContactsManager() final;
 
   static UserId load_my_id();
 
@@ -513,20 +513,19 @@ class ContactsManager : public Actor {
   ChannelId get_channel_linked_channel_id(ChannelId channel_id);
   int32 get_channel_slow_mode_delay(ChannelId channel_id);
 
-  static DialogId get_participant_dialog_id(const td_api::object_ptr<td_api::MessageSender> &participant_id);
-
   void add_dialog_participant(DialogId dialog_id, UserId user_id, int32 forward_limit, Promise<Unit> &&promise);
 
   void add_dialog_participants(DialogId dialog_id, const vector<UserId> &user_ids, Promise<Unit> &&promise);
 
-  void set_dialog_participant_status(DialogId dialog_id, DialogId participant_dialog_id,
+  void set_dialog_participant_status(DialogId dialog_id, const tl_object_ptr<td_api::MessageSender> &participant_id,
                                      const tl_object_ptr<td_api::ChatMemberStatus> &chat_member_status,
                                      Promise<Unit> &&promise);
 
-  void ban_dialog_participant(DialogId dialog_id, DialogId participant_dialog_id, int32 banned_until_date,
-                              bool revoke_messages, Promise<Unit> &&promise);
+  void ban_dialog_participant(DialogId dialog_id, const tl_object_ptr<td_api::MessageSender> &participant_id,
+                              int32 banned_until_date, bool revoke_messages, Promise<Unit> &&promise);
 
-  DialogParticipant get_dialog_participant(DialogId dialog_id, DialogId participant_dialog_id, int64 &random_id,
+  DialogParticipant get_dialog_participant(DialogId dialog_id,
+                                           const tl_object_ptr<td_api::MessageSender> &participant_id, int64 &random_id,
                                            bool force, Promise<Unit> &&promise);
 
   void search_dialog_participants(DialogId dialog_id, const string &query, int32 limit, DialogParticipantsFilter filter,
@@ -1393,6 +1392,8 @@ class ContactsManager : public Actor {
 
   bool update_permanent_invite_link(DialogInviteLink &invite_link, DialogInviteLink new_invite_link);
 
+  static Result<DialogId> get_participant_dialog_id(const td_api::object_ptr<td_api::MessageSender> &participant_id);
+
   void add_chat_participant(ChatId chat_id, UserId user_id, int32 forward_limit, Promise<Unit> &&promise);
 
   void add_channel_participant(ChannelId channel_id, UserId user_id, Promise<Unit> &&promise,
@@ -1498,8 +1499,7 @@ class ContactsManager : public Actor {
   void add_channel_participant_to_cache(ChannelId channel_id, const DialogParticipant &dialog_participant,
                                         bool allow_replace);
 
-  const DialogParticipant *get_channel_participant_from_cache(ChannelId channel_id,
-                                                              DialogId participant_dialog_id) const;
+  const DialogParticipant *get_channel_participant_from_cache(ChannelId channel_id, DialogId participant_dialog_id);
 
   void change_channel_participant_status_impl(ChannelId channel_id, DialogId participant_dialog_id,
                                               DialogParticipantStatus status, DialogParticipantStatus old_status,
@@ -1557,7 +1557,7 @@ class ContactsManager : public Actor {
 
   void on_channel_participant_cache_timeout(ChannelId channel_id);
 
-  void tear_down() override;
+  void tear_down() final;
 
   Td *td_;
   ActorShared<> parent_;
@@ -1663,7 +1663,7 @@ class ContactsManager : public Actor {
   struct ChannelParticipantInfo {
     DialogParticipant participant_;
 
-    mutable int32 last_access_date_ = 0;
+    int32 last_access_date_ = 0;
   };
   struct ChannelParticipants {
     std::unordered_map<DialogId, ChannelParticipantInfo, DialogIdHash> participants_;
