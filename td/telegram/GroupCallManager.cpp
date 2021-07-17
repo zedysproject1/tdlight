@@ -2223,7 +2223,7 @@ std::pair<int32, int32> GroupCallManager::process_group_call_participant(InputGr
   if (participant.is_self) {
     auto *group_call = get_group_call(input_group_call_id);
     if (!(group_call != nullptr && group_call->is_inited)) {
-      return 0;
+      return {0, 0};
     }
     auto can_self_unmute = group_call->is_active && !participant.get_is_muted_by_admin();
     if (can_self_unmute != group_call->can_self_unmute) {
