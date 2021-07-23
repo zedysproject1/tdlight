@@ -16320,8 +16320,6 @@ void ContactsManager::memory_cleanup(bool full) {
   uploaded_profile_photos_.rehash(0);
   imported_contacts_.clear();
   imported_contacts_.rehash(0);
-  received_channel_participant_.clear();
-  received_channel_participant_.rehash(0);
   cached_channel_participants_.clear();
   cached_channel_participants_.rehash(0);
   load_contacts_queries_.clear();
@@ -16412,8 +16410,6 @@ void ContactsManager::memory_stats(vector<string> &output) {
   output.push_back("\"uploaded_profile_photos_\":"); output.push_back(std::to_string(uploaded_profile_photos_.size()));
   output.push_back(",");
   output.push_back("\"imported_contacts_\":"); output.push_back(std::to_string(imported_contacts_.size()));
-  output.push_back(",");
-  output.push_back("\"received_channel_participant_\":"); output.push_back(std::to_string(received_channel_participant_.size()));
   output.push_back(",");
   output.push_back("\"cached_channel_participants_\":"); output.push_back(std::to_string(cached_channel_participants_.size()));
   output.push_back(",");
