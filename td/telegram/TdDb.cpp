@@ -149,10 +149,8 @@ Status init_db(SqliteDb &db) {
   TRY_STATUS(db.exec("PRAGMA cache_size=4096"));
   TRY_STATUS(db.exec("PRAGMA page_size=65536"));
   TRY_STATUS(db.exec("PRAGMA synchronous=NORMAL"));
-  TRY_STATUS(db.exec("PRAGMA temp_store=FILE"));
-  TRY_STATUS(db.exec("PRAGMA wal_autocheckpoint=10000"));
-  TRY_STATUS(db.exec("PRAGMA shrink_memory"));
-  TRY_STATUS(db.exec("PRAGMA secure_delete=0"));
+  TRY_STATUS(db.exec("PRAGMA temp_store=MEMORY"));
+  TRY_STATUS(db.exec("PRAGMA secure_delete=1"));
 
   return Status::OK();
 }
@@ -371,7 +369,6 @@ Status TdDb::init_sqlite(int32 scheduler_id, const TdParameters &parameters, DbK
   binlog_pmc.force_sync({});
 
   TRY_STATUS(db.exec("COMMIT TRANSACTION"));
-  TRY_STATUS(db.exec("VACUUM"));
 
   file_db_ = create_file_db(sql_connection_, scheduler_id);
 

@@ -7473,7 +7473,7 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
         }
         auto enable_pull_based_backpressure
             = G()->shared_config().get_option_boolean("enable_pull_based_backpressure", false);
-        get_channel_difference_delayed(dialog_id, old_pts, true, enable_pull_based_backpressure, "old");
+        get_channel_difference_delayed(dialog_id, old_pts, true, enable_pull_based_backpressure, "add_pending_channel_update old");
       }
 
       if (update->get_id() == telegram_api::updateNewChannelMessage::ID) {
@@ -33761,10 +33761,6 @@ bool MessagesManager::update_message_content(DialogId dialog_id, Message *old_me
 }
 
 MessagesManager::Dialog *MessagesManager::get_dialog_by_message_id(MessageId message_id) {
-  if (G()->shared_config().get_option_boolean("ignore_server_deletes_and_reads", false)) {
-    LOG(INFO) << "Can't find the chat by " << message_id << " because this function is disabled";
-    return nullptr;
-  }
   CHECK(message_id.is_valid() && message_id.is_server());
   auto it = message_id_to_dialog_id_.find(message_id);
   if (it == message_id_to_dialog_id_.end()) {
@@ -35575,7 +35571,11 @@ void MessagesManager::get_channel_difference_delayed(DialogId dialog_id, int32 p
                                              bool force, bool enable_pull_based_backpressure, const char *source) {
   if (!enable_pull_based_backpressure) {
     // Execute get_channel_difference immediatly
-    get_channel_difference(dialog_id,pts, force, "on_get_channel_difference");
+    const char* source_prefix = "on_get_channel_difference, ";
+    char* joined_source{ new char[strlen(source_prefix) + strlen(source) + 1] };
+    joined_source = strcpy(joined_source, source_prefix);
+    joined_source = strcat(joined_source, source);
+    get_channel_difference(dialog_id,pts, force, joined_source);
   } else {
     auto channel_difference_id = ++last_pending_channel_difference_;
     PendingChannelDifference pending_channel_difference = {dialog_id, pts, force};
