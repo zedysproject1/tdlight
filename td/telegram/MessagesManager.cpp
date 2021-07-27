@@ -7110,7 +7110,9 @@ bool MessagesManager::need_skip_bot_commands(DialogId dialog_id, const Message *
   }
 
   auto d = get_dialog(dialog_id);
-  CHECK(d != nullptr);
+  if(d == nullptr) {
+    return true;
+  }
   return (d->is_has_bots_inited && !d->has_bots) || is_broadcast_channel(dialog_id);
 }
 
@@ -21655,7 +21657,9 @@ void MessagesManager::on_message_live_location_viewed_on_server(int64 task_id) {
 }
 
 void MessagesManager::try_add_bot_command_message_id(DialogId dialog_id, const Message *m) {
-  CHECK(m != nullptr);
+  if (m == nullptr) {
+    return;
+  }
   if (td_->auth_manager_->is_bot() || !is_group_dialog(dialog_id) || m->message_id.is_scheduled() ||
       !has_bot_commands(get_message_content_text(m->content.get()))) {
     return;
@@ -28405,7 +28409,9 @@ void MessagesManager::remove_message_dialog_notifications(Dialog *d, MessageId m
 }
 
 void MessagesManager::send_update_message_send_succeeded(Dialog *d, MessageId old_message_id, const Message *m) const {
-  CHECK(m != nullptr);
+  if (m == nullptr) {
+    return;
+  }
   CHECK(d->is_update_new_chat_sent);
   if (!td_->auth_manager_->is_bot()) {
     d->yet_unsent_message_id_to_persistent_message_id.emplace(old_message_id, m->message_id);
@@ -28416,7 +28422,9 @@ void MessagesManager::send_update_message_send_succeeded(Dialog *d, MessageId ol
 }
 
 void MessagesManager::send_update_message_content(DialogId dialog_id, const Message *m, const char *source) {
-  CHECK(m != nullptr);
+  if (m == nullptr) {
+    return;
+  }
   LOG_CHECK(have_dialog(dialog_id)) << "Send updateMessageContent in unknown " << dialog_id << " from " << source
                                     << " with load count " << loaded_dialogs_.count(dialog_id);
   delete_bot_command_message_id(dialog_id, m->message_id);
@@ -28425,7 +28433,9 @@ void MessagesManager::send_update_message_content(DialogId dialog_id, const Mess
 }
 
 void MessagesManager::send_update_message_content_impl(DialogId dialog_id, const Message *m, const char *source) const {
-  CHECK(m != nullptr);
+  if (m == nullptr) {
+    return;
+  }
   LOG(INFO) << "Send updateMessageContent for " << m->message_id << " in " << dialog_id << " from " << source;
   auto content_object = get_message_content_object(m->content.get(), td_, dialog_id, m->is_failed_to_send ? 0 : m->date,
                                                    m->is_content_secret, need_skip_bot_commands(dialog_id, m));
@@ -28435,7 +28445,9 @@ void MessagesManager::send_update_message_content_impl(DialogId dialog_id, const
 }
 
 void MessagesManager::send_update_message_edited(DialogId dialog_id, const Message *m) {
-  CHECK(m != nullptr);
+  if (m == nullptr) {
+    return;
+  }
   cancel_user_dialog_action(dialog_id, m);
   auto edit_date = m->hide_edit_date ? 0 : m->edit_date;
   send_closure(G()->td(), &Td::send_update,
@@ -30171,7 +30183,9 @@ void MessagesManager::on_dialog_bots_updated(DialogId dialog_id, vector<UserId> 
 }
 
 void MessagesManager::set_dialog_has_bots(Dialog *d, bool has_bots) {
-  CHECK(d != nullptr);
+  if (d == nullptr) {
+    return;
+  }
   LOG_CHECK(d->is_update_new_chat_sent) << "Wrong " << d->dialog_id << " in set_dialog_has_bots";
 
   LOG(INFO) << "Set " << d->dialog_id << " has_bots to " << has_bots;
