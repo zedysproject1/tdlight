@@ -6392,6 +6392,8 @@ void MessagesManager::memory_stats(vector<string> &output) {
   output.push_back("\"notification_group_id_to_dialog_id_\":"); output.push_back(std::to_string(this->notification_group_id_to_dialog_id_.size()));
   output.push_back(",");
   output.push_back("\"previous_repaired_read_inbox_max_message_id_\":"); output.push_back(std::to_string(this->previous_repaired_read_inbox_max_message_id_.size()));
+  output.push_back(",");
+  output.push_back("\"channel_get_difference_retry_timeouts_\":"); output.push_back(std::to_string(this->channel_get_difference_retry_timeouts_.size()));
 }
 
 tl_object_ptr<telegram_api::InputPeer> MessagesManager::get_input_peer(DialogId dialog_id,
