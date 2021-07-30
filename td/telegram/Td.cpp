@@ -3571,6 +3571,8 @@ bool Td::is_internal_config_option(Slice name) {
              name == "rating_e_decay" || name == "recent_stickers_limit";
     case 's':
       return name == "saved_animations_limit";
+    case 'v':
+      return name == "video_note_size_max";
     case 'w':
       return name == "webfile_dc_id";
     default:
