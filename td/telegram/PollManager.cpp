@@ -667,7 +667,7 @@ void PollManager::unregister_poll(PollId poll_id, FullMessageId full_message_id,
   auto &message_ids = poll_messages_[poll_id];
   auto is_deleted = message_ids.erase(full_message_id) > 0;
   if (!is_deleted) {
-    LOG(ERROR) << "tried to unregister already deleted poll. " << source << " " << poll_id << " " << full_message_id;
+    LOG(DEBUG) << "tried to unregister already deleted poll. " << source << " " << poll_id << " " << full_message_id;
     return;
   }
   if (message_ids.empty()) {
