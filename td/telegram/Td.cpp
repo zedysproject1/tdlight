@@ -706,7 +706,7 @@ class GetUserFullInfoRequest final : public RequestActor<> {
   UserId user_id_;
 
   void do_run(Promise<Unit> &&promise) final {
-    td->contacts_manager_->load_user_full(user_id_, get_tries() < 2, std::move(promise));
+    td->contacts_manager_->load_user_full(user_id_, get_tries() < 2, std::move(promise), "GetUserFullInfoRequest");
   }
 
   void do_send_result() final {
@@ -776,7 +776,8 @@ class GetSupergroupFullInfoRequest final : public RequestActor<> {
   ChannelId channel_id_;
 
   void do_run(Promise<Unit> &&promise) final {
-    td->contacts_manager_->load_channel_full(channel_id_, get_tries() < 2, std::move(promise));
+    td->contacts_manager_->load_channel_full(channel_id_, get_tries() < 2, std::move(promise),
+                                             "GetSupergroupFullInfoRequest");
   }
 
   void do_send_result() final {

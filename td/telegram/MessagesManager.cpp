@@ -1737,7 +1737,7 @@ class ToggleDialogIsBlockedQuery final : public Td::ResultHandler {
     }
     if (!G()->close_flag()) {
       td->messages_manager_->on_update_dialog_is_blocked(dialog_id_, !is_blocked_);
-      td->messages_manager_->get_dialog_info_full(dialog_id_, Auto());
+      td->messages_manager_->get_dialog_info_full(dialog_id_, Auto(), "ToggleDialogIsBlockedQuery");
       td->messages_manager_->reget_dialog_action_bar(dialog_id_, "ToggleDialogIsBlockedQuery");
     }
     promise_.set_error(std::move(status));
@@ -4374,12 +4374,7 @@ class UpdatePeerSettingsQuery final : public Td::ResultHandler {
       return on_error(id, result_ptr.move_as_error());
     }
 
-    td->messages_manager_->on_get_peer_settings(
-        dialog_id_,
-        make_tl_object<telegram_api::peerSettings>(0, false /*ignored*/, false /*ignored*/, false /*ignored*/,
-                                                   false /*ignored*/, false /*ignored*/, false /*ignored*/,
-                                                   false /*ignored*/, false /*ignored*/, 0),
-        true);
+    td->messages_manager_->on_get_peer_settings(dialog_id_, make_tl_object<telegram_api::peerSettings>(), true);
 
     promise_.set_value(Unit());
   }
@@ -4416,12 +4411,7 @@ class ReportEncryptedSpamQuery final : public Td::ResultHandler {
       return on_error(id, result_ptr.move_as_error());
     }
 
-    td->messages_manager_->on_get_peer_settings(
-        dialog_id_,
-        make_tl_object<telegram_api::peerSettings>(0, false /*ignored*/, false /*ignored*/, false /*ignored*/,
-                                                   false /*ignored*/, false /*ignored*/, false /*ignored*/,
-                                                   false /*ignored*/, false /*ignored*/, 0),
-        true);
+    td->messages_manager_->on_get_peer_settings(dialog_id_, make_tl_object<telegram_api::peerSettings>(), true);
 
     promise_.set_value(Unit());
   }
@@ -4586,7 +4576,7 @@ class EditPeerFoldersQuery final : public Td::ResultHandler {
     }
 
     // trying to repair folder ID for this dialog
-    td->messages_manager_->get_dialog_info_full(dialog_id_, Auto());
+    td->messages_manager_->get_dialog_info_full(dialog_id_, Auto(), "EditPeerFoldersQuery");
 
     promise_.set_error(std::move(status));
   }
@@ -6959,8 +6949,8 @@ bool MessagesManager::is_active_message_reply_info(DialogId dialog_id, const Mes
   auto linked_channel_id = td_->contacts_manager_->get_channel_linked_channel_id(channel_id);
   if (!linked_channel_id.is_valid()) {
     // keep the comment button while linked channel is unknown
-    send_closure_later(G()->contacts_manager(), &ContactsManager::load_channel_full, channel_id, false,
-                       Promise<Unit>());
+    send_closure_later(G()->contacts_manager(), &ContactsManager::load_channel_full, channel_id, false, Promise<Unit>(),
+                       "is_active_message_reply_info");
     return true;
   }
 
@@ -7507,7 +7497,7 @@ void MessagesManager::add_pending_channel_update(DialogId dialog_id, tl_object_p
     // if there is no dialog, it can be created by the update
     LOG(INFO) << "Receive pending update from " << source << " about unknown " << dialog_id;
     if (running_get_channel_difference(dialog_id)) {
-      promise.set_value(Unit());
+      add_postponed_channel_update(dialog_id, std::move(update), new_pts, pts_count, std::move(promise));
       return;
     }
   } else {
@@ -11548,7 +11538,7 @@ void MessagesManager::repair_channel_server_unread_count(Dialog *d) {
   }
 
   LOG(INFO) << "Reload ChannelFull for " << d->dialog_id << " to repair unread message counts";
-  get_dialog_info_full(d->dialog_id, Auto());
+  get_dialog_info_full(d->dialog_id, Auto(), "repair_channel_server_unread_count");
 }
 
 void MessagesManager::read_history_inbox(DialogId dialog_id, MessageId max_message_id, int32 unread_count,
@@ -12997,15 +12987,13 @@ void MessagesManager::on_send_secret_message_error(int64 random_id, Status error
 }
 
 void MessagesManager::on_send_secret_message_success(int64 random_id, MessageId message_id, int32 date,
-                                                     tl_object_ptr<telegram_api::EncryptedFile> file_ptr,
-                                                     Promise<> promise) {
+                                                     unique_ptr<EncryptedFile> file, Promise<> promise) {
   promise.set_value(Unit());  // TODO: set after message is saved
 
   FileId new_file_id;
-  if (file_ptr != nullptr && file_ptr->get_id() == telegram_api::encryptedFile::ID) {
-    auto file = move_tl_object_as<telegram_api::encryptedFile>(file_ptr);
+  if (file != nullptr) {
     if (!DcId::is_valid(file->dc_id_)) {
-      LOG(ERROR) << "Wrong dc_id = " << file->dc_id_ << " in file " << to_string(file);
+      LOG(ERROR) << "Wrong dc_id = " << file->dc_id_ << " in file " << *file;
     } else {
       DialogId owner_dialog_id;
       auto it = being_sent_messages_.find(random_id);
@@ -13198,7 +13186,7 @@ void MessagesManager::on_update_secret_chat_state(SecretChatId secret_chat_id, S
 }
 
 void MessagesManager::on_get_secret_message(SecretChatId secret_chat_id, UserId user_id, MessageId message_id,
-                                            int32 date, tl_object_ptr<telegram_api::encryptedFile> file,
+                                            int32 date, unique_ptr<EncryptedFile> file,
                                             tl_object_ptr<secret_api::decryptedMessage> message, Promise<> promise) {
   LOG(DEBUG) << "On get " << to_string(message);
   CHECK(message != nullptr);
@@ -13902,7 +13890,8 @@ FullMessageId MessagesManager::on_get_message(MessageInfo &&message_info, bool f
 
     need_update = false;
 
-    if (old_message_id.is_valid() && message_id.is_valid() && message_id < old_message_id) {
+    if (old_message_id.is_valid() && message_id.is_valid() && message_id < old_message_id &&
+        !can_overflow_message_id(dialog_id)) {
       LOG(ERROR) << "Sent " << old_message_id << " to " << dialog_id << " as " << message_id;
     }
 
@@ -14716,14 +14705,12 @@ void MessagesManager::on_get_dialogs(FolderId folder_id, vector<tl_object_ptr<te
     if (!d->is_is_blocked_inited && !td_->auth_manager_->is_bot()) {
       // asynchronously get is_blocked from the server
       // TODO add is_blocked to telegram_api::dialog
-      get_dialog_info_full(dialog_id, Auto());
-    }
-    if (!d->is_has_bots_inited && !td_->auth_manager_->is_bot()) {
+      get_dialog_info_full(dialog_id, Auto(), "on_get_dialogs init is_blocked");
+    } else if (!d->is_has_bots_inited && !td_->auth_manager_->is_bot()) {
       // asynchronously get has_bots from the server
       // TODO add has_bots to telegram_api::dialog
-      get_dialog_info_full(dialog_id, Auto());
-    }
-    if (!d->is_last_pinned_message_id_inited && !td_->auth_manager_->is_bot()) {
+      get_dialog_info_full(dialog_id, Auto(), "on_get_dialogs init has_bots");
+    } else if (!d->is_last_pinned_message_id_inited && !td_->auth_manager_->is_bot()) {
       // asynchronously get dialog pinned message from the server
       get_dialog_pinned_message(dialog_id, Auto());
     }
@@ -17364,19 +17351,19 @@ td_api::object_ptr<td_api::messageThreadInfo> MessagesManager::get_message_threa
                                                         std::move(draft_message));
 }
 
-void MessagesManager::get_dialog_info_full(DialogId dialog_id, Promise<Unit> &&promise) {
+void MessagesManager::get_dialog_info_full(DialogId dialog_id, Promise<Unit> &&promise, const char *source) {
   switch (dialog_id.get_type()) {
     case DialogType::User:
       send_closure_later(G()->contacts_manager(), &ContactsManager::load_user_full, dialog_id.get_user_id(), false,
-                         std::move(promise));
+                         std::move(promise), source);
       return;
     case DialogType::Chat:
       send_closure_later(G()->contacts_manager(), &ContactsManager::load_chat_full, dialog_id.get_chat_id(), false,
-                         std::move(promise), "get_dialog_info_full");
+                         std::move(promise), source);
       return;
     case DialogType::Channel:
       send_closure_later(G()->contacts_manager(), &ContactsManager::load_channel_full, dialog_id.get_channel_id(),
-                         false, std::move(promise));
+                         false, std::move(promise), source);
       return;
     case DialogType::SecretChat:
       return promise.set_value(Unit());
@@ -17420,11 +17407,12 @@ MessageId MessagesManager::get_dialog_pinned_message(DialogId dialog_id, Promise
             << (d->is_last_pinned_message_id_inited ? "inited" : "unknown") << " pinned " << d->last_pinned_message_id;
 
   if (!d->is_last_pinned_message_id_inited) {
-    get_dialog_info_full(dialog_id, std::move(promise));
+    // must call get_dialog_info_full as expected in fix_new_dialog
+    get_dialog_info_full(dialog_id, std::move(promise), "get_dialog_pinned_message 1");
     return MessageId();
   }
 
-  get_dialog_info_full(dialog_id, Auto());
+  get_dialog_info_full(dialog_id, Auto(), "get_dialog_pinned_message 2");
 
   if (d->last_pinned_message_id.is_valid()) {
     tl_object_ptr<telegram_api::InputMessage> input_message;
@@ -19441,8 +19429,8 @@ DialogId MessagesManager::create_new_group_chat(const vector<UserId> &user_ids, 
     created_dialogs_.erase(it);
 
     // set default notification settings to newly created chat
-    on_update_dialog_notify_settings(
-        dialog_id, make_tl_object<telegram_api::peerNotifySettings>(0, false, false, 0, ""), "create_new_group_chat");
+    on_update_dialog_notify_settings(dialog_id, make_tl_object<telegram_api::peerNotifySettings>(),
+                                     "create_new_group_chat");
 
     promise.set_value(Unit());
     return dialog_id;
@@ -19495,8 +19483,8 @@ DialogId MessagesManager::create_new_channel_chat(const string &title, bool is_m
     created_dialogs_.erase(it);
 
     // set default notification settings to newly created chat
-    on_update_dialog_notify_settings(
-        dialog_id, make_tl_object<telegram_api::peerNotifySettings>(0, false, false, 0, ""), "create_new_channel_chat");
+    on_update_dialog_notify_settings(dialog_id, make_tl_object<telegram_api::peerNotifySettings>(),
+                                     "create_new_channel_chat");
 
     promise.set_value(Unit());
     return dialog_id;
@@ -22682,6 +22670,10 @@ void MessagesManager::get_history_from_the_end_impl(const Dialog *d, bool from_d
       promise.set_value(Unit());
       return;
     }
+    if (!promise && !G()->parameters().use_message_db) {
+      // repair last message ID
+      limit = 10;
+    }
 
     LOG(INFO) << "Get history from the end of " << dialog_id << " from server";
     td_->create_handler<GetHistoryQuery>(std::move(promise))
@@ -23455,8 +23447,7 @@ void MessagesManager::fix_server_reply_to_message_id(DialogId dialog_id, Message
   }
 
   if (!message_id.is_scheduled() && !reply_in_dialog_id.is_valid() && reply_to_message_id >= message_id) {
-    if (reply_to_message_id.get() - message_id.get() <= MessageId(ServerMessageId(1000000)).get() ||
-        dialog_id.get_type() == DialogType::Channel) {
+    if (!can_overflow_message_id(dialog_id)) {
       LOG(ERROR) << "Receive reply to wrong " << reply_to_message_id << " in " << message_id << " in " << dialog_id;
     }
     reply_to_message_id = MessageId();
@@ -24809,6 +24800,21 @@ void MessagesManager::do_send_inline_query_result_message(DialogId dialog_id, co
   }
   m->send_query_ref = td_->create_handler<SendInlineBotResultQuery>()->send(
       flags, dialog_id, m->reply_to_message_id, get_message_schedule_date(m), random_id, query_id, result_id);
+}
+
+bool MessagesManager::can_overflow_message_id(DialogId dialog_id) {
+  switch (dialog_id.get_type()) {
+    case DialogType::User:
+    case DialogType::Chat:
+      return G()->shared_config().get_option_integer("session_count") > 1;
+    case DialogType::Channel:
+    case DialogType::SecretChat:
+      return false;
+    case DialogType::None:
+    default:
+      UNREACHABLE();
+      return false;
+  }
 }
 
 bool MessagesManager::can_edit_message(DialogId dialog_id, const Message *m, bool is_editing,
@@ -29013,7 +29019,7 @@ FullMessageId MessagesManager::on_send_message_success(int64 random_id, MessageI
     send_update_message_content(dialog_id, sent_message.get(), source);
   }
 
-  if (old_message_id.is_valid() && new_message_id < old_message_id) {
+  if (old_message_id.is_valid() && new_message_id < old_message_id && !can_overflow_message_id(dialog_id)) {
     LOG(ERROR) << "Sent " << old_message_id << " to " << dialog_id << " as " << new_message_id;
   }
 
@@ -34311,24 +34317,22 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
 
   if (being_added_dialog_id_ != dialog_id && !d->is_is_blocked_inited && !td_->auth_manager_->is_bot()) {
     // asynchronously get is_blocked from the server
-    get_dialog_info_full(dialog_id, Auto());
-  }
-  if (being_added_dialog_id_ != dialog_id && !d->is_has_bots_inited && !td_->auth_manager_->is_bot()) {
+    get_dialog_info_full(dialog_id, Auto(), "fix_new_dialog init is_blocked");
+  } else if (being_added_dialog_id_ != dialog_id && !d->is_has_bots_inited && !td_->auth_manager_->is_bot()) {
     // asynchronously get has_bots from the server
-    get_dialog_info_full(dialog_id, Auto());
-  }
-  if (being_added_dialog_id_ != dialog_id && !d->is_last_pinned_message_id_inited && !td_->auth_manager_->is_bot()) {
+    get_dialog_info_full(dialog_id, Auto(), "fix_new_dialog init has_bots");
+  } else if (being_added_dialog_id_ != dialog_id && !d->is_last_pinned_message_id_inited &&
+             !td_->auth_manager_->is_bot()) {
     // asynchronously get dialog pinned message from the server
     get_dialog_pinned_message(dialog_id, Auto());
-  }
-  if (being_added_dialog_id_ != dialog_id && !d->is_folder_id_inited && !td_->auth_manager_->is_bot() &&
-      order != DEFAULT_ORDER) {
+  } else if (being_added_dialog_id_ != dialog_id && !d->is_folder_id_inited && !td_->auth_manager_->is_bot() &&
+             order != DEFAULT_ORDER) {
     // asynchronously get dialog folder identifier from the server
-    get_dialog_info_full(dialog_id, Auto());
-  }
-  if (!d->is_message_ttl_setting_inited && !td_->auth_manager_->is_bot() && order != DEFAULT_ORDER) {
+    get_dialog_info_full(dialog_id, Auto(), "fix_new_dialog init folder_id");
+  } else if (!d->is_message_ttl_setting_inited && !td_->auth_manager_->is_bot() &&
+             have_input_peer(dialog_id, AccessRights::Write)) {
     // asynchronously get dialog message TTL setting from the server
-    get_dialog_info_full(dialog_id, Auto());
+    get_dialog_info_full(dialog_id, Auto(), "fix_new_dialog init message_ttl_setting");
   }
   if (!d->know_action_bar && !td_->auth_manager_->is_bot() && dialog_type != DialogType::SecretChat &&
       dialog_id != get_my_dialog_id() && have_input_peer(dialog_id, AccessRights::Read)) {
@@ -36472,11 +36476,6 @@ void MessagesManager::after_get_channel_difference(DialogId dialog_id, bool succ
       send_closure_later(G()->notification_manager(), &NotificationManager::after_get_chat_difference,
                          d->mention_notification_group.group_id);
     }
-
-    if (!td_->auth_manager_->is_bot() && have_access && !d->last_message_id.is_valid() && !d->is_empty &&
-        (d->order != DEFAULT_ORDER || is_dialog_sponsored(d))) {
-      get_history_from_the_end_impl(d, true, false, Auto());
-    }
   } else {
     is_channel_difference_finished_.insert(dialog_id);
   }
@@ -36503,6 +36502,11 @@ void MessagesManager::after_get_channel_difference(DialogId dialog_id, bool succ
 
     on_get_dialogs(res.folder_id, std::move(res.dialogs), res.total_count, std::move(res.messages),
                    std::move(res.promise));
+  }
+
+  if (d != nullptr && !td_->auth_manager_->is_bot() && have_access && !d->last_message_id.is_valid() && !d->is_empty &&
+      (d->order != DEFAULT_ORDER || is_dialog_sponsored(d))) {
+    get_history_from_the_end_impl(d, true, false, Auto());
   }
 }
 
