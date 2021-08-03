@@ -3039,8 +3039,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
       if (old_photo->id.get() != new_photo->id.get() || old_->caption != new_->caption) {
         need_update = true;
       }
-      if (old_photo->minithumbnail != new_photo->minithumbnail) {
-        need_update = true;
+      if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+        if (old_photo->minithumbnail != new_photo->minithumbnail) {
+          need_update = true;
+        }
       }
       if (old_photo->photos != new_photo->photos) {
         LOG(DEBUG) << "Merge photos " << old_photo->photos << " and " << new_photo->photos

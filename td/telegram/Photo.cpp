@@ -67,6 +67,9 @@ StringBuilder &operator<<(StringBuilder &string_builder, const Dimensions &dimen
 }
 
 td_api::object_ptr<td_api::minithumbnail> get_minithumbnail_object(const string &packed) {
+  if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    return nullptr;
+  }
   if (packed.size() < 3) {
     return nullptr;
   }
@@ -165,7 +168,9 @@ ProfilePhoto get_profile_photo(FileManager *file_manager, UserId user_id, int64 
       auto dc_id = DcId::create(profile_photo->dc_id_);
       result.has_animation = (profile_photo->flags_ & telegram_api::userProfilePhoto::HAS_VIDEO_MASK) != 0;
       result.id = profile_photo->photo_id_;
-      result.minithumbnail = profile_photo->stripped_thumb_.as_slice().str();
+      if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+        result.minithumbnail = profile_photo->stripped_thumb_.as_slice().str();
+      }
       result.small_file_id =
           register_photo(file_manager, {DialogId(user_id), user_access_hash, false}, result.id, 0 /*access_hash*/,
                          "" /*file_reference*/, DialogId(), 0 /*file_size*/, dc_id, PhotoFormat::Jpeg);

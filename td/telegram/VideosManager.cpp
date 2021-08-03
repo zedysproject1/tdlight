@@ -78,9 +78,11 @@ FileId VideosManager::on_get_video(unique_ptr<Video> new_video, bool replace) {
       v->file_name = std::move(new_video->file_name);
       v->is_changed = true;
     }
-    if (v->minithumbnail != new_video->minithumbnail) {
-      v->minithumbnail = std::move(new_video->minithumbnail);
-      v->is_changed = true;
+    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+      if (v->minithumbnail != new_video->minithumbnail) {
+        v->minithumbnail = std::move(new_video->minithumbnail);
+        v->is_changed = true;
+      }
     }
     if (v->thumbnail != new_video->thumbnail) {
       if (!v->thumbnail.file_id.is_valid()) {

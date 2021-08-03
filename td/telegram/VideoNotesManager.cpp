@@ -64,9 +64,11 @@ FileId VideoNotesManager::on_get_video_note(unique_ptr<VideoNote> new_video_note
       v->dimensions = new_video_note->dimensions;
       v->is_changed = true;
     }
-    if (v->minithumbnail != new_video_note->minithumbnail) {
-      v->minithumbnail = std::move(new_video_note->minithumbnail);
-      v->is_changed = true;
+    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+      if (v->minithumbnail != new_video_note->minithumbnail) {
+        v->minithumbnail = std::move(new_video_note->minithumbnail);
+        v->is_changed = true;
+      }
     }
     if (v->thumbnail != new_video_note->thumbnail) {
       if (!v->thumbnail.file_id.is_valid()) {
