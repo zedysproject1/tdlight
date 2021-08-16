@@ -6,6 +6,7 @@
 //
 #include "td/telegram/MessageEntity.h"
 
+#include "td/utils/algorithm.h"
 #include "td/utils/common.h"
 #include "td/utils/format.h"
 #include "td/utils/logging.h"
@@ -17,6 +18,7 @@
 #include "td/utils/utf8.h"
 
 #include <algorithm>
+#include <utility>
 
 static void check_mention(const td::string &str, const td::vector<td::string> &expected) {
   auto result_slice = td::find_mentions(str);
@@ -170,6 +172,48 @@ TEST(MessageEntities, cashtag) {
   check_cashtag(u8"$ABC\u2122", {"$ABC"});
   check_cashtag(u8"\u2122$ABC", {"$ABC"});
   check_cashtag(u8"\u2122$ABC\u2122", {"$ABC"});
+}
+
+static void check_media_timestamp(const td::string &str, const td::vector<std::pair<td::string, td::int32>> &expected) {
+  auto result = td::transform(td::find_media_timestamps(str),
+                              [](auto &&entity) { return std::make_pair(entity.first.str(), entity.second); });
+  if (result != expected) {
+    LOG(FATAL) << td::tag("text", str) << td::tag("got", td::format::as_array(result))
+               << td::tag("expected", td::format::as_array(expected));
+  }
+}
+
+TEST(MessageEntities, media_timestamp) {
+  check_media_timestamp("", {});
+  check_media_timestamp(":", {});
+  check_media_timestamp(":1", {});
+  check_media_timestamp("a:1", {});
+  check_media_timestamp("01", {});
+  check_media_timestamp("01:", {});
+  check_media_timestamp("01::", {});
+  check_media_timestamp("01::", {});
+  check_media_timestamp("a1:1a", {});
+  check_media_timestamp("a1::01a", {});
+  check_media_timestamp("2001:db8::8a2e:f70:13a4", {});
+  check_media_timestamp("0:00", {{"0:00", 0}});
+  check_media_timestamp("+0:00", {{"0:00", 0}});
+  check_media_timestamp("0:00+", {{"0:00", 0}});
+  check_media_timestamp("a0:00", {});
+  check_media_timestamp("0:00a", {});
+  check_media_timestamp("б0:00", {});
+  check_media_timestamp("0:00б", {});
+  check_media_timestamp("_0:00", {});
+  check_media_timestamp("0:00_", {});
+  check_media_timestamp("00:00:00:00", {});
+  check_media_timestamp("1:1:01 1:1:1", {{"1:1:01", 3661}});
+  check_media_timestamp("0:0:00 00:00 000:00 0000:00 00000:00 00:00:00 000:00:00 00:000:00 00:00:000",
+                        {{"0:0:00", 0}, {"00:00", 0}, {"000:00", 0}, {"0000:00", 0}, {"00:00:00", 0}});
+  check_media_timestamp("00:0:00 0:00:00 00::00 :00:00 00:00: 00:00:0 00:00:", {{"00:0:00", 0}, {"0:00:00", 0}});
+  check_media_timestamp("1:1:59 1:1:-1 1:1:60", {{"1:1:59", 3719}});
+  check_media_timestamp("1:59:00 1:-1:00 1:60:00", {{"1:59:00", 7140}, {"1:00", 60}});
+  check_media_timestamp("59:59 60:00", {{"59:59", 3599}, {"60:00", 3600}});
+  check_media_timestamp("9999:59 99:59:59 99:60:59", {{"9999:59", 599999}, {"99:59:59", 360000 - 1}});
+  check_media_timestamp("2001:db8::8a2e:f70:13a4", {});
 }
 
 static void check_bank_card_number(const td::string &str, const td::vector<td::string> &expected) {
@@ -655,16 +699,16 @@ static void check_fix_formatted_text(td::string str, td::vector<td::MessageEntit
                                      const td::vector<td::MessageEntity> &expected_entities, bool allow_empty = true,
                                      bool skip_new_entities = false, bool skip_bot_commands = false,
                                      bool for_draft = true) {
-  ASSERT_TRUE(
-      td::fix_formatted_text(str, entities, allow_empty, skip_new_entities, skip_bot_commands, for_draft).is_ok());
+  ASSERT_TRUE(td::fix_formatted_text(str, entities, allow_empty, skip_new_entities, skip_bot_commands, true, for_draft)
+                  .is_ok());
   ASSERT_STREQ(expected_str, str);
   ASSERT_EQ(expected_entities, entities);
 }
 
 static void check_fix_formatted_text(td::string str, td::vector<td::MessageEntity> entities, bool allow_empty,
                                      bool skip_new_entities, bool skip_bot_commands, bool for_draft) {
-  ASSERT_TRUE(
-      fix_formatted_text(str, entities, allow_empty, skip_new_entities, skip_bot_commands, for_draft).is_error());
+  ASSERT_TRUE(td::fix_formatted_text(str, entities, allow_empty, skip_new_entities, skip_bot_commands, true, for_draft)
+                  .is_error());
 }
 
 TEST(MessageEntities, fix_formatted_text) {
@@ -1064,7 +1108,7 @@ TEST(MessageEntities, fix_formatted_text) {
       return result;
     };
     auto old_type_mask = get_type_mask(str.size(), entities);
-    ASSERT_TRUE(td::fix_formatted_text(str, entities, false, false, true, false).is_ok());
+    ASSERT_TRUE(td::fix_formatted_text(str, entities, false, false, true, true, false).is_ok());
     auto new_type_mask = get_type_mask(str.size(), entities);
     auto splittable_mask = (1 << 5) | (1 << 6) | (1 << 14) | (1 << 15);
     auto pre_mask = (1 << 7) | (1 << 8) | (1 << 9);
@@ -1384,7 +1428,7 @@ static void check_parse_markdown_v3(td::string text, td::vector<td::MessageEntit
                                     bool fix = false) {
   auto parsed_text = td::parse_markdown_v3({std::move(text), std::move(entities)});
   if (fix) {
-    ASSERT_TRUE(fix_formatted_text(parsed_text.text, parsed_text.entities, true, true, true, true).is_ok());
+    ASSERT_TRUE(td::fix_formatted_text(parsed_text.text, parsed_text.entities, true, true, true, true, true).is_ok());
   }
   ASSERT_STREQ(result_text, parsed_text.text);
   ASSERT_EQ(result_entities, parsed_text.entities);
@@ -1676,9 +1720,9 @@ TEST(MessageEntities, parse_markdown_v3) {
 
     td::FormattedText text{std::move(str), std::move(entities)};
     while (true) {
-      ASSERT_TRUE(fix_formatted_text(text.text, text.entities, true, true, true, true).is_ok());
+      ASSERT_TRUE(td::fix_formatted_text(text.text, text.entities, true, true, true, true, true).is_ok());
       auto parsed_text = td::parse_markdown_v3(text);
-      ASSERT_TRUE(fix_formatted_text(parsed_text.text, parsed_text.entities, true, true, true, true).is_ok());
+      ASSERT_TRUE(td::fix_formatted_text(parsed_text.text, parsed_text.entities, true, true, true, true, true).is_ok());
       if (parsed_text == text) {
         break;
       }

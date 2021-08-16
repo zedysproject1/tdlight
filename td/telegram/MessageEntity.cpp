@@ -29,7 +29,7 @@
 namespace td {
 
 int MessageEntity::get_type_priority(Type type) {
-  static const int types[] = {50, 50, 50, 50, 50, 90, 91, 20, 11, 10, 49, 49, 50, 50, 92, 93, 0, 50};
+  static const int types[] = {50, 50, 50, 50, 50, 90, 91, 20, 11, 10, 49, 49, 50, 50, 92, 93, 0, 50, 50};
   static_assert(sizeof(types) / sizeof(types[0]) == static_cast<size_t>(MessageEntity::Type::Size), "");
   return types[static_cast<int32>(type)];
 }
@@ -72,6 +72,8 @@ StringBuilder &operator<<(StringBuilder &string_builder, const MessageEntity::Ty
       return string_builder << "PhoneNumber";
     case MessageEntity::Type::BankCardNumber:
       return string_builder << "BankCardNumber";
+    case MessageEntity::Type::MediaTimestamp:
+      return string_builder << "MediaTimestamp";
     default:
       UNREACHABLE();
       return string_builder << "Impossible";
@@ -81,6 +83,9 @@ StringBuilder &operator<<(StringBuilder &string_builder, const MessageEntity::Ty
 StringBuilder &operator<<(StringBuilder &string_builder, const MessageEntity &message_entity) {
   string_builder << '[' << message_entity.type << ", offset = " << message_entity.offset
                  << ", length = " << message_entity.length;
+  if (message_entity.media_timestamp >= 0) {
+    string_builder << ", media_timestamp = \"" << message_entity.media_timestamp << "\"";
+  }
   if (!message_entity.argument.empty()) {
     string_builder << ", argument = \"" << message_entity.argument << "\"";
   }
@@ -130,6 +135,8 @@ tl_object_ptr<td_api::TextEntityType> MessageEntity::get_text_entity_type_object
       return make_tl_object<td_api::textEntityTypePhoneNumber>();
     case MessageEntity::Type::BankCardNumber:
       return make_tl_object<td_api::textEntityTypeBankCardNumber>();
+    case MessageEntity::Type::MediaTimestamp:
+      return make_tl_object<td_api::textEntityTypeMediaTimestamp>(media_timestamp);
     default:
       UNREACHABLE();
       return nullptr;
@@ -141,12 +148,15 @@ tl_object_ptr<td_api::textEntity> MessageEntity::get_text_entity_object() const 
 }
 
 vector<tl_object_ptr<td_api::textEntity>> get_text_entities_object(const vector<MessageEntity> &entities,
-                                                                   bool skip_bot_commands) {
+                                                                   bool skip_bot_commands, int32 max_media_timestamp) {
   vector<tl_object_ptr<td_api::textEntity>> result;
   result.reserve(entities.size());
 
   for (auto &entity : entities) {
     if (skip_bot_commands && entity.type == MessageEntity::Type::BotCommand) {
+      continue;
+    }
+    if (entity.type == MessageEntity::Type::MediaTimestamp && max_media_timestamp < entity.media_timestamp) {
       continue;
     }
     auto entity_object = entity.get_text_entity_object();
@@ -162,9 +172,10 @@ StringBuilder &operator<<(StringBuilder &string_builder, const FormattedText &te
   return string_builder << '"' << text.text << "\" with entities " << text.entities;
 }
 
-td_api::object_ptr<td_api::formattedText> get_formatted_text_object(const FormattedText &text, bool skip_bot_commands) {
-  return td_api::make_object<td_api::formattedText>(text.text,
-                                                    get_text_entities_object(text.entities, skip_bot_commands));
+td_api::object_ptr<td_api::formattedText> get_formatted_text_object(const FormattedText &text, bool skip_bot_commands,
+                                                                    int32 max_media_timestamp) {
+  return td_api::make_object<td_api::formattedText>(
+      text.text, get_text_entities_object(text.entities, skip_bot_commands, max_media_timestamp));
 }
 
 static bool is_word_character(uint32 code) {
@@ -426,6 +437,57 @@ static vector<Slice> match_cashtags(Slice str) {
     }
 
     result.emplace_back(cashtag_begin - 1, cashtag_end);
+  }
+  return result;
+}
+
+static vector<Slice> match_media_timestamps(Slice str) {
+  vector<Slice> result;
+  const unsigned char *begin = str.ubegin();
+  const unsigned char *end = str.uend();
+  const unsigned char *ptr = begin;
+
+  while (true) {
+    ptr = static_cast<const unsigned char *>(std::memchr(ptr, ':', narrow_cast<int32>(end - ptr)));
+    if (ptr == nullptr) {
+      break;
+    }
+
+    auto media_timestamp_begin = ptr;
+    while (media_timestamp_begin != begin &&
+           (media_timestamp_begin[-1] == ':' || is_digit(media_timestamp_begin[-1]))) {
+      media_timestamp_begin--;
+    }
+    auto media_timestamp_end = ptr;
+    while (media_timestamp_end + 1 != end && (media_timestamp_end[1] == ':' || is_digit(media_timestamp_end[1]))) {
+      media_timestamp_end++;
+    }
+    media_timestamp_end++;
+
+    if (media_timestamp_begin != ptr && media_timestamp_end != ptr + 1 && is_digit(ptr[1])) {
+      ptr = media_timestamp_end;
+
+      if (media_timestamp_begin != begin) {
+        uint32 prev;
+        next_utf8_unsafe(prev_utf8_unsafe(media_timestamp_begin), &prev, "match_media_timestamps 1");
+
+        if (is_word_character(prev)) {
+          continue;
+        }
+      }
+      if (media_timestamp_end != end) {
+        uint32 next;
+        next_utf8_unsafe(media_timestamp_end, &next, "match_media_timestamps 2");
+
+        if (is_word_character(next)) {
+          continue;
+        }
+      }
+
+      result.emplace_back(media_timestamp_begin, media_timestamp_end);
+    } else {
+      ptr = media_timestamp_end;
+    }
   }
   return result;
 }
@@ -1247,6 +1309,42 @@ vector<std::pair<Slice, bool>> find_urls(Slice str) {
   return result;
 }
 
+vector<std::pair<Slice, int32>> find_media_timestamps(Slice str) {
+  vector<std::pair<Slice, int32>> result;
+  for (auto media_timestamp : match_media_timestamps(str)) {
+    vector<Slice> parts = full_split(media_timestamp, ':');
+    CHECK(parts.size() >= 2);
+    if (parts.size() > 3 || parts.back().size() != 2) {
+      continue;
+    }
+    auto seconds = to_integer<int32>(parts.back());
+    if (seconds >= 60) {
+      continue;
+    }
+    if (parts.size() == 2) {
+      if (parts[0].size() > 4 || parts[0].empty()) {
+        continue;
+      }
+
+      auto minutes = to_integer<int32>(parts[0]);
+      result.emplace_back(media_timestamp, minutes * 60 + seconds);
+      continue;
+    } else {
+      if (parts[0].size() > 2 || parts[1].size() > 2 || parts[0].empty() || parts[1].empty()) {
+        continue;
+      }
+
+      auto minutes = to_integer<int32>(parts[1]);
+      if (minutes >= 60) {
+        continue;
+      }
+      auto hours = to_integer<int32>(parts[0]);
+      result.emplace_back(media_timestamp, hours * 3600 + minutes * 60 + seconds);
+    }
+  }
+  return result;
+}
+
 static int32 text_length(Slice text) {
   return narrow_cast<int32>(utf8_utf16_length(text));
 }
@@ -1291,7 +1389,8 @@ static constexpr int32 get_continuous_entities_mask() {
          get_entity_type_mask(MessageEntity::Type::EmailAddress) | get_entity_type_mask(MessageEntity::Type::TextUrl) |
          get_entity_type_mask(MessageEntity::Type::MentionName) | get_entity_type_mask(MessageEntity::Type::Cashtag) |
          get_entity_type_mask(MessageEntity::Type::PhoneNumber) |
-         get_entity_type_mask(MessageEntity::Type::BankCardNumber);
+         get_entity_type_mask(MessageEntity::Type::BankCardNumber) |
+         get_entity_type_mask(MessageEntity::Type::MediaTimestamp);
 }
 
 static constexpr int32 get_pre_entities_mask() {
@@ -1440,7 +1539,7 @@ static void remove_entities_intersecting_blockquote(vector<MessageEntity> &entit
     while (blockquote_it != blockquote_entities.end() &&
            (blockquote_it->type != MessageEntity::Type::BlockQuote ||
             blockquote_it->offset + blockquote_it->length <= entities[i].offset)) {
-      blockquote_it++;
+      ++blockquote_it;
     }
     if (blockquote_it != blockquote_entities.end() &&
         (blockquote_it->offset + blockquote_it->length < entities[i].offset + entities[i].length ||
@@ -1456,7 +1555,52 @@ static void remove_entities_intersecting_blockquote(vector<MessageEntity> &entit
   entities.erase(entities.begin() + left_entities, entities.end());
 }
 
-vector<MessageEntity> find_entities(Slice text, bool skip_bot_commands) {
+// keeps only non-intersecting entities
+// fixes entity offsets from UTF-8 to UTF-16 offsets
+static void fix_entity_offsets(Slice text, vector<MessageEntity> &entities) {
+  if (entities.empty()) {
+    return;
+  }
+
+  sort_entities(entities);
+
+  remove_intersecting_entities(entities);
+
+  const unsigned char *begin = text.ubegin();
+  const unsigned char *ptr = begin;
+  const unsigned char *end = text.uend();
+
+  int32 utf16_pos = 0;
+  for (auto &entity : entities) {
+    int cnt = 2;
+    auto entity_begin = entity.offset;
+    auto entity_end = entity.offset + entity.length;
+
+    int32 pos = static_cast<int32>(ptr - begin);
+    if (entity_begin == pos) {
+      cnt--;
+      entity.offset = utf16_pos;
+    }
+
+    while (ptr != end && cnt > 0) {
+      unsigned char c = ptr[0];
+      utf16_pos += 1 + (c >= 0xf0);
+      ptr = next_utf8_unsafe(ptr, nullptr, "fix_entity_offsets");
+
+      pos = static_cast<int32>(ptr - begin);
+      if (entity_begin == pos) {
+        cnt--;
+        entity.offset = utf16_pos;
+      } else if (entity_end == pos) {
+        cnt--;
+        entity.length = utf16_pos - entity.offset;
+      }
+    }
+    CHECK(cnt == 0);
+  }
+}
+
+vector<MessageEntity> find_entities(Slice text, bool skip_bot_commands, bool skip_media_timestamps) {
   vector<MessageEntity> entities;
 
   auto add_entities = [&entities, &text](MessageEntity::Type type, vector<Slice> (*find_entities_f)(Slice)) mutable {
@@ -1485,47 +1629,31 @@ vector<MessageEntity> find_entities(Slice text, bool skip_bot_commands) {
     entities.emplace_back(type, offset, length);
   }
 
-  if (entities.empty()) {
-    return entities;
+  if (!skip_media_timestamps) {
+    auto media_timestamps = find_media_timestamps(text);
+    for (auto &entity : media_timestamps) {
+      auto offset = narrow_cast<int32>(entity.first.begin() - text.begin());
+      auto length = narrow_cast<int32>(entity.first.size());
+      entities.emplace_back(MessageEntity::Type::MediaTimestamp, offset, length, entity.second);
+    }
   }
 
-  sort_entities(entities);
+  fix_entity_offsets(text, entities);
 
-  remove_intersecting_entities(entities);
+  return entities;
+}
 
-  // fix offsets to UTF-16 offsets
-  const unsigned char *begin = text.ubegin();
-  const unsigned char *ptr = begin;
-  const unsigned char *end = text.uend();
+static vector<MessageEntity> find_media_timestamp_entities(Slice text) {
+  vector<MessageEntity> entities;
 
-  int32 utf16_pos = 0;
-  for (auto &entity : entities) {
-    int cnt = 2;
-    auto entity_begin = entity.offset;
-    auto entity_end = entity.offset + entity.length;
-
-    int32 pos = static_cast<int32>(ptr - begin);
-    if (entity_begin == pos) {
-      cnt--;
-      entity.offset = utf16_pos;
-    }
-
-    while (ptr != end && cnt > 0) {
-      unsigned char c = ptr[0];
-      utf16_pos += 1 + (c >= 0xf0);
-      ptr = next_utf8_unsafe(ptr, nullptr, "find_entities");
-
-      pos = static_cast<int32>(ptr - begin);
-      if (entity_begin == pos) {
-        cnt--;
-        entity.offset = utf16_pos;
-      } else if (entity_end == pos) {
-        cnt--;
-        entity.length = utf16_pos - entity.offset;
-      }
-    }
-    CHECK(cnt == 0);
+  auto media_timestamps = find_media_timestamps(text);
+  for (auto &entity : media_timestamps) {
+    auto offset = narrow_cast<int32>(entity.first.begin() - text.begin());
+    auto length = narrow_cast<int32>(entity.first.size());
+    entities.emplace_back(MessageEntity::Type::MediaTimestamp, offset, length, entity.second);
   }
+
+  fix_entity_offsets(text, entities);
 
   return entities;
 }
@@ -1546,17 +1674,17 @@ static vector<MessageEntity> merge_entities(vector<MessageEntity> old_entities, 
   for (auto &old_entity : old_entities) {
     while (new_it != new_end && new_it->offset + new_it->length <= old_entity.offset) {
       result.push_back(std::move(*new_it));
-      new_it++;
+      ++new_it;
     }
     auto old_entity_end = old_entity.offset + old_entity.length;
     result.push_back(std::move(old_entity));
     while (new_it != new_end && new_it->offset < old_entity_end) {
-      new_it++;
+      ++new_it;
     }
   }
   while (new_it != new_end) {
     result.push_back(std::move(*new_it));
-    new_it++;
+    ++new_it;
   }
 
   return result;
@@ -1615,6 +1743,8 @@ string get_first_url(Slice text, const vector<MessageEntity> &entities) {
       case MessageEntity::Type::PhoneNumber:
         break;
       case MessageEntity::Type::BankCardNumber:
+        break;
+      case MessageEntity::Type::MediaTimestamp:
         break;
       default:
         UNREACHABLE();
@@ -2239,7 +2369,7 @@ static vector<MessageEntity> find_splittable_entities_v3(Slice text, const vecto
     }
   }
 
-  auto found_entities = find_entities(text, false);
+  auto found_entities = find_entities(text, false, true);
   td::remove_if(found_entities, [](const auto &entity) {
     return entity.type == MessageEntity::Type::EmailAddress || entity.type == MessageEntity::Type::Url;
   });
@@ -3030,6 +3160,8 @@ vector<tl_object_ptr<secret_api::MessageEntity>> get_input_secret_message_entiti
         break;
       case MessageEntity::Type::MentionName:
         break;
+      case MessageEntity::Type::MediaTimestamp:
+        break;
       default:
         UNREACHABLE();
     }
@@ -3119,6 +3251,15 @@ Result<vector<MessageEntity>> get_message_entities(const ContactsManager *contac
           return Status::Error(7, "Have no access to the user");
         }
         entities.emplace_back(entity->offset_, entity->length_, user_id);
+        break;
+      }
+      case td_api::textEntityTypeMediaTimestamp::ID: {
+        auto entity_media_timestamp = static_cast<td_api::textEntityTypeMediaTimestamp *>(entity->type_.get());
+        if (entity_media_timestamp->media_timestamp_ < 0) {
+          return Status::Error(400, "Invalid media timestamp specified");
+        }
+        entities.emplace_back(MessageEntity::Type::MediaTimestamp, entity->offset_, entity->length_,
+                              entity_media_timestamp->media_timestamp_);
         break;
       }
       default:
@@ -3759,7 +3900,7 @@ static void merge_new_entities(vector<MessageEntity> &entities, vector<MessageEn
 }
 
 Status fix_formatted_text(string &text, vector<MessageEntity> &entities, bool allow_empty, bool skip_new_entities,
-                          bool skip_bot_commands, bool for_draft) {
+                          bool skip_bot_commands, bool skip_media_timestamps, bool for_draft) {
   string result;
   if (entities.empty()) {
     // fast path
@@ -3867,7 +4008,9 @@ Status fix_formatted_text(string &text, vector<MessageEntity> &entities, bool al
   }
 
   if (!skip_new_entities) {
-    merge_new_entities(entities, find_entities(text, skip_bot_commands));
+    merge_new_entities(entities, find_entities(text, skip_bot_commands, skip_media_timestamps));
+  } else if (!skip_media_timestamps) {
+    merge_new_entities(entities, find_media_timestamp_entities(text));
   }
 
   // new whitespace-only entities could be added after splitting of entities
@@ -3880,11 +4023,12 @@ Status fix_formatted_text(string &text, vector<MessageEntity> &entities, bool al
 
 FormattedText get_message_text(const ContactsManager *contacts_manager, string message_text,
                                vector<tl_object_ptr<telegram_api::MessageEntity>> &&server_entities,
-                               bool skip_new_entities, int32 send_date, bool from_album, const char *source) {
+                               bool skip_new_entities, bool skip_media_timestamps, int32 send_date, bool from_album,
+                               const char *source) {
   auto entities = get_message_entities(contacts_manager, std::move(server_entities), source);
   auto debug_message_text = message_text;
   auto debug_entities = entities;
-  auto status = fix_formatted_text(message_text, entities, true, skip_new_entities, true, false);
+  auto status = fix_formatted_text(message_text, entities, true, skip_new_entities, true, skip_media_timestamps, false);
   if (status.is_error()) {
     // message entities in media albums can be wrong because of a long time ago fixed server-side bug
     if (!from_album && (send_date == 0 || send_date > 1600340000)) {  // approximate fix date
@@ -3895,7 +4039,7 @@ FormattedText get_message_text(const ContactsManager *contacts_manager, string m
     if (!clean_input_string(message_text)) {
       message_text.clear();
     }
-    entities = find_entities(message_text, false);
+    entities = find_entities(message_text, false, skip_media_timestamps);
   }
   return FormattedText{std::move(message_text), std::move(entities)};
 }
@@ -3939,7 +4083,7 @@ Result<FormattedText> process_input_caption(const ContactsManager *contacts_mana
   }
   TRY_RESULT(entities, get_message_entities(contacts_manager, std::move(caption->entities_)));
   TRY_STATUS(fix_formatted_text(caption->text_, entities, true, false,
-                                need_always_skip_bot_commands(contacts_manager, dialog_id, is_bot), false));
+                                need_always_skip_bot_commands(contacts_manager, dialog_id, is_bot), is_bot, false));
   return FormattedText{std::move(caption->text_), std::move(entities)};
 }
 
@@ -3952,6 +4096,19 @@ void add_formatted_text_dependencies(Dependencies &dependencies, const Formatted
       dependencies.user_ids.insert(entity.user_id);
     }
   }
+}
+
+bool has_media_timestamps(const FormattedText *text, int32 min_media_timestamp, int32 max_media_timestamp) {
+  if (text == nullptr) {
+    return false;
+  }
+  for (auto &entity : text->entities) {
+    if (entity.type == MessageEntity::Type::MediaTimestamp && min_media_timestamp <= entity.media_timestamp &&
+        entity.media_timestamp <= max_media_timestamp) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool has_bot_commands(const FormattedText *text) {
