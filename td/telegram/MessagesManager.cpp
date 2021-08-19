@@ -6327,6 +6327,8 @@ void MessagesManager::memory_cleanup(bool full) {
   }
   full_message_id_to_file_source_id_.clear();
   full_message_id_to_file_source_id_.rehash(0);
+  replied_by_media_timestamp_messages_.clear();
+  replied_by_media_timestamp_messages_.rehash(0);
 }
 
 void MessagesManager::memory_stats(vector<string> &output) {
@@ -6382,7 +6384,7 @@ void MessagesManager::memory_stats(vector<string> &output) {
   output.push_back(",");
   output.push_back("\"search_public_dialogs_queries_\":"); output.push_back(std::to_string(this->search_public_dialogs_queries_.size()));
   output.push_back(",");
-  output.push_back("\"public_message_links_\":"); output.push_back(std::to_string(this->public_message_links_->size()));
+  output.push_back("\"replied_by_media_timestamp_messages_\":"); output.push_back(std::to_string(this->replied_by_media_timestamp_messages_->size()));
   output.push_back(",");
   output.push_back("\"full_message_id_to_file_source_id_\":"); output.push_back(std::to_string(this->full_message_id_to_file_source_id_.size()));
   output.push_back(",");
