@@ -124,6 +124,7 @@ class UpdatesManager final : public Actor {
 
  private:
   static constexpr int32 FORCED_GET_DIFFERENCE_PTS_DIFF = 100000;
+  static constexpr int32 GAP_TIMEOUT_UPDATE_COUNT = 20;
   static const double MAX_UNFILLED_GAP_TIME;
   static constexpr bool DROP_PTS_UPDATES = false;
 
@@ -271,13 +272,17 @@ class UpdatesManager final : public Actor {
 
   void process_qts_update(tl_object_ptr<telegram_api::Update> &&update_ptr, int32 qts, Promise<Unit> &&promise);
 
+  void process_all_pending_pts_updates();
+
+  void drop_all_pending_pts_updates();
+
+  void process_postponed_pts_updates();
+
   void process_pending_pts_updates();
 
   void process_pending_seq_updates();
 
   void process_pending_qts_updates();
-
-  void drop_pending_pts_updates();
 
   static void fill_pts_gap(void *td);
 
@@ -304,8 +309,6 @@ class UpdatesManager final : public Actor {
   void before_get_difference(bool is_initial);
 
   void after_get_difference();
-
-  int32 get_min_pending_pts() const;
 
   static bool have_update_pts_changed(const vector<tl_object_ptr<telegram_api::Update>> &updates);
 
