@@ -28,11 +28,12 @@ We added some options:
 * **delete_chat_reference_after_seconds** (positive number) During cleanup, free the memory of the chats that have not been touched for more than X seconds
 * **delete_user_reference_after_seconds** (positive number) During cleanup, free the memory of the users that have not been touched for more than X seconds
 * **delete_file_reference_after_seconds** (positive number) During cleanup, free the memory of the files that have not been touched for more than X seconds
+* **receive_access_hashes** (true/**false**) Receive chats and users access hash as updates
 * **experiment_enable_file_reference_cleanup** (**true**/false) During cleanup, free the memory of the file references
 * **experiment_enable_chat_access_hash_cleanup** (**true**/false) During cleanup, clean chats and channels access hash
 * **enable_pull_based_backpressure** (true/**false**) Enable manual `get_channel_difference` execution by calling `getChannelDifference(channel_difference_id)`.
     Don't modify this option unless you have a very large bot that struggles to keep up with start-up updates throughput, or you want to implement a pull-based async library.
-
+  
 ## Custom API functions
 ### TdApi.OptimizeMemory
 This method is used to optimize the memory usage, but it must be used carefully.
