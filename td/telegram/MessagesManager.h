@@ -31,6 +31,7 @@
 #include "td/telegram/MessageId.h"
 #include "td/telegram/MessageLinkInfo.h"
 #include "td/telegram/MessageReplyInfo.h"
+#include "td/telegram/MessageThreadInfo.h"
 #include "td/telegram/MessagesDb.h"
 #include "td/telegram/MessageSearchFilter.h"
 #include "td/telegram/MessageTtlSetting.h"
@@ -573,17 +574,13 @@ class MessagesManager final : public Actor {
   void get_messages_from_server(vector<FullMessageId> &&message_ids, Promise<Unit> &&promise, const char *source,
                                 tl_object_ptr<telegram_api::InputMessage> input_message = nullptr);
 
-  struct MessageThreadInfo {
-    DialogId dialog_id;
-    vector<MessageId> message_ids;
-  };
   void get_message_thread(DialogId dialog_id, MessageId message_id, Promise<MessageThreadInfo> &&promise);
 
   td_api::object_ptr<td_api::messageThreadInfo> get_message_thread_info_object(const MessageThreadInfo &info);
 
   void process_discussion_message(telegram_api::object_ptr<telegram_api::messages_discussionMessage> &&result,
                                   DialogId dialog_id, MessageId message_id, DialogId expected_dialog_id,
-                                  MessageId expected_message_id, Promise<vector<FullMessageId>> promise);
+                                  MessageId expected_message_id, Promise<MessageThreadInfo> promise);
 
   bool is_message_edited_recently(FullMessageId full_message_id, int32 seconds);
 
@@ -1044,6 +1041,7 @@ class MessagesManager final : public Actor {
     bool is_mention_notification_disabled = false;
     bool is_from_scheduled = false;
     bool is_pinned = false;
+    bool are_media_timestamp_entities_found = false;
 
     bool is_copy = false;                   // for send_message
     bool from_background = false;           // for send_message
@@ -1064,6 +1062,9 @@ class MessagesManager final : public Actor {
 
     NotificationId notification_id;
     NotificationId removed_notification_id;
+
+    int32 max_reply_media_timestamp = -1;
+    int32 max_own_media_timestamp = -2;  // to update replied messages on the first load
 
     int32 view_count = 0;
     int32 forward_count = 0;
@@ -1101,6 +1102,7 @@ class MessagesManager final : public Actor {
     unique_ptr<Message> right;
 
     mutable int32 last_access_date = 0;
+    mutable bool is_update_sent = false;  // whether the message is known to the app
 
     mutable uint64 send_message_log_event_id = 0;
 
@@ -1648,9 +1650,9 @@ class MessagesManager final : public Actor {
   static constexpr int32 MAX_SEARCH_MESSAGES = 100;                // server side limit
   static constexpr int32 MIN_SEARCH_PUBLIC_DIALOG_PREFIX_LEN = 4;  // server side limit
   static constexpr int32 MIN_CHANNEL_DIFFERENCE = 1;
-  static constexpr int32 MAX_CHANNEL_DIFFERENCE = 1000;          // server side limit
-  static constexpr int32 MAX_BOT_CHANNEL_DIFFERENCE = 1000000;   // server side limit
-  static constexpr int32 MAX_RECENTLY_FOUND_DIALOGS = 30;       // some reasonable value
+  static constexpr int32 MAX_CHANNEL_DIFFERENCE = 100;
+  static constexpr int32 MAX_BOT_CHANNEL_DIFFERENCE = 100000;   // server side limit
+  static constexpr int32 MAX_RECENTLY_FOUND_DIALOGS = 50;       // some reasonable value
   static constexpr size_t MAX_TITLE_LENGTH = 128;               // server side limit for chat title
   static constexpr size_t MAX_DESCRIPTION_LENGTH = 255;         // server side limit for chat description
   static constexpr size_t MAX_DIALOG_FILTER_TITLE_LENGTH = 12;  // server side limit for dialog filter title
@@ -1783,6 +1785,8 @@ class MessagesManager final : public Actor {
   bool can_report_dialog(DialogId dialog_id) const;
 
   Status can_pin_messages(DialogId dialog_id) const;
+
+  static Status can_get_media_timestamp_link(DialogId dialog_id, const Message *m);
 
   void cancel_edit_message_media(DialogId dialog_id, Message *m, Slice error_message);
 
@@ -2142,12 +2146,25 @@ class MessagesManager final : public Actor {
 
   void attach_message_to_next(Dialog *d, MessageId message_id, const char *source);
 
-  bool update_message(Dialog *d, Message *old_message, unique_ptr<Message> new_message, bool *need_update_dialog_pos);
+  bool update_message(Dialog *d, Message *old_message, unique_ptr<Message> new_message, bool *need_update_dialog_pos,
+                      bool is_message_in_dialog);
 
   static bool need_message_changed_warning(const Message *old_message);
 
   bool update_message_content(DialogId dialog_id, Message *old_message, unique_ptr<MessageContent> new_content,
                               bool need_send_update_message_content, bool need_merge_files, bool is_message_in_dialog);
+
+  void update_message_max_reply_media_timestamp(const Dialog *d, Message *m, bool need_send_update_message_content);
+
+  void update_message_max_own_media_timestamp(const Dialog *d, Message *m);
+
+  void update_message_max_reply_media_timestamp_in_replied_messages(DialogId dialog_id, MessageId reply_to_message_id);
+
+  void register_message_reply(const Dialog *d, const Message *m);
+
+  void reregister_message_reply(const Dialog *d, const Message *m);
+
+  void unregister_message_reply(const Dialog *d, const Message *m);
 
   void send_update_new_message(const Dialog *d, const Message *m);
 
@@ -2205,7 +2222,9 @@ class MessagesManager final : public Actor {
 
   void send_update_message_send_succeeded(Dialog *d, MessageId old_message_id, const Message *m) const;
 
-  void send_update_message_content(DialogId dialog_id, const Message *m, const char *source);
+  void send_update_message_content(DialogId dialog_id, Message *m, bool is_message_in_dialog, const char *source);
+
+  void send_update_message_content(const Dialog *d, Message *m, bool is_message_in_dialog, const char *source);
 
   void send_update_message_content_impl(DialogId dialog_id, const Message *m, const char *source) const;
 
@@ -2608,6 +2627,10 @@ class MessagesManager final : public Actor {
 
   bool has_message_sender_user_id(DialogId dialog_id, const Message *m) const;
 
+  int32 get_message_own_max_media_timestamp(const Message *m) const;
+
+  static int32 get_message_max_media_timestamp(const Message *m);
+
   static bool get_message_disable_web_page_preview(const Message *m);
 
   static int32 get_message_flags(const Message *m);
@@ -2656,9 +2679,9 @@ class MessagesManager final : public Actor {
 
   void process_discussion_message_impl(telegram_api::object_ptr<telegram_api::messages_discussionMessage> &&result,
                                        DialogId dialog_id, MessageId message_id, DialogId expected_dialog_id,
-                                       MessageId expected_message_id, Promise<vector<FullMessageId>> promise);
+                                       MessageId expected_message_id, Promise<MessageThreadInfo> promise);
 
-  void on_get_discussion_message(DialogId dialog_id, MessageId message_id, vector<FullMessageId> full_message_ids,
+  void on_get_discussion_message(DialogId dialog_id, MessageId message_id, MessageThreadInfo &&message_thread_info,
                                  Promise<MessageThreadInfo> &&promise);
 
   static MessageId get_first_database_message_id_by_index(const Dialog *d, MessageSearchFilter filter);
@@ -3207,10 +3230,10 @@ class MessagesManager final : public Actor {
   std::unordered_map<int64, FoundMessages> found_fts_messages_;             // random_id -> FoundMessages
   std::unordered_map<int64, FoundMessages> found_message_public_forwards_;  // random_id -> FoundMessages
 
-  struct PublicMessageLinks {
-    std::unordered_map<MessageId, std::pair<string, string>, MessageIdHash> links_;
+  struct MessageEmbeddingCodes {
+    std::unordered_map<MessageId, string, MessageIdHash> embedding_codes_;
   };
-  std::unordered_map<DialogId, PublicMessageLinks, DialogIdHash> public_message_links_[2];
+  std::unordered_map<DialogId, MessageEmbeddingCodes, DialogIdHash> message_embedding_codes_[2];
 
   std::unordered_map<int64, tl_object_ptr<td_api::chatEvents>> chat_events_;  // random_id -> chat events
 
@@ -3222,6 +3245,10 @@ class MessagesManager final : public Actor {
   std::unordered_map<DialogId, uint64, DialogIdHash> get_dialog_query_log_event_id_;
 
   std::unordered_map<FullMessageId, int32, FullMessageIdHash> replied_by_yet_unsent_messages_;
+
+  // full_message_id -> replies with media timestamps
+  std::unordered_map<FullMessageId, std::unordered_set<MessageId, MessageIdHash>, FullMessageIdHash>
+      replied_by_media_timestamp_messages_;
 
   struct ActiveDialogAction {
     MessageId top_thread_message_id;

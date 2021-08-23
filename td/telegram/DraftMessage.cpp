@@ -45,13 +45,13 @@ unique_ptr<DraftMessage> get_draft_message(ContactsManager *contacts_manager,
       }
 
       auto entities = get_message_entities(contacts_manager, std::move(draft->entities_), "draftMessage");
-      auto status = fix_formatted_text(draft->message_, entities, true, true, true, true);
+      auto status = fix_formatted_text(draft->message_, entities, true, true, true, true, true);
       if (status.is_error()) {
         LOG(ERROR) << "Receive error " << status << " while parsing draft " << draft->message_;
         if (!clean_input_string(draft->message_)) {
           draft->message_.clear();
         }
-        entities = find_entities(draft->message_, false);
+        entities = find_entities(draft->message_, false, true);
       }
       result->input_message_text.text = FormattedText{std::move(draft->message_), std::move(entities)};
       result->input_message_text.disable_web_page_preview = (flags & telegram_api::draftMessage::NO_WEBPAGE_MASK) != 0;

@@ -759,6 +759,8 @@ messageSendingStateFailed error_code:int32 error_message:string can_retry:Bool r
 //@can_be_deleted_for_all_users True, if the message can be deleted for all users
 //@can_get_statistics True, if the message statistics are available
 //@can_get_message_thread True, if the message thread info is available
+//@can_get_media_timestamp_links True, if media timestamp links can be generated for media timestamp entities in the message text, caption or web page description
+//@has_timestamped_media True, if media timestamp entities refers to a media in this message as opposed to a media in the replied message
 //@is_channel_post True, if the message is a channel post. All messages to channels are channel posts, all other messages are not channel posts
 //@contains_unread_mention True, if the message contains an unread mention for the current user
 //@date Point in time (Unix timestamp) when the message was sent
@@ -776,7 +778,7 @@ messageSendingStateFailed error_code:int32 error_message:string can_retry:Bool r
 //@restriction_reason If non-empty, contains a human-readable description of the reason why access to this message must be restricted
 //@content Content of the message
 //@reply_markup Reply markup for the message; may be null
-message id:int53 sender:MessageSender chat_id:int53 sending_state:MessageSendingState scheduling_state:MessageSchedulingState is_outgoing:Bool is_pinned:Bool can_be_edited:Bool can_be_forwarded:Bool can_be_deleted_only_for_self:Bool can_be_deleted_for_all_users:Bool can_get_statistics:Bool can_get_message_thread:Bool is_channel_post:Bool contains_unread_mention:Bool date:int32 edit_date:int32 forward_info:messageForwardInfo interaction_info:messageInteractionInfo reply_in_chat_id:int53 reply_to_message_id:int53 message_thread_id:int53 ttl:int32 ttl_expires_in:double via_bot_user_id:int32 author_signature:string media_album_id:int64 restriction_reason:string content:MessageContent reply_markup:ReplyMarkup = Message;
+message id:int53 sender:MessageSender chat_id:int53 sending_state:MessageSendingState scheduling_state:MessageSchedulingState is_outgoing:Bool is_pinned:Bool can_be_edited:Bool can_be_forwarded:Bool can_be_deleted_only_for_self:Bool can_be_deleted_for_all_users:Bool can_get_statistics:Bool can_get_message_thread:Bool can_get_media_timestamp_links:Bool has_timestamped_media:Bool is_channel_post:Bool contains_unread_mention:Bool date:int32 edit_date:int32 forward_info:messageForwardInfo interaction_info:messageInteractionInfo reply_in_chat_id:int53 reply_to_message_id:int53 message_thread_id:int53 ttl:int32 ttl_expires_in:double via_bot_user_id:int32 author_signature:string media_album_id:int64 restriction_reason:string content:MessageContent reply_markup:ReplyMarkup = Message;
 
 //@description Contains a list of messages @total_count Approximate total count of messages found @messages List of messages; messages may be null
 messages total_count:int32 messages:vector<message> = Messages;
@@ -1257,7 +1259,8 @@ pageBlockMap location:location zoom:int32 width:int32 height:int32 caption:pageB
 //@version Version of the instant view, currently can be 1 or 2
 //@is_rtl True, if the instant view must be shown from right to left
 //@is_full True, if the instant view contains the full page. A network request might be needed to get the full web page instant view
-webPageInstantView page_blocks:vector<PageBlock> view_count:int32 version:int32 is_rtl:Bool is_full:Bool = WebPageInstantView;
+//@feedback_link An internal link to be opened to leave feedback about the instant view
+webPageInstantView page_blocks:vector<PageBlock> view_count:int32 version:int32 is_rtl:Bool is_full:Bool feedback_link:InternalLinkType = WebPageInstantView;
 
 
 //@description Describes a web page preview
@@ -1851,6 +1854,9 @@ textEntityTypeTextUrl url:string = TextEntityType;
 
 //@description A text shows instead of a raw mention of the user (e.g., when the user has no username) @user_id Identifier of the mentioned user
 textEntityTypeMentionName user_id:int32 = TextEntityType;
+
+//@description A media timestamp @media_timestamp Timestamp from which a video/audio/video note/voice note playing should start, in seconds. The media can be in the content or the web page preview of the current message, or in the same places in the replied message
+textEntityTypeMediaTimestamp media_timestamp:int32 = TextEntityType;
 
 
 //@description A thumbnail to be sent along with a file; must be in JPEG or WEBP format for stickers, and less than 200 KB in size @thumbnail Thumbnail file to send. Sending thumbnails by file_id is currently not supported
@@ -3052,27 +3058,27 @@ internalLinkTypeBotStartInGroup bot_username:string start_parameter:string = Int
 //@description The link is a link to the change phone number section of the app
 internalLinkTypeChangePhoneNumber = InternalLinkType;
 
-//@description The link is a chat invite link. Call checkChatInviteLink to process the link
-internalLinkTypeChatInvite = InternalLinkType;
+//@description The link is a chat invite link. Call checkChatInviteLink with the given invite link to process the link @invite_link Internal representation of the invite link
+internalLinkTypeChatInvite invite_link:string = InternalLinkType;
 
 //@description The link is a link to the filter settings section of the app
 internalLinkTypeFilterSettings = InternalLinkType;
 
-//@description The link is a link to a game. Call searchPublicChat with the given bot username, check that the user is a bot, ask the current user to select a group to send the game, and then call sendMessage with inputMessageGame
+//@description The link is a link to a game. Call searchPublicChat with the given bot username, check that the user is a bot, ask the current user to select a chat to send the game, and then call sendMessage with inputMessageGame
 //@bot_username Username of the bot that owns the game @game_short_name Short name of the game
 internalLinkTypeGame bot_username:string game_short_name:string = InternalLinkType;
 
 //@description The link is a link to a language pack. Call getLanguagePackInfo with the given language pack identifier to process the link @language_pack_id Language pack identifier
 internalLinkTypeLanguagePack language_pack_id:string = InternalLinkType;
 
-//@description The link is a link to a Telegram message. Call getMessageLinkInfo to process the link
-internalLinkTypeMessage = InternalLinkType;
+//@description The link is a link to a Telegram message. Call getMessageLinkInfo with the given URL to process the link @url URL to be passed to getMessageLinkInfo
+internalLinkTypeMessage url:string = InternalLinkType;
 
 //@description The link contains a message draft text. A share screen needs to be shown to the user, then the chosen chat should be open and the text should be added to the input field
 //@text Message draft text @contains_link True, if the first line of the text contains a link. If true, the input field needs to be focused and the text after the link should be selected
 internalLinkTypeMessageDraft text:formattedText contains_link:Bool = InternalLinkType;
 
-//@description The link contains a request of Telegram passport data. Call getPassportAuthorizationForm to process the link if the link was received outside of the app, otherwise ignore it
+//@description The link contains a request of Telegram passport data. Call getPassportAuthorizationForm with the given parameters to process the link if the link was received from outside of the app, otherwise ignore it
 //@bot_user_id User identifier of the service's bot @scope Telegram Passport element types requested by the service @public_key Service's public key @nonce Unique request identifier provided by the service
 //@callback_url An HTTP URL to open once the request is finished or canceled with the parameter tg_passport=success or tg_passport=cancel respectively. If empty, then the link tgbot{bot_user_id}://passport/success or tgbot{bot_user_id}://passport/cancel needs to be opened instead
 internalLinkTypePassportDataRequest bot_user_id:int32 scope:string public_key:string nonce:string callback_url:string = InternalLinkType;
@@ -3081,7 +3087,7 @@ internalLinkTypePassportDataRequest bot_user_id:int32 scope:string public_key:st
 //@hash Hash value from the link @phone_number Phone number value from the link
 internalLinkTypePhoneNumberConfirmation hash:string phone_number:string = InternalLinkType;
 
-//@description The link is a link to a proxy. Call addProxy to process the link and add the proxy
+//@description The link is a link to a proxy. Call addProxy with the given parameters to process the link and add the proxy
 //@server Proxy server IP address @port Proxy server port @type Type of the proxy
 internalLinkTypeProxy server:string port:int32 type:ProxyType = InternalLinkType;
 
@@ -3104,8 +3110,8 @@ internalLinkTypeTheme theme_name:string = InternalLinkType;
 //@description The link is a link to the theme settings section of the app
 internalLinkTypeThemeSettings = InternalLinkType;
 
-//@description The link is an unknown tg: link. Call getDeepLinkInfo to process the link
-internalLinkTypeUnknownDeepLink = InternalLinkType;
+//@description The link is an unknown tg: link. Call getDeepLinkInfo to process the link @link Link to be passed to getDeepLinkInfo
+internalLinkTypeUnknownDeepLink link:string = InternalLinkType;
 
 //@description The link is a link to a voice chat. Call searchPublicChat with the given chat username, and then joinGoupCall with the given invite hash to process the link
 //@chat_username Username of the chat with the voice chat @invite_hash If non-empty, invite hash to be used to join the voice chat without being muted by administrators
@@ -3119,7 +3125,7 @@ messageLink link:string is_public:Bool = MessageLink;
 //@is_public True, if the link is a public link for a message in a chat
 //@chat_id If found, identifier of the chat to which the message belongs, 0 otherwise
 //@message If found, the linked message; may be null
-//@media_timestamp Timestamp from which the video/audio/video note/voice note playing should start, in seconds; 0 if not specified. The media can be in the message content or in its link preview
+//@media_timestamp Timestamp from which the video/audio/video note/voice note playing should start, in seconds; 0 if not specified. The media can be in the message content or in its web page preview
 //@for_album True, if the whole media album to which the message belongs is linked
 //@for_comment True, if the message is linked as a channel post comment or from a message thread
 messageLinkInfo is_public:Bool chat_id:int53 message:message media_timestamp:int32 for_album:Bool for_comment:Bool = MessageLinkInfo;
@@ -3245,7 +3251,7 @@ networkStatistics since_date:int32 entries:vector<NetworkStatisticsEntry> = Netw
 //@use_less_data_for_calls True, if "use less data for calls" option needs to be enabled
 autoDownloadSettings is_auto_download_enabled:Bool max_photo_file_size:int32 max_video_file_size:int32 max_other_file_size:int32 video_upload_bitrate:int32 preload_large_videos:Bool preload_next_audio:Bool use_less_data_for_calls:Bool = AutoDownloadSettings;
 
-//@description Contains auto-download settings presets for the user
+//@description Contains auto-download settings presets for the current user
 //@low Preset with lowest settings; supposed to be used by default when roaming
 //@medium Preset with medium settings; supposed to be used by default when using mobile data
 //@high Preset with highest settings; supposed to be used by default when connected on Wi-Fi
@@ -3926,7 +3932,7 @@ setDatabaseEncryptionKey new_encryption_key:bytes = Ok;
 //@description Returns the current state of 2-step verification
 getPasswordState = PasswordState;
 
-//@description Changes the password for the user. If a new recovery email address is specified, then the change will not be applied until the new recovery email address is confirmed
+//@description Changes the password for the current user. If a new recovery email address is specified, then the change will not be applied until the new recovery email address is confirmed
 //@old_password Previous password of the user @new_password New password of the user; may be empty to remove the password @new_hint New password hint; may be empty @set_recovery_email_address Pass true if the recovery email address should be changed @new_recovery_email_address New recovery email address; may be empty
 setPassword old_password:string new_password:string new_hint:string set_recovery_email_address:Bool new_recovery_email_address:string = PasswordState;
 
@@ -4027,10 +4033,10 @@ getChannelDifference channel_difference_id:int64 = Ok;
 getRemoteFile remote_file_id:string file_type:FileType = File;
 
 //@description Returns an ordered list of chats in a chat list. Chats are sorted by the pair (chat.position.order, chat.id) in descending order. (For example, to get a list of chats from the beginning, the offset_order should be equal to a biggest signed 64-bit number 9223372036854775807 == 2^63 - 1).
-//-For optimal performance the number of returned chats is chosen by the library
+//-For optimal performance, the number of returned chats is chosen by TDLib
 //@chat_list The chat list in which to return chats
 //@offset_order Chat order to return chats from @offset_chat_id Chat identifier to return chats from
-//@limit The maximum number of chats to be returned. It is possible that fewer chats than the limit are returned even if the end of the list is not reached
+//@limit The maximum number of chats to be returned. For optimal performance, the number of returned chats is chosen by TDLib and can be smaller than the specified limit, even if the end of the list is not reached
 getChats chat_list:ChatList offset_order:int64 offset_chat_id:int53 limit:int32 = Chats;
 
 //@description Searches a public chat by its username. Currently only private chats, supergroups and channels can be public. Returns the chat if found; otherwise an error is returned @username Username to be resolved
@@ -4039,7 +4045,7 @@ searchPublicChat username:string = Chat;
 //@description Searches public chats by looking for specified query in their username and title. Currently only private chats, supergroups and channels can be public. Returns a meaningful number of results. Returns nothing if the length of the searched username prefix is less than 5. Excludes private chats with contacts and chats from the chat list from the results @query Query to search for
 searchPublicChats query:string = Chats;
 
-//@description Searches for the specified query in the title and username of already known chats, this is an offline request. Returns chats in the order seen in the main chat list @query Query to search for. If the query is empty, returns up to 20 recently found chats @limit The maximum number of chats to be returned
+//@description Searches for the specified query in the title and username of already known chats, this is an offline request. Returns chats in the order seen in the main chat list @query Query to search for. If the query is empty, returns up to 50 recently found chats @limit The maximum number of chats to be returned
 searchChats query:string limit:int32 = Chats;
 
 //@description Searches for the specified query in the title and username of already known chats via request to the server. Returns chats in the order seen in the main chat list @query Query to search for @limit The maximum number of chats to be returned
@@ -4084,21 +4090,21 @@ getGroupsInCommon user_id:int32 offset_chat_id:int53 limit:int32 = Chats;
 
 
 //@description Returns messages in a chat. The messages are returned in a reverse chronological order (i.e., in order of decreasing message_id).
-//-For optimal performance the number of returned messages is chosen by the library. This is an offline request if only_local is true
+//-For optimal performance, the number of returned messages is chosen by TDLib. This is an offline request if only_local is true
 //@chat_id Chat identifier
 //@from_message_id Identifier of the message starting from which history must be fetched; use 0 to get results from the last message
 //@offset Specify 0 to get results from exactly the from_message_id or a negative offset up to 99 to get additionally some newer messages
-//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. If the offset is negative, the limit must be greater than or equal to -offset. Fewer messages may be returned than specified by the limit, even if the end of the message history has not been reached
+//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. If the offset is negative, the limit must be greater than or equal to -offset. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 //@only_local If true, returns only messages that are available locally without sending network requests
 getChatHistory chat_id:int53 from_message_id:int53 offset:int32 limit:int32 only_local:Bool = Messages;
 
 //@description Returns messages in a message thread of a message. Can be used only if message.can_get_message_thread == true. Message thread of a channel message is in the channel's linked supergroup.
-//-The messages are returned in a reverse chronological order (i.e., in order of decreasing message_id). For optimal performance the number of returned messages is chosen by the library
+//-The messages are returned in a reverse chronological order (i.e., in order of decreasing message_id). For optimal performance, the number of returned messages is chosen by TDLib
 //@chat_id Chat identifier
 //@message_id Message identifier, which thread history needs to be returned
 //@from_message_id Identifier of the message starting from which history must be fetched; use 0 to get results from the last message
 //@offset Specify 0 to get results from exactly the from_message_id or a negative offset up to 99 to get additionally some newer messages
-//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. If the offset is negative, the limit must be greater than or equal to -offset. Fewer messages may be returned than specified by the limit, even if the end of the message thread history has not been reached
+//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. If the offset is negative, the limit must be greater than or equal to -offset. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 getMessageThreadHistory chat_id:int53 message_id:int53 from_message_id:int53 offset:int32 limit:int32 = Messages;
 
 //@description Deletes all messages in the chat. Use Chat.can_be_deleted_only_for_self and Chat.can_be_deleted_for_all_users fields to find whether and how the method can be applied to the chat
@@ -4109,41 +4115,41 @@ deleteChatHistory chat_id:int53 remove_from_chat_list:Bool revoke:Bool = Ok;
 deleteChat chat_id:int53 = Ok;
 
 //@description Searches for messages with given words in the chat. Returns the results in reverse chronological order, i.e. in order of decreasing message_id. Cannot be used in secret chats with a non-empty query
-//-(searchSecretMessages should be used instead), or without an enabled message database. For optimal performance the number of returned messages is chosen by the library
+//-(searchSecretMessages should be used instead), or without an enabled message database. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 //@chat_id Identifier of the chat in which to search messages
 //@query Query to search for
 //@sender If not null, only messages sent by the specified sender will be returned. Not supported in secret chats
 //@from_message_id Identifier of the message starting from which history must be fetched; use 0 to get results from the last message
 //@offset Specify 0 to get results from exactly the from_message_id or a negative offset to get the specified message and some newer messages
-//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. If the offset is negative, the limit must be greater than -offset. Fewer messages may be returned than specified by the limit, even if the end of the message history has not been reached
+//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. If the offset is negative, the limit must be greater than -offset. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 //@filter Filter for message content in the search results
 //@message_thread_id If not 0, only messages in the specified thread will be returned; supergroups only
 searchChatMessages chat_id:int53 query:string sender:MessageSender from_message_id:int53 offset:int32 limit:int32 filter:SearchMessagesFilter message_thread_id:int53 = Messages;
 
 //@description Searches for messages in all chats except secret chats. Returns the results in reverse chronological order (i.e., in order of decreasing (date, chat_id, message_id)).
-//-For optimal performance the number of returned messages is chosen by the library
+//-For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 //@chat_list Chat list in which to search messages; pass null to search in all chats regardless of their chat list. Only Main and Archive chat lists are supported
 //@query Query to search for
 //@offset_date The date of the message starting from which the results should be fetched. Use 0 or any date in the future to get results from the last message
 //@offset_chat_id The chat identifier of the last found message, or 0 for the first request
 //@offset_message_id The message identifier of the last found message, or 0 for the first request
-//@limit The maximum number of messages to be returned; up to 100. Fewer messages may be returned than specified by the limit, even if the end of the message history has not been reached
+//@limit The maximum number of messages to be returned; up to 100. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 //@filter Filter for message content in the search results; searchMessagesFilterCall, searchMessagesFilterMissedCall, searchMessagesFilterMention, searchMessagesFilterUnreadMention, searchMessagesFilterFailedToSend and searchMessagesFilterPinned are unsupported in this function
 //@min_date If not 0, the minimum date of the messages to return
 //@max_date If not 0, the maximum date of the messages to return
 searchMessages chat_list:ChatList query:string offset_date:int32 offset_chat_id:int53 offset_message_id:int53 limit:int32 filter:SearchMessagesFilter min_date:int32 max_date:int32 = Messages;
 
-//@description Searches for messages in secret chats. Returns the results in reverse chronological order. For optimal performance the number of returned messages is chosen by the library
+//@description Searches for messages in secret chats. Returns the results in reverse chronological order. For optimal performance, the number of returned messages is chosen by TDLib
 //@chat_id Identifier of the chat in which to search. Specify 0 to search in all secret chats
 //@query Query to search for. If empty, searchChatMessages should be used instead
 //@offset Offset of the first entry to return as received from the previous request; use empty string to get first chunk of results
-//@limit The maximum number of messages to be returned; up to 100. Fewer messages may be returned than specified by the limit, even if the end of the message history has not been reached
+//@limit The maximum number of messages to be returned; up to 100. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 //@filter A filter for message content in the search results
 searchSecretMessages chat_id:int53 query:string offset:string limit:int32 filter:SearchMessagesFilter = FoundMessages;
 
-//@description Searches for call messages. Returns the results in reverse chronological order (i. e., in order of decreasing message_id). For optimal performance the number of returned messages is chosen by the library
+//@description Searches for call messages. Returns the results in reverse chronological order (i. e., in order of decreasing message_id). For optimal performance, the number of returned messages is chosen by TDLib
 //@from_message_id Identifier of the message from which to search; use 0 to get results from the last message
-//@limit The maximum number of messages to be returned; up to 100. Fewer messages may be returned than specified by the limit, even if the end of the message history has not been reached @only_missed If true, returns only messages with missed calls
+//@limit The maximum number of messages to be returned; up to 100. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit @only_missed If true, returns only messages with missed calls
 searchCallMessages from_message_id:int53 limit:int32 only_missed:Bool = Messages;
 
 //@description Deletes all call messages @revoke Pass true to delete the messages for all users
@@ -4164,11 +4170,11 @@ getChatMessageCount chat_id:int53 filter:SearchMessagesFilter return_local:Bool 
 //@description Returns all scheduled messages in a chat. The messages are returned in a reverse chronological order (i.e., in order of decreasing message_id) @chat_id Chat identifier
 getChatScheduledMessages chat_id:int53 = Messages;
 
-//@description Returns forwarded copies of a channel message to different public channels. For optimal performance the number of returned messages is chosen by the library
+//@description Returns forwarded copies of a channel message to different public channels. For optimal performance, the number of returned messages is chosen by TDLib
 //@chat_id Chat identifier of the message
 //@message_id Message identifier
 //@offset Offset of the first entry to return as received from the previous request; use empty string to get first chunk of results
-//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. Fewer messages may be returned than specified by the limit, even if the end of the list has not been reached
+//@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 getMessagePublicForwards chat_id:int53 message_id:int53 offset:string limit:int32 = FoundMessages;
 
 
@@ -4179,10 +4185,10 @@ removeNotification notification_group_id:int32 notification_id:int32 = Ok;
 removeNotificationGroup notification_group_id:int32 max_notification_id:int32 = Ok;
 
 
-//@description Returns an HTTPS link to a message in a chat. Available only for already sent messages in supergroups and channels. This is an offline request
+//@description Returns an HTTPS link to a message in a chat. Available only for already sent messages in supergroups and channels, or if message.can_get_media_timestamp_links and a media timestamp link is generated. This is an offline request
 //@chat_id Identifier of the chat to which the message belongs
 //@message_id Identifier of the message
-//@media_timestamp If not 0, timestamp from which the video/audio/video note/voice note playing should start, in seconds. The media can be in the message content or in its link preview
+//@media_timestamp If not 0, timestamp from which the video/audio/video note/voice note playing should start, in seconds. The media can be in the message content or in its web page preview
 //@for_album Pass true to create a link for the whole media album
 //@for_comment Pass true to create a link to the message as a channel post comment, or from a message thread
 getMessageLink chat_id:int53 message_id:int53 media_timestamp:int32 for_album:Bool for_comment:Bool = MessageLink;
@@ -4193,7 +4199,7 @@ getMessageLink chat_id:int53 message_id:int53 media_timestamp:int32 for_album:Bo
 //@for_album Pass true to return an HTML code for embedding of the whole media album
 getMessageEmbeddingCode chat_id:int53 message_id:int53 for_album:Bool = Text;
 
-//@description Returns information about a public or private message link @url The message link
+//@description Returns information about a public or private message link. Can be called for any internal link of the type internalLinkTypeMessage @url The message link
 getMessageLinkInfo url:string = MessageLinkInfo;
 
 
@@ -4341,11 +4347,11 @@ getJsonString json_value:JsonValue = Text;
 //@option_ids 0-based identifiers of answer options, chosen by the user. User can choose more than 1 answer option only is the poll allows multiple answers
 setPollAnswer chat_id:int53 message_id:int53 option_ids:vector<int32> = Ok;
 
-//@description Returns users voted for the specified option in a non-anonymous polls. For the optimal performance the number of returned users is chosen by the library
+//@description Returns users voted for the specified option in a non-anonymous polls. For optimal performance, the number of returned users is chosen by TDLib
 //@chat_id Identifier of the chat to which the poll belongs @message_id Identifier of the message containing the poll
 //@option_id 0-based identifier of the answer option
 //@offset Number of users to skip in the result; must be non-negative
-//@limit The maximum number of users to be returned; must be positive and can't be greater than 50. Fewer users may be returned than specified by the limit, even if the end of the voter list has not been reached
+//@limit The maximum number of users to be returned; must be positive and can't be greater than 50. For optimal performance, the number of returned users is chosen by TDLib and can be smaller than the specified limit, even if the end of the voter list has not been reached
 getPollVoters chat_id:int53 message_id:int53 option_id:int32 offset:int32 limit:int32 = Users;
 
 //@description Stops a poll. A poll in a message can be stopped when the message has can_be_edited flag set
@@ -4435,7 +4441,7 @@ openMessageContent chat_id:int53 message_id:int53 = Ok;
 //@description Returns information about the type of an internal link. Returns a 404 error if the link is not internal. Can be called before authorization @link The link
 getInternalLinkType link:string = InternalLinkType;
 
-//@description Returns information about an action to be done when the current user clicks an external link. Don't use this method for links from secret chats if link preview is disabled in secret chats @link The link
+//@description Returns information about an action to be done when the current user clicks an external link. Don't use this method for links from secret chats if web page preview is disabled in secret chats @link The link
 getExternalLinkInfo link:string = LoginUrlInfo;
 
 //@description Returns an HTTP URL which can be used to automatically authorize the current user on a website after clicking an HTTP link. Use the method getExternalLinkInfo to find whether a prior user confirmation is needed
@@ -4588,7 +4594,7 @@ setChatMemberStatus chat_id:int53 member_id:MessageSender status:ChatMemberStatu
 //@chat_id Chat identifier
 //@member_id Member identifier
 //@banned_until_date Point in time (Unix timestamp) when the user will be unbanned; 0 if never. If the user is banned for more than 366 days or for less than 30 seconds from the current time, the user is considered to be banned forever. Ignored in basic groups
-//@revoke_messages Pass true to delete all messages in the chat for the user. Always true for supergroups and channels
+//@revoke_messages Pass true to delete all messages in the chat for the user that is being removed. Always true for supergroups and channels
 banChatMember chat_id:int53 member_id:MessageSender banned_until_date:int32 revoke_messages:Bool = Ok;
 
 //@description Checks whether the current session can be used to transfer a chat ownership to another user
@@ -4945,9 +4951,9 @@ getInstalledStickerSets is_masks:Bool = StickerSets;
 //@description Returns a list of archived sticker sets @is_masks Pass true to return mask stickers sets; pass false to return ordinary sticker sets @offset_sticker_set_id Identifier of the sticker set from which to return the result @limit The maximum number of sticker sets to return
 getArchivedStickerSets is_masks:Bool offset_sticker_set_id:int64 limit:int32 = StickerSets;
 
-//@description Returns a list of trending sticker sets. For the optimal performance the number of returned sticker sets is chosen by the library
+//@description Returns a list of trending sticker sets. For optimal performance, the number of returned sticker sets is chosen by TDLib
 //@offset The offset from which to return the sticker sets; must be non-negative
-//@limit The maximum number of sticker sets to be returned; must be non-negative. Fewer sticker sets may be returned than specified by the limit, even if the end of the list has not been reached
+//@limit The maximum number of sticker sets to be returned; must be non-negative. For optimal performance, the number of returned sticker sets is chosen by TDLib and can be smaller than the specified limit, even if the end of the list has not been reached
 getTrendingStickerSets offset:int32 limit:int32 = StickerSets;
 
 //@description Returns a list of sticker sets attached to a file. Currently only photos and videos can have attached sticker sets @file_id File identifier
@@ -5042,7 +5048,7 @@ setProfilePhoto photo:InputChatPhoto = Ok;
 //@description Deletes a profile photo @profile_photo_id Identifier of the profile photo to delete
 deleteProfilePhoto profile_photo_id:int64 = Ok;
 
-//@description Changes the first and last name of the current user @first_name The new value of the first name for the user; 1-64 characters @last_name The new value of the optional last name for the user; 0-64 characters
+//@description Changes the first and last name of the current user @first_name The new value of the first name for the current user; 1-64 characters @last_name The new value of the optional last name for the current user; 0-64 characters
 setName first_name:string last_name:string = Ok;
 
 //@description Changes the bio of the current user @bio The new value of the user bio; 0-70 characters without line feeds
@@ -5058,7 +5064,7 @@ setLocation location:location = Ok;
 //@phone_number The new phone number of the user in international format @settings Settings for the authentication of the user's phone number
 changePhoneNumber phone_number:string settings:phoneNumberAuthenticationSettings = AuthenticationCodeInfo;
 
-//@description Re-sends the authentication code sent to confirm a new phone number for the user. Works only if the previously received authenticationCodeInfo next_code_type was not null and the server-specified timeout has passed
+//@description Re-sends the authentication code sent to confirm a new phone number for the current user. Works only if the previously received authenticationCodeInfo next_code_type was not null and the server-specified timeout has passed
 resendChangePhoneNumberCode = AuthenticationCodeInfo;
 
 //@description Checks the authentication code sent to confirm a new phone number of the user @code Verification code received by SMS, phone call or flash call

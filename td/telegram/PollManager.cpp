@@ -575,7 +575,7 @@ td_api::object_ptr<td_api::poll> PollManager::get_poll_object(PollId poll_id, co
     auto correct_option_id = is_local_poll_id(poll_id) ? -1 : poll->correct_option_id;
     poll_type = td_api::make_object<td_api::pollTypeQuiz>(
         correct_option_id,
-        get_formatted_text_object(is_local_poll_id(poll_id) ? FormattedText() : poll->explanation, true));
+        get_formatted_text_object(is_local_poll_id(poll_id) ? FormattedText() : poll->explanation, true, -1));
   } else {
     poll_type = td_api::make_object<td_api::pollTypeRegular>(poll->allow_multiple_answers);
   }
@@ -1581,12 +1581,12 @@ PollId PollManager::on_get_poll(PollId poll_id, tl_object_ptr<telegram_api::poll
 
   auto entities =
       get_message_entities(td_->contacts_manager_.get(), std::move(poll_results->solution_entities_), "on_get_poll");
-  auto status = fix_formatted_text(poll_results->solution_, entities, true, true, true, false);
+  auto status = fix_formatted_text(poll_results->solution_, entities, true, true, true, true, false);
   if (status.is_error()) {
     if (!clean_input_string(poll_results->solution_)) {
       poll_results->solution_.clear();
     }
-    entities = find_entities(poll_results->solution_, true);
+    entities = find_entities(poll_results->solution_, true, true);
   }
   FormattedText explanation{std::move(poll_results->solution_), std::move(entities)};
 

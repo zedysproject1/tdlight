@@ -825,7 +825,7 @@ int64 WebPagesManager::get_web_page_preview(td_api::object_ptr<td_api::formatted
   }
   auto entities = r_entities.move_as_ok();
 
-  auto result = fix_formatted_text(text->text_, entities, true, false, true, false);
+  auto result = fix_formatted_text(text->text_, entities, true, false, true, true, false);
   if (result.is_error() || text->text_.empty()) {
     promise.set_value(Unit());
     return 0;
@@ -1225,7 +1225,7 @@ tl_object_ptr<td_api::webPage> WebPagesManager::get_web_page_object(WebPageId we
 
   FormattedText description;
   description.text = web_page->description;
-  description.entities = find_entities(web_page->description, true);
+  description.entities = find_entities(web_page->description, true, false);
 
   auto r_url = parse_url(web_page->display_url);
   if (r_url.is_ok()) {
@@ -1294,11 +1294,12 @@ tl_object_ptr<td_api::webPage> WebPagesManager::get_web_page_object(WebPageId we
     }
   }
 
+  auto duration = get_web_page_media_duration(web_page);
   return make_tl_object<td_api::webPage>(
       web_page->url, web_page->display_url, web_page->type, web_page->site_name, web_page->title,
-      get_formatted_text_object(description, true), get_photo_object(td_->file_manager_.get(), web_page->photo),
-      web_page->embed_url, web_page->embed_type, web_page->embed_dimensions.width, web_page->embed_dimensions.height,
-      web_page->duration, web_page->author,
+      get_formatted_text_object(description, true, duration == 0 ? std::numeric_limits<int32>::max() : duration),
+      get_photo_object(td_->file_manager_.get(), web_page->photo), web_page->embed_url, web_page->embed_type,
+      web_page->embed_dimensions.width, web_page->embed_dimensions.height, web_page->duration, web_page->author,
       web_page->document.type == Document::Type::Animation
           ? td_->animations_manager_->get_animation_object(web_page->document.file_id, "get_web_page_object")
           : nullptr,
@@ -1325,11 +1326,11 @@ tl_object_ptr<td_api::webPage> WebPagesManager::get_web_page_object(WebPageId we
 
 tl_object_ptr<td_api::webPageInstantView> WebPagesManager::get_web_page_instant_view_object(
     WebPageId web_page_id) const {
-  return get_web_page_instant_view_object(get_web_page_instant_view(web_page_id));
+  return get_web_page_instant_view_object(web_page_id, get_web_page_instant_view(web_page_id));
 }
 
 tl_object_ptr<td_api::webPageInstantView> WebPagesManager::get_web_page_instant_view_object(
-    const WebPageInstantView *web_page_instant_view) const {
+    WebPageId web_page_id, const WebPageInstantView *web_page_instant_view) const {
   if (web_page_instant_view == nullptr) {
     return nullptr;
   }
@@ -1337,10 +1338,12 @@ tl_object_ptr<td_api::webPageInstantView> WebPagesManager::get_web_page_instant_
     LOG(ERROR) << "Trying to get not loaded web page instant view";
     return nullptr;
   }
+  auto feedback_link =
+      td_api::make_object<td_api::internalLinkTypeBotStart>("previews", PSTRING() << "webpage" << web_page_id.get());
   return td_api::make_object<td_api::webPageInstantView>(
       get_page_block_objects(web_page_instant_view->page_blocks, td_, web_page_instant_view->url),
       web_page_instant_view->view_count, web_page_instant_view->is_v2 ? 2 : 1, web_page_instant_view->is_rtl,
-      web_page_instant_view->is_full);
+      web_page_instant_view->is_full, std::move(feedback_link));
 }
 
 void WebPagesManager::on_web_page_changed(WebPageId web_page_id, bool have_web_page) {
@@ -1527,7 +1530,7 @@ void WebPagesManager::on_get_web_page_instant_view(WebPage *web_page, tl_object_
   web_page->instant_view.is_loaded = true;
 
   LOG(DEBUG) << "Receive web page instant view: "
-             << to_string(get_web_page_instant_view_object(&web_page->instant_view));
+             << to_string(get_web_page_instant_view_object(WebPageId(), &web_page->instant_view));
 }
 
 class WebPagesManager::WebPageLogEvent {
@@ -1751,12 +1754,22 @@ string WebPagesManager::get_web_page_search_text(WebPageId web_page_id) const {
   return PSTRING() << web_page->title + " " + web_page->description;
 }
 
-int32 WebPagesManager::get_web_page_duration(WebPageId web_page_id) const {
+int32 WebPagesManager::get_web_page_media_duration(WebPageId web_page_id) const {
   const WebPage *web_page = get_web_page(web_page_id);
   if (web_page == nullptr) {
-    return 0;
+    return -1;
   }
-  return web_page->duration;
+  return get_web_page_media_duration(web_page);
+}
+
+int32 WebPagesManager::get_web_page_media_duration(const WebPage *web_page) {
+  if (web_page->document.type == Document::Type::Audio || web_page->document.type == Document::Type::Video ||
+      web_page->document.type == Document::Type::VideoNote || web_page->document.type == Document::Type::VoiceNote ||
+      web_page->embed_type == "iframe") {
+    return web_page->duration;
+  }
+
+  return -1;
 }
 
 vector<FileId> WebPagesManager::get_web_page_file_ids(const WebPage *web_page) const {
