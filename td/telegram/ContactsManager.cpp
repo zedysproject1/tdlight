@@ -15830,8 +15830,8 @@ tl_object_ptr<td_api::accessHash> ContactsManager::get_user_access_hash_object(U
   if (u == nullptr) {
     return nullptr;
   }
-  tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeUser>();
   if (!u->is_min_access_hash && u->access_hash != 0) {
+    tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeUser>();
     DialogId dialog_id(user_id);
     return make_tl_object<td_api::accessHash>(dialog_id.get(), std::move(type), u->access_hash);
   }
@@ -15841,8 +15841,8 @@ tl_object_ptr<td_api::accessHash> ContactsManager::get_channel_access_hash_objec
   if (c == nullptr) {
     return nullptr;
   }
-  tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeChannel>();
   if (c->access_hash != 0) {
+    tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeChannel>();
     DialogId dialog_id(channel_id);
     return make_tl_object<td_api::accessHash>(dialog_id.get(), std::move(type), c->access_hash);
   }
