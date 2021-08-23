@@ -7634,7 +7634,7 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
       if (set_boolean_option("experiment_old_postponed_pts_updates_behavior")) {
         return;
       }
-      if (set_boolean_option("enable_pull_based_backpressure")) {
+      if (set_boolean_option("enable_reactive_pull_backpressure")) {
         return;
       }
       break;
