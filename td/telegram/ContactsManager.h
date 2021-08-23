@@ -1449,6 +1449,10 @@ class ContactsManager final : public Actor {
 
   tl_object_ptr<td_api::user> get_user_object(UserId user_id, const User *u) const;
 
+  tl_object_ptr<td_api::accessHash> get_user_access_hash_object(UserId user_id, const User *u) const;
+
+  tl_object_ptr<td_api::accessHash> get_channel_access_hash_object(ChannelId channel_id, const Channel *c) const;
+
   tl_object_ptr<td_api::userFullInfo> get_user_full_info_object(UserId user_id, const UserFull *user_full) const;
 
   static td_api::object_ptr<td_api::updateBasicGroup> get_update_unknown_basic_group_object(ChatId chat_id);

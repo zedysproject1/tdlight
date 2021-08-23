@@ -7752,6 +7752,9 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
       if (set_boolean_option("reuse_uploaded_photos_by_hash")) {
         return;
       }
+      if (set_boolean_option("receive_access_hashes")) {
+        return;
+      }
       break;
     case 's':
       if (set_integer_option("session_count", 0, 50)) {

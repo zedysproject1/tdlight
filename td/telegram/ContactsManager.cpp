@@ -8284,6 +8284,10 @@ class ContactsManager::UserLogEvent {
 
 void ContactsManager::save_user(User *u, UserId user_id, bool from_binlog) {
   if (!G()->parameters().use_chat_info_db) {
+    if (u != nullptr && G()->shared_config().get_option_boolean("receive_access_hashes", false)) {
+      send_closure(G()->td(), &Td::send_update,
+                   make_tl_object<td_api::updateAccessHash>(get_user_access_hash_object(user_id, u)));
+    }
     return;
   }
   CHECK(u != nullptr);
@@ -8822,6 +8826,10 @@ class ContactsManager::ChannelLogEvent {
 
 void ContactsManager::save_channel(Channel *c, ChannelId channel_id, bool from_binlog) {
   if (!G()->parameters().use_chat_info_db) {
+    if (c != nullptr && G()->shared_config().get_option_boolean("receive_access_hashes", false)) {
+      send_closure(G()->td(), &Td::send_update,
+                   make_tl_object<td_api::updateAccessHash>(get_channel_access_hash_object(channel_id, c)));
+    }
     return;
   }
   CHECK(c != nullptr);
@@ -15816,6 +15824,28 @@ int32 ContactsManager::get_user_id_object(UserId user_id, const char *source) co
 
 tl_object_ptr<td_api::user> ContactsManager::get_user_object(UserId user_id) const {
   return get_user_object(user_id, get_user(user_id));
+}
+
+tl_object_ptr<td_api::accessHash> ContactsManager::get_user_access_hash_object(UserId user_id, const User *u) const {
+  if (u == nullptr) {
+    return nullptr;
+  }
+  tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeUser>();
+  if (!u->is_min_access_hash && u->access_hash != 0) {
+    DialogId dialog_id(user_id);
+    return make_tl_object<td_api::accessHash>(dialog_id.get(), std::move(type), u->access_hash);
+  }
+}
+
+tl_object_ptr<td_api::accessHash> ContactsManager::get_channel_access_hash_object(ChannelId channel_id, const Channel *c) const {
+  if (c == nullptr) {
+    return nullptr;
+  }
+  tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeChannel>();
+  if (c->access_hash != 0) {
+    DialogId dialog_id(channel_id);
+    return make_tl_object<td_api::accessHash>(dialog_id.get(), std::move(type), c->access_hash);
+  }
 }
 
 tl_object_ptr<td_api::user> ContactsManager::get_user_object(UserId user_id, const User *u) const {
