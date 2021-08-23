@@ -1133,6 +1133,9 @@ class MessagesManager final : public Actor {
 
   struct Dialog {
     DialogId dialog_id;
+
+    int64 time_ = INT64_MAX;
+
     MessageId last_new_message_id;  // identifier of the last known server message received from update, there should be
                                     // no server messages after it
     MessageId last_message_id;      // identifier of the message after which currently there is no any message, i.e. a
@@ -1331,12 +1334,26 @@ class MessagesManager final : public Actor {
     MessageId debug_first_database_message_id;
     MessageId debug_last_database_message_id;
 
-    Dialog() = default;
+    Dialog() {
+      set_time();
+    }
     Dialog(const Dialog &) = delete;
     Dialog &operator=(const Dialog &) = delete;
     Dialog(Dialog &&other) = delete;
     Dialog &operator=(Dialog &&other) = delete;
     ~Dialog();
+
+    void set_time() {
+      time_ = std::time(nullptr);
+    }
+
+    int64 get_time() const {
+      return time_;
+    }
+
+    void reset_time() {
+      time_ = INT64_MAX;
+    }
 
     template <class StorerT>
     void store(StorerT &storer) const;
@@ -1698,7 +1715,9 @@ class MessagesManager final : public Actor {
 
   static constexpr bool DROP_SEND_MESSAGE_UPDATES = false;
 
-  void memory_cleanup(bool full);
+  void memory_cleanup(bool teardown);
+
+  void memory_cleanup(Dialog *d);
 
   static FullMessageId get_full_message_id(const tl_object_ptr<telegram_api::Message> &message_ptr, bool is_scheduled);
 

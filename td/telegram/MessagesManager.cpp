@@ -6287,31 +6287,76 @@ void MessagesManager::memory_cleanup() {
   memory_cleanup(false);
 }
 
-void MessagesManager::memory_cleanup(bool full) {
+void MessagesManager::memory_cleanup(DialogId *dialog_id, Dialog *dialog) {
+  remove_all_dialog_notifications(dialog, false, "memory_cleanup");
+  remove_all_dialog_notifications(dialog, true, "memory_cleanup");
+  clear_active_dialog_actions(dialog_id);
+
+  auto &deleted_message_ids = dialog->deleted_message_ids;
+  deleted_message_ids.clear();
+  deleted_message_ids.rehash(0);
+
+  auto &notification_id_to_message_id = dialog->notification_id_to_message_id;
+  notification_id_to_message_id.clear();
+  notification_id_to_message_id.rehash(0);
+
+  auto &pending_new_message_notifications = dialog->pending_new_message_notifications;
+  pending_new_message_notifications.clear();
+  pending_new_message_notifications.rehash(0);
+
+  auto &pending_new_mention_notifications = dialog->pending_new_mention_notifications;
+  pending_new_mention_notifications.clear();
+  pending_new_mention_notifications.rehash(0);
+
+  auto &deleted_scheduled_server_message_ids = dialog->deleted_scheduled_server_message_ids;
+  deleted_scheduled_server_message_ids.clear();
+  deleted_scheduled_server_message_ids.rehash(0);
+
+  auto &deleted_scheduled_server_message_ids = dialog->deleted_scheduled_server_message_ids;
+  deleted_scheduled_server_message_ids.clear();
+  deleted_scheduled_server_message_ids.rehash(0);
+
+  auto &updated_read_history_message_ids = dialog->updated_read_history_message_ids;
+  updated_read_history_message_ids.clear();
+  updated_read_history_message_ids.rehash(0);
+
+  auto &read_history_log_event_ids = dialog->read_history_log_event_ids;
+  read_history_log_event_ids.clear();
+  read_history_log_event_ids.rehash(0);
+
+  auto &read_history_log_event_ids = dialog->read_history_log_event_ids;
+  read_history_log_event_ids.clear();
+  read_history_log_event_ids.rehash(0);
+}
+
+void MessagesManager::memory_cleanup(bool teardown) {
+  auto time = std::time(nullptr);
+  auto chat_ttl = full ? 0 : !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 900);
+  auto user_ttl = std::max(chat_ttl, full ? 0 : !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 900));
   /* CLEAR DELETED MESSAGES CACHE */
-  if (full) {
+  if (teardown) {
     dialogs_.clear();
     dialogs_.rehash(0);
   } else {
     auto it = dialogs_.begin();
     while (it != dialogs_.end()) {
       auto &dialog = it->second;
-      clear_active_dialog_actions(it->first);
+      memory_cleanup(it->first, dialog);
 
-      auto &deleted_message_ids = dialog->deleted_message_ids;
-      deleted_message_ids.clear();
-      deleted_message_ids.rehash(0);
-
-      it++;
+      if (time - dialog->get_time() > (dialog->dialog_id.get_type() == DialogType::User) ? user_ttl : chat_ttl) {
+        it = dialogs_.erase(it);
+      } else {
+        ++it;
+      }
     }
   }
-  if (full) {
+  if (teardown) {
     recently_found_dialogs_loaded_ = 2;
     recently_found_dialog_ids_.clear();
   } else {
     clear_recently_found_dialogs();
   }
-  if (full) {
+  if (teardown) {
     found_public_dialogs_.clear();
     found_public_dialogs_.rehash(0);
     found_on_server_dialogs_.clear();
