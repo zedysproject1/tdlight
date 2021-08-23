@@ -6287,7 +6287,7 @@ void MessagesManager::memory_cleanup() {
   memory_cleanup(false);
 }
 
-void MessagesManager::memory_cleanup(DialogId *dialog_id, Dialog *dialog) {
+void MessagesManager::memory_cleanup(DialogId dialog_id, Dialog *dialog) {
   remove_all_dialog_notifications(dialog, false, "memory_cleanup");
   remove_all_dialog_notifications(dialog, true, "memory_cleanup");
   clear_active_dialog_actions(dialog_id);
@@ -6302,15 +6302,9 @@ void MessagesManager::memory_cleanup(DialogId *dialog_id, Dialog *dialog) {
 
   auto &pending_new_message_notifications = dialog->pending_new_message_notifications;
   pending_new_message_notifications.clear();
-  pending_new_message_notifications.rehash(0);
 
   auto &pending_new_mention_notifications = dialog->pending_new_mention_notifications;
   pending_new_mention_notifications.clear();
-  pending_new_mention_notifications.rehash(0);
-
-  auto &deleted_scheduled_server_message_ids = dialog->deleted_scheduled_server_message_ids;
-  deleted_scheduled_server_message_ids.clear();
-  deleted_scheduled_server_message_ids.rehash(0);
 
   auto &deleted_scheduled_server_message_ids = dialog->deleted_scheduled_server_message_ids;
   deleted_scheduled_server_message_ids.clear();
@@ -6323,16 +6317,12 @@ void MessagesManager::memory_cleanup(DialogId *dialog_id, Dialog *dialog) {
   auto &read_history_log_event_ids = dialog->read_history_log_event_ids;
   read_history_log_event_ids.clear();
   read_history_log_event_ids.rehash(0);
-
-  auto &read_history_log_event_ids = dialog->read_history_log_event_ids;
-  read_history_log_event_ids.clear();
-  read_history_log_event_ids.rehash(0);
 }
 
 void MessagesManager::memory_cleanup(bool teardown) {
   auto time = std::time(nullptr);
-  auto chat_ttl = full ? 0 : !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 900);
-  auto user_ttl = std::max(chat_ttl, full ? 0 : !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 900));
+  auto chat_ttl = teardown ? 0 : !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 900);
+  auto user_ttl = std::max(chat_ttl, teardown ? 0 : !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 900));
   /* CLEAR DELETED MESSAGES CACHE */
   if (teardown) {
     dialogs_.clear();
@@ -6340,10 +6330,9 @@ void MessagesManager::memory_cleanup(bool teardown) {
   } else {
     auto it = dialogs_.begin();
     while (it != dialogs_.end()) {
-      auto &dialog = it->second;
-      memory_cleanup(it->first, dialog);
+      memory_cleanup(it->first, it->second.get());
 
-      if (time - dialog->get_time() > (dialog->dialog_id.get_type() == DialogType::User) ? user_ttl : chat_ttl) {
+      if (time - it->second->get_time() > (it->second->dialog_id.get_type() == DialogType::User) ? user_ttl : chat_ttl) {
         it = dialogs_.erase(it);
       } else {
         ++it;
@@ -34461,6 +34450,7 @@ MessagesManager::Dialog *MessagesManager::add_dialog(DialogId dialog_id, const c
 
   auto d = make_unique<Dialog>();
   d->dialog_id = dialog_id;
+  d->set_time();
   invalidate_message_indexes(d.get());
 
   return add_new_dialog(std::move(d), false, source);
@@ -34590,6 +34580,10 @@ MessagesManager::Dialog *MessagesManager::add_new_dialog(unique_ptr<Dialog> &&d,
   loaded_dialogs_.erase(dialog_id);
 
   Dialog *dialog = dialog_it->second.get();
+
+  if (dialog != nullptr) {
+    dialog->set_time();
+  }
 
   fix_dialog_action_bar(dialog);
 
@@ -35557,6 +35551,9 @@ uint64 MessagesManager::get_sequence_dispatcher_id(DialogId dialog_id, MessageCo
 
 MessagesManager::Dialog *MessagesManager::get_dialog(DialogId dialog_id) {
   auto it = dialogs_.find(dialog_id);
+  if (it != dialogs_.end()) {
+    it->second->set_time();
+  }
   return it == dialogs_.end() ? nullptr : it->second.get();
 }
 
@@ -35574,6 +35571,7 @@ MessagesManager::Dialog *MessagesManager::get_dialog_force(DialogId dialog_id, c
 
   auto it = dialogs_.find(dialog_id);
   if (it != dialogs_.end()) {
+    it->second->set_time();
     return it->second.get();
   }
 
@@ -35599,6 +35597,7 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
   LOG(INFO) << "Loaded " << dialog_id << " of size " << value.size() << " from database from " << source;
   auto d = make_unique<Dialog>();
   d->dialog_id = dialog_id;
+  d->set_time();
   invalidate_message_indexes(d.get());  // must initialize indexes, because some of them could be not parsed
 
   loaded_dialogs_.insert(dialog_id);
@@ -35615,6 +35614,7 @@ unique_ptr<MessagesManager::Dialog> MessagesManager::parse_dialog(DialogId dialo
     // just clean all known data about the dialog
     d = make_unique<Dialog>();
     d->dialog_id = dialog_id;
+    d->set_time();
     invalidate_message_indexes(d.get());
 
     // and try to reget it from the server if possible

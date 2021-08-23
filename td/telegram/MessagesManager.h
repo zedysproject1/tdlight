@@ -1334,9 +1334,7 @@ class MessagesManager final : public Actor {
     MessageId debug_first_database_message_id;
     MessageId debug_last_database_message_id;
 
-    Dialog() {
-      set_time();
-    }
+    Dialog() = default;
     Dialog(const Dialog &) = delete;
     Dialog &operator=(const Dialog &) = delete;
     Dialog(Dialog &&other) = delete;
@@ -1717,7 +1715,7 @@ class MessagesManager final : public Actor {
 
   void memory_cleanup(bool teardown);
 
-  void memory_cleanup(Dialog *d);
+  void memory_cleanup(DialogId dialog_id, Dialog *d);
 
   static FullMessageId get_full_message_id(const tl_object_ptr<telegram_api::Message> &message_ptr, bool is_scheduled);
 
