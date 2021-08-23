@@ -28691,7 +28691,9 @@ void MessagesManager::send_update_message_content(DialogId dialog_id, Message *m
 
 void MessagesManager::send_update_message_content(const Dialog *d, Message *m, bool is_message_in_dialog,
                                                   const char *source) {
-  CHECK(d != nullptr);
+  if (d == nullptr) {
+    return;
+  }
   if (m == nullptr) {
     return;
   }
