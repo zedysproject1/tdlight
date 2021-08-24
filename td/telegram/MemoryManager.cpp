@@ -103,13 +103,15 @@ bool MemoryManager::do_session_settings_allow_for_memory_management() {
 
 void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) const {
   if (!can_manage_memory()) {
-    auto value = MemoryStats("{}");
+    auto value = MemoryStats(R"({"warning": "OptimizeMemory is not enabled, please read the recommended options on README.md"})");
 
     promise.set_value(std::move(value));
     return;
   }
 
-  vector<string> output = {"{\"memory_stats\":{"};
+  vector<string> output = {"{"};
+
+  output.push_back("\"memory_stats\":{");
 
   output.push_back("\"messages_manager_\":{");
   td_->messages_manager_->memory_stats(output);
@@ -200,7 +202,9 @@ void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) co
   td_->poll_manager_->memory_stats(output);
   output.push_back("}");
 
-  output.push_back("}}");
+  output.push_back("}");
+
+  output.push_back("}");
 
   string s;
   s = accumulate(output.begin(), output.end(), s);

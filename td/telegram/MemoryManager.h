@@ -39,7 +39,7 @@ class Td;
 struct MemoryStats {
   string debug;
   MemoryStats() = default;
-  explicit MemoryStats(string debug) : debug(debug) {
+  explicit MemoryStats(string debug) : debug(std::move(debug)) {
   }
   tl_object_ptr<td_api::memoryStatistics> get_memory_statistics_object() const;
 };

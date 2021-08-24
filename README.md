@@ -55,7 +55,7 @@ If you want to avoid receiving data with missing fields during cleanup:
 This method is used to read the size of all the biggest data maps inside tdlib implementation.
 The output contains a string that can be parsed as a JSON.
 
-## Other reccomended options
+## Other recommended options
 * Options:
     * ignore_inline_thumbnails: true
     * disable_top_chats: true
@@ -69,7 +69,7 @@ The output contains a string that can be parsed as a JSON.
 -----
 
 
-The following text is the classic tdlib readme:
+The following text is the classic TDLib readme:
 
 # TDLib
 
