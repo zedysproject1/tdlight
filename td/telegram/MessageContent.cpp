@@ -84,6 +84,7 @@
 #include "td/utils/tl_helpers.h"
 #include "td/utils/utf8.h"
 
+#include <limits>
 #include <utility>
 
 namespace td {
@@ -723,6 +724,19 @@ class MessageInviteToGroupCall final : public MessageContent {
   }
 };
 
+class MessageChatSetTheme final : public MessageContent {
+ public:
+  string emoji;
+
+  MessageChatSetTheme() = default;
+  explicit MessageChatSetTheme(string &&emoji) : emoji(std::move(emoji)) {
+  }
+
+  MessageContentType get_type() const final {
+    return MessageContentType::ChatSetTheme;
+  }
+};
+
 template <class StorerT>
 static void store(const MessageContent *content, StorerT &storer) {
   CHECK(content != nullptr);
@@ -1014,6 +1028,11 @@ static void store(const MessageContent *content, StorerT &storer) {
       auto m = static_cast<const MessageInviteToGroupCall *>(content);
       store(m->input_group_call_id, storer);
       store(m->user_ids, storer);
+      break;
+    }
+    case MessageContentType::ChatSetTheme: {
+      auto m = static_cast<const MessageChatSetTheme *>(content);
+      store(m->emoji, storer);
       break;
     }
     default:
@@ -1419,6 +1438,12 @@ static void parse(unique_ptr<MessageContent> &content, ParserT &parser) {
       auto m = make_unique<MessageInviteToGroupCall>();
       parse(m->input_group_call_id, parser);
       parse(m->user_ids, parser);
+      content = std::move(m);
+      break;
+    }
+    case MessageContentType::ChatSetTheme: {
+      auto m = make_unique<MessageChatSetTheme>();
+      parse(m->emoji, parser);
       content = std::move(m);
       break;
     }
@@ -2035,6 +2060,7 @@ bool can_have_input_media(const Td *td, const MessageContent *content) {
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       return false;
     case MessageContentType::Animation:
     case MessageContentType::Audio:
@@ -2149,6 +2175,7 @@ SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       break;
     default:
       UNREACHABLE();
@@ -2264,6 +2291,7 @@ static tl_object_ptr<telegram_api::InputMedia> get_input_media_impl(
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       break;
     default:
       UNREACHABLE();
@@ -2427,6 +2455,7 @@ void delete_message_content_thumbnail(MessageContent *content, Td *td) {
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       break;
     default:
       UNREACHABLE();
@@ -2594,6 +2623,7 @@ Status can_send_message_content(DialogId dialog_id, const MessageContent *conten
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       UNREACHABLE();
   }
   return Status::OK();
@@ -2719,6 +2749,7 @@ static int32 get_message_content_media_index_mask(const MessageContent *content,
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       return 0;
     default:
       UNREACHABLE();
@@ -2737,6 +2768,15 @@ MessageId get_message_content_pinned_message_id(const MessageContent *content) {
       return static_cast<const MessagePinMessage *>(content)->message_id;
     default:
       return MessageId();
+  }
+}
+
+string get_message_content_theme_name(const MessageContent *content) {
+  switch (content->get_type()) {
+    case MessageContentType::ChatSetTheme:
+      return static_cast<const MessageChatSetTheme *>(content)->emoji;
+    default:
+      return string();
   }
 }
 
@@ -2943,8 +2983,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Animation: {
       auto old_ = static_cast<const MessageAnimation *>(old_content);
       auto new_ = static_cast<const MessageAnimation *>(new_content);
-      if (new_->file_id != old_->file_id &&
-          (!need_merge_files || td->animations_manager_->merge_animations(new_->file_id, old_->file_id, false))) {
+      if (new_->file_id != old_->file_id) {
+        if (need_merge_files) {
+          td->animations_manager_->merge_animations(new_->file_id, old_->file_id, false);
+        }
         need_update = true;
       }
       if (old_->caption != new_->caption) {
@@ -2955,8 +2997,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Audio: {
       auto old_ = static_cast<const MessageAudio *>(old_content);
       auto new_ = static_cast<const MessageAudio *>(new_content);
-      if (new_->file_id != old_->file_id &&
-          (!need_merge_files || td->audios_manager_->merge_audios(new_->file_id, old_->file_id, false))) {
+      if (new_->file_id != old_->file_id) {
+        if (need_merge_files) {
+          td->audios_manager_->merge_audios(new_->file_id, old_->file_id, false);
+        }
         need_update = true;
       }
       if (old_->caption != new_->caption) {
@@ -2975,8 +3019,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Document: {
       auto old_ = static_cast<const MessageDocument *>(old_content);
       auto new_ = static_cast<const MessageDocument *>(new_content);
-      if (new_->file_id != old_->file_id &&
-          (!need_merge_files || td->documents_manager_->merge_documents(new_->file_id, old_->file_id, false))) {
+      if (new_->file_id != old_->file_id) {
+        if (need_merge_files) {
+          td->documents_manager_->merge_documents(new_->file_id, old_->file_id, false);
+        }
         need_update = true;
       }
       if (old_->caption != new_->caption) {
@@ -3108,8 +3154,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Sticker: {
       auto old_ = static_cast<const MessageSticker *>(old_content);
       auto new_ = static_cast<const MessageSticker *>(new_content);
-      if (new_->file_id != old_->file_id &&
-          (!need_merge_files || td->stickers_manager_->merge_stickers(new_->file_id, old_->file_id, false))) {
+      if (new_->file_id != old_->file_id) {
+        if (need_merge_files) {
+          td->stickers_manager_->merge_stickers(new_->file_id, old_->file_id, false);
+        }
         need_update = true;
       }
       break;
@@ -3129,8 +3177,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Video: {
       auto old_ = static_cast<const MessageVideo *>(old_content);
       auto new_ = static_cast<const MessageVideo *>(new_content);
-      if (new_->file_id != old_->file_id &&
-          (!need_merge_files || td->videos_manager_->merge_videos(new_->file_id, old_->file_id, false))) {
+      if (new_->file_id != old_->file_id) {
+        if (need_merge_files) {
+          td->videos_manager_->merge_videos(new_->file_id, old_->file_id, false);
+        }
         need_update = true;
       }
       if (old_->caption != new_->caption) {
@@ -3141,8 +3191,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::VideoNote: {
       auto old_ = static_cast<const MessageVideoNote *>(old_content);
       auto new_ = static_cast<const MessageVideoNote *>(new_content);
-      if (new_->file_id != old_->file_id &&
-          (!need_merge_files || td->video_notes_manager_->merge_video_notes(new_->file_id, old_->file_id, false))) {
+      if (new_->file_id != old_->file_id) {
+        if (need_merge_files) {
+          td->video_notes_manager_->merge_video_notes(new_->file_id, old_->file_id, false);
+        }
         need_update = true;
       }
       if (old_->is_viewed != new_->is_viewed) {
@@ -3153,8 +3205,10 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::VoiceNote: {
       auto old_ = static_cast<const MessageVoiceNote *>(old_content);
       auto new_ = static_cast<const MessageVoiceNote *>(new_content);
-      if (new_->file_id != old_->file_id &&
-          (!need_merge_files || td->voice_notes_manager_->merge_voice_notes(new_->file_id, old_->file_id, false))) {
+      if (new_->file_id != old_->file_id) {
+        if (need_merge_files) {
+          td->voice_notes_manager_->merge_voice_notes(new_->file_id, old_->file_id, false);
+        }
         need_update = true;
       }
       if (old_->caption != new_->caption) {
@@ -3377,6 +3431,14 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
       }
       break;
     }
+    case MessageContentType::ChatSetTheme: {
+      auto old_ = static_cast<const MessageChatSetTheme *>(old_content);
+      auto new_ = static_cast<const MessageChatSetTheme *>(new_content);
+      if (old_->emoji != new_->emoji) {
+        need_update = true;
+      }
+      break;
+    }
     case MessageContentType::Unsupported: {
       auto old_ = static_cast<const MessageUnsupported *>(old_content);
       auto new_ = static_cast<const MessageUnsupported *>(new_content);
@@ -3512,6 +3574,7 @@ bool merge_message_content_file_id(Td *td, MessageContent *message_content, File
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       LOG(ERROR) << "Receive new file " << new_file_id << " in a sent message of the type " << content_type;
       break;
     default:
@@ -4110,14 +4173,11 @@ unique_ptr<MessageContent> get_message_content(Td *td, FormattedText message,
     case telegram_api::messageMediaGame::ID: {
       auto message_game = move_tl_object_as<telegram_api::messageMediaGame>(media);
 
-      auto m = make_unique<MessageGame>(Game(td, std::move(message_game->game_), owner_dialog_id));
-      if (m->game.empty()) {
+      auto m =
+          make_unique<MessageGame>(Game(td, via_bot_user_id, std::move(message_game->game_), message, owner_dialog_id));
+      if (m->game.is_empty()) {
         break;
       }
-
-      m->game.set_bot_user_id(via_bot_user_id);
-      m->game.set_text(std::move(message));
-
       return std::move(m);
     }
     case telegram_api::messageMediaInvoice::ID:
@@ -4381,6 +4441,7 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       return nullptr;
     default:
       UNREACHABLE();
@@ -4640,6 +4701,10 @@ unique_ptr<MessageContent> get_action_message_content(Td *td, tl_object_ptr<tele
       return make_unique<MessageGroupCall>(InputGroupCallId(scheduled_group_call->call_), -1,
                                            scheduled_group_call->schedule_date_);
     }
+    case telegram_api::messageActionSetChatTheme::ID: {
+      auto set_chat_theme = move_tl_object_as<telegram_api::messageActionSetChatTheme>(action);
+      return td::make_unique<MessageChatSetTheme>(std::move(set_chat_theme->emoticon_));
+    }
     default:
       UNREACHABLE();
   }
@@ -4656,7 +4721,7 @@ tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageCo
     case MessageContentType::Animation: {
       const MessageAnimation *m = static_cast<const MessageAnimation *>(content);
       return make_tl_object<td_api::messageAnimation>(
-          td->animations_manager_->get_animation_object(m->file_id, "get_message_content_object"),
+          td->animations_manager_->get_animation_object(m->file_id),
           get_formatted_text_object(m->caption, skip_bot_commands, max_media_timestamp), is_content_secret);
     }
     case MessageContentType::Audio: {
@@ -4873,6 +4938,10 @@ tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageCo
       return make_tl_object<td_api::messageInviteVoiceChatParticipants>(
           td->group_call_manager_->get_group_call_id(m->input_group_call_id, DialogId()).get(),
           td->contacts_manager_->get_user_ids_object(m->user_ids, "MessageInviteToGroupCall"));
+    }
+    case MessageContentType::ChatSetTheme: {
+      const MessageChatSetTheme *m = static_cast<const MessageChatSetTheme *>(content);
+      return make_tl_object<td_api::messageChatSetTheme>(m->emoji);
     }
     default:
       UNREACHABLE();
@@ -5222,6 +5291,7 @@ string get_message_content_search_text(const Td *td, const MessageContent *conte
     case MessageContentType::ProximityAlertTriggered:
     case MessageContentType::GroupCall:
     case MessageContentType::InviteToGroupCall:
+    case MessageContentType::ChatSetTheme:
       return string();
     default:
       UNREACHABLE();
@@ -5431,6 +5501,8 @@ void add_message_content_dependencies(Dependencies &dependencies, const MessageC
       dependencies.user_ids.insert(content->user_ids.begin(), content->user_ids.end());
       break;
     }
+    case MessageContentType::ChatSetTheme:
+      break;
     default:
       UNREACHABLE();
       break;

@@ -37,7 +37,7 @@ class AnimationsManager final : public Actor {
 
   int32 get_animation_duration(FileId file_id) const;
 
-  tl_object_ptr<td_api::animation> get_animation_object(FileId file_id, const char *source);
+  tl_object_ptr<td_api::animation> get_animation_object(FileId file_id) const;
 
   void create_animation(FileId file_id, string minithumbnail, PhotoSize thumbnail, AnimationSize animated_thumbnail,
                         bool has_stickers, vector<FileId> &&sticker_file_ids, string file_name, string mime_type,
@@ -59,7 +59,7 @@ class AnimationsManager final : public Actor {
 
   FileId dup_animation(FileId new_id, FileId old_id);
 
-  bool merge_animations(FileId new_id, FileId old_id, bool can_delete_old);
+  void merge_animations(FileId new_id, FileId old_id, bool can_delete_old);
 
   void on_update_animation_search_emojis(string animation_search_emojis);
 
@@ -114,8 +114,6 @@ class AnimationsManager final : public Actor {
     vector<FileId> sticker_file_ids;
 
     FileId file_id;
-
-    bool is_changed = true;
   };
 
   void memory_cleanup(bool full);

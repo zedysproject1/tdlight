@@ -801,6 +801,14 @@ messages total_count:int32 messages:vector<message> = Messages;
 foundMessages total_count:int32 messages:vector<message> next_offset:string = FoundMessages;
 
 
+//@description Describes a sponsored message @id Unique sponsored message identifier @sponsor_chat_id Chat identifier
+//@start_parameter Parameter for the bot start message if the sponsored chat is a chat with a bot @content Content of the message
+sponsoredMessage id:bytes sponsor_chat_id:int53 start_parameter:string content:MessageContent = SponsoredMessage;
+
+//@description Contains a list of sponsored messages @messages List of sponsored messages
+sponsoredMessages messages:vector<sponsoredMessage> = SponsoredMessages;
+
+
 //@class NotificationSettingsScope @description Describes the types of chats to which notification settings are relevant
 
 //@description Notification settings applied to all private and secret chats when the corresponding chat setting has a default value
@@ -942,12 +950,13 @@ voiceChat group_call_id:int32 has_participants:Bool default_participant_id:Messa
 //@unread_mention_count Number of unread messages with a mention/reply in the chat
 //@notification_settings Notification settings for this chat
 //@message_ttl_setting Current message Time To Live setting (self-destruct timer) for the chat; 0 if not defined. TTL is counted from the time message or its content is viewed in secret chats and from the send date in other chats
+//@theme_name If non-empty, name of the theme set for the chat
 //@action_bar Describes actions which should be possible to do through a chat action bar; may be null
 //@voice_chat Contains information about voice chat of the chat
 //@reply_markup_message_id Identifier of the message from which reply markup needs to be used; 0 if there is no default custom reply markup in the chat
 //@draft_message A draft of a message in the chat; may be null
 //@client_data Contains application-specific data associated with the chat. (For example, the chat scroll position or local chat notification settings can be stored here.) Persistent if the message database is used
-chat id:int53 type:ChatType title:string photo:chatPhotoInfo permissions:chatPermissions last_message:message positions:vector<chatPosition> is_marked_as_unread:Bool is_blocked:Bool has_scheduled_messages:Bool can_be_deleted_only_for_self:Bool can_be_deleted_for_all_users:Bool can_be_reported:Bool default_disable_notification:Bool unread_count:int32 last_read_inbox_message_id:int53 last_read_outbox_message_id:int53 unread_mention_count:int32 notification_settings:chatNotificationSettings message_ttl_setting:int32 action_bar:ChatActionBar voice_chat:voiceChat reply_markup_message_id:int53 draft_message:draftMessage client_data:string = Chat;
+chat id:int53 type:ChatType title:string photo:chatPhotoInfo permissions:chatPermissions last_message:message positions:vector<chatPosition> is_marked_as_unread:Bool is_blocked:Bool has_scheduled_messages:Bool can_be_deleted_only_for_self:Bool can_be_deleted_for_all_users:Bool can_be_reported:Bool default_disable_notification:Bool unread_count:int32 last_read_inbox_message_id:int53 last_read_outbox_message_id:int53 unread_mention_count:int32 notification_settings:chatNotificationSettings message_ttl_setting:int32 theme_name:string action_bar:ChatActionBar voice_chat:voiceChat reply_markup_message_id:int53 draft_message:draftMessage client_data:string = Chat;
 
 //@description Represents a list of chats @total_count Approximate total count of chats found @chat_ids List of chat identifiers
 chats total_count:int32 chat_ids:vector<int53> = Chats;
@@ -1078,9 +1087,10 @@ loginUrlInfoRequestConfirmation url:string domain:string bot_user_id:int32 reque
 //@chat_id Identifier of the chat to which the message thread belongs
 //@message_thread_id Message thread identifier, unique within the chat
 //@reply_info Contains information about the message thread
+//@unread_message_count Approximate number of unread messages in the message thread
 //@messages The messages from which the thread starts. The messages are returned in a reverse chronological order (i.e., in order of decreasing message_id)
 //@draft_message A draft of a message in the message thread; may be null
-messageThreadInfo chat_id:int53 message_thread_id:int53 reply_info:messageReplyInfo messages:vector<message> draft_message:draftMessage = MessageThreadInfo;
+messageThreadInfo chat_id:int53 message_thread_id:int53 reply_info:messageReplyInfo unread_message_count:int32 messages:vector<message> draft_message:draftMessage = MessageThreadInfo;
 
 
 //@class RichText @description Describes a text object inside an instant-view web page
@@ -1316,7 +1326,7 @@ countries countries:vector<countryInfo> = Countries;
 //@description Contains information about a phone number
 //@country Information about the country to which the phone number belongs; may be null
 //@country_calling_code The part of the phone number denoting country calling code or its part
-//@formatted_phone_number The phone number without country calling code formatted accordingly to local rules
+//@formatted_phone_number The phone number without country calling code formatted accordingly to local rules. Expected digits are returned as '-', but even more digits might be entered by the user
 phoneNumberInfo country:countryInfo country_calling_code:string formatted_phone_number:string = PhoneNumberInfo;
 
 
@@ -1395,7 +1405,7 @@ paymentForm id:int64 invoice:invoice url:string seller_bot_user_id:int32 payment
 //@description Contains a temporary identifier of validated order information, which is stored for one hour. Also contains the available shipping options @order_info_id Temporary identifier of the order information @shipping_options Available shipping options
 validatedOrderInfo order_info_id:string shipping_options:vector<shippingOption> = ValidatedOrderInfo;
 
-//@description Contains the result of a payment request @success True, if the payment request was successful; otherwise the verification_url will be not empty @verification_url URL for additional payment credentials verification
+//@description Contains the result of a payment request @success True, if the payment request was successful; otherwise the verification_url will be non-empty @verification_url URL for additional payment credentials verification
 paymentResult success:Bool verification_url:string = PaymentResult;
 
 //@description Contains information about a successful payment
@@ -1469,7 +1479,7 @@ date day:int32 month:int32 year:int32 = Date;
 personalDetails first_name:string middle_name:string last_name:string native_first_name:string native_middle_name:string native_last_name:string birthdate:date gender:string country_code:string residence_country_code:string = PersonalDetails;
 
 //@description An identity document @number Document number; 1-24 characters @expiry_date Document expiry date; may be null @front_side Front side of the document
-//@reverse_side Reverse side of the document; only for driver license and identity card @selfie Selfie with the document; may be null @translation List of files containing a certified English translation of the document
+//@reverse_side Reverse side of the document; only for driver license and identity card; may be null @selfie Selfie with the document; may be null @translation List of files containing a certified English translation of the document
 identityDocument number:string expiry_date:date front_side:datedFile reverse_side:datedFile selfie:datedFile translation:vector<datedFile> = IdentityDocument;
 
 //@description An identity document to be saved to Telegram Passport @number Document number; 1-24 characters @expiry_date Document expiry date, if available @front_side Front side of the document
@@ -1780,6 +1790,9 @@ messagePinMessage message_id:int53 = MessageContent;
 //@description A screenshot of a message in the chat has been taken
 messageScreenshotTaken = MessageContent;
 
+//@description A theme in the chat has been changed @theme_name If non-empty, name of the new theme set for the chat. Otherwise theme was deleted in the chat
+messageChatSetTheme theme_name:string = MessageContent;
+
 //@description The TTL (Time To Live) setting for messages in the chat has been changed @ttl New message TTL setting
 messageChatSetTtl ttl:int32 = MessageContent;
 
@@ -2032,28 +2045,43 @@ searchMessagesFilterPinned = SearchMessagesFilter;
 
 //@description The user is typing a message
 chatActionTyping = ChatAction;
+
 //@description The user is recording a video
 chatActionRecordingVideo = ChatAction;
+
 //@description The user is uploading a video @progress Upload progress, as a percentage
 chatActionUploadingVideo progress:int32 = ChatAction;
+
 //@description The user is recording a voice note
 chatActionRecordingVoiceNote = ChatAction;
+
 //@description The user is uploading a voice note @progress Upload progress, as a percentage
 chatActionUploadingVoiceNote progress:int32 = ChatAction;
+
 //@description The user is uploading a photo @progress Upload progress, as a percentage
 chatActionUploadingPhoto progress:int32 = ChatAction;
+
 //@description The user is uploading a document @progress Upload progress, as a percentage
 chatActionUploadingDocument progress:int32 = ChatAction;
+
+//@description The user is picking a sticker to send
+chatActionChoosingSticker = ChatAction;
+
 //@description The user is picking a location or venue to send
 chatActionChoosingLocation = ChatAction;
+
 //@description The user is picking a contact to send
 chatActionChoosingContact = ChatAction;
+
 //@description The user has started to play a game
 chatActionStartPlayingGame = ChatAction;
+
 //@description The user is recording a video note
 chatActionRecordingVideoNote = ChatAction;
+
 //@description The user is uploading a video note @progress Upload progress, as a percentage
 chatActionUploadingVideoNote progress:int32 = ChatAction;
+
 //@description The user has canceled the previous action
 chatActionCancel = ChatAction;
 
@@ -2173,6 +2201,18 @@ callStateDiscarded reason:CallDiscardReason need_rating:Bool need_debug_informat
 callStateError error:error = CallState;
 
 
+//@class GroupCallVideoQuality @description Describes the quality of a group call video
+
+//@description The worst available video quality
+groupCallVideoQualityThumbnail = GroupCallVideoQuality;
+
+//@description The medium video quality
+groupCallVideoQualityMedium = GroupCallVideoQuality;
+
+//@description The best available video quality
+groupCallVideoQualityFull = GroupCallVideoQuality;
+
+
 //@description Describes a recently speaking participant in a group call @participant_id Group call participant identifier @is_speaking True, is the user has spoken recently
 groupCallRecentSpeaker participant_id:MessageSender is_speaking:Bool = GroupCallRecentSpeaker;
 
@@ -2194,8 +2234,9 @@ groupCallRecentSpeaker participant_id:MessageSender is_speaking:Bool = GroupCall
 //@mute_new_participants True, if only group call administrators can unmute new participants
 //@can_change_mute_new_participants True, if the current user can enable or disable mute_new_participants setting
 //@record_duration Duration of the ongoing group call recording, in seconds; 0 if none. An updateGroupCall update is not triggered when value of this field changes, but the same recording goes on
+//@is_video_recorded True, if a video file is being recorded for the call
 //@duration Call duration, in seconds; for ended calls only
-groupCall id:int32 title:string scheduled_start_date:int32 enabled_start_notification:Bool is_active:Bool is_joined:Bool need_rejoin:Bool can_be_managed:Bool participant_count:int32 loaded_all_participants:Bool recent_speakers:vector<groupCallRecentSpeaker> is_my_video_enabled:Bool is_my_video_paused:Bool can_enable_video:Bool mute_new_participants:Bool can_change_mute_new_participants:Bool record_duration:int32 duration:int32 = GroupCall;
+groupCall id:int32 title:string scheduled_start_date:int32 enabled_start_notification:Bool is_active:Bool is_joined:Bool need_rejoin:Bool can_be_managed:Bool participant_count:int32 loaded_all_participants:Bool recent_speakers:vector<groupCallRecentSpeaker> is_my_video_enabled:Bool is_my_video_paused:Bool can_enable_video:Bool mute_new_participants:Bool can_change_mute_new_participants:Bool record_duration:int32 is_video_recorded:Bool duration:int32 = GroupCall;
 
 //@description Describes a group of video synchronization source identifiers @semantics The semantics of sources, one of "SIM" or "FID" @source_ids The list of synchronization source identifiers
 groupCallVideoSourceGroup semantics:string source_ids:vector<int32> = GroupCallVideoSourceGroup;
@@ -2491,6 +2532,9 @@ chatEventUsernameChanged old_username:string new_username:string = ChatEventActi
 //@description The chat photo was changed @old_photo Previous chat photo value; may be null @new_photo New chat photo value; may be null
 chatEventPhotoChanged old_photo:chatPhoto new_photo:chatPhoto = ChatEventAction;
 
+//@description The chat theme was changed @old_theme_name Previous chat theme name; empty if none @new_theme_name New chat theme name; empty if none
+chatEventThemeChanged old_theme_name:string new_theme_name:string = ChatEventAction;
+
 //@description The can_invite_users permission of a supergroup chat was toggled @can_invite_users New value of can_invite_users permission
 chatEventInvitesToggled can_invite_users:Bool = ChatEventAction;
 
@@ -2689,6 +2733,24 @@ inputBackgroundLocal background:InputFile = InputBackground;
 inputBackgroundRemote background_id:int64 = InputBackground;
 
 
+//@description Describes theme settings
+//@accent_color Theme accent color in ARGB format
+//@background The background to be used in chats; may be null
+//@message_fill The fill to be used as a background for outgoing messages
+//@animate_message_fill If true, the freeform gradient fill needs to be animated on every sent message
+themeSettings accent_color:int32 background:background message_fill:BackgroundFill animate_message_fill:Bool = ThemeSettings;
+
+
+//@description Describes a chat theme
+//@name Theme name
+//@light_settings Theme settings for a light chat theme
+//@dark_settings Theme settings for a dark chat theme
+chatTheme name:string light_settings:themeSettings dark_settings:themeSettings = ChatTheme;
+
+//@description Contains a list of chat themes @chat_themes A list of chat themes
+chatThemes chat_themes:vector<chatTheme> = ChatThemes;
+
+
 //@description Contains a list of hashtags @hashtags A list of hashtags
 hashtags hashtags:vector<string> = Hashtags;
 
@@ -2830,6 +2892,9 @@ pushMessageContentChatChangePhoto = PushMessageContent;
 
 //@description A chat title was edited @title New chat title
 pushMessageContentChatChangeTitle title:string = PushMessageContent;
+
+//@description A chat theme was edited @theme_name Name of the new chat theme
+pushMessageContentChatChangeTheme theme_name:string = PushMessageContent;
 
 //@description A chat member was deleted @member_name Name of the deleted member @is_current_user True, if the current user was deleted from the group
 //@is_left True, if the user has left the group themselves
@@ -3634,6 +3699,9 @@ updateChatMessageTtlSetting chat_id:int53 message_ttl_setting:int32 = Update;
 //@description The chat action bar was changed @chat_id Chat identifier @action_bar The new value of the action bar; may be null
 updateChatActionBar chat_id:int53 action_bar:ChatActionBar = Update;
 
+//@description The chat theme was changed @chat_id Chat identifier @theme_name The new name of the chat theme; may be empty if none
+updateChatTheme chat_id:int53 theme_name:string = Update;
+
 //@description The default chat reply markup was changed. Can occur because new messages with reply markup were received or because an old reply markup was hidden by the user
 //@chat_id Chat identifier @reply_markup_message_id Identifier of the message from which reply markup needs to be used; 0 if there is no default custom reply markup in the chat
 updateChatReplyMarkup chat_id:int53 reply_markup_message_id:int53 = Update;
@@ -4049,12 +4117,13 @@ getChannelDifference channel_difference_id:int64 = Ok;
 //@remote_file_id Remote identifier of the file to get @file_type File type, if known
 getRemoteFile remote_file_id:string file_type:FileType = File;
 
-//@description Returns an ordered list of chats in a chat list. Chats are sorted by the pair (chat.position.order, chat.id) in descending order. (For example, to get a list of chats from the beginning, the offset_order should be equal to a biggest signed 64-bit number 9223372036854775807 == 2^63 - 1).
-//-For optimal performance, the number of returned chats is chosen by TDLib
-//@chat_list The chat list in which to return chats
-//@offset_order Chat order to return chats from @offset_chat_id Chat identifier to return chats from
-//@limit The maximum number of chats to be returned. For optimal performance, the number of returned chats is chosen by TDLib and can be smaller than the specified limit, even if the end of the list is not reached
-getChats chat_list:ChatList offset_order:int64 offset_chat_id:int53 limit:int32 = Chats;
+//@description Loads more chats from a chat list. The loaded chats and their positions in the chat list will be sent through updates. Chats are sorted by the pair (chat.position.order, chat.id) in descending order. Returns a 404 error if all chats has been loaded
+//@chat_list The chat list in which to load chats
+//@limit The maximum number of chats to be loaded. For optimal performance, the number of loaded chats is chosen by TDLib and can be smaller than the specified limit, even if the end of the list is not reached
+loadChats chat_list:ChatList limit:int32 = Ok;
+
+//@description Returns an ordered list of chats from the beginning of a chat list. For informational purposes only. Use loadChats instead to maintain chat lists @chat_list The chat list in which to return chats @limit The maximum number of chats to be returned
+getChats chat_list:ChatList limit:int32 = Chats;
 
 //@description Searches a public chat by its username. Currently only private chats, supergroups and channels can be public. Returns the chat if found; otherwise an error is returned @username Username to be resolved
 searchPublicChat username:string = Chat;
@@ -4194,6 +4263,12 @@ getChatScheduledMessages chat_id:int53 = Messages;
 //@limit The maximum number of messages to be returned; must be positive and can't be greater than 100. For optimal performance, the number of returned messages is chosen by TDLib and can be smaller than the specified limit
 getMessagePublicForwards chat_id:int53 message_id:int53 offset:string limit:int32 = FoundMessages;
 
+//@description Returns sponsored messages to be shown in a chat; for channel chats only @chat_id Identifier of the chat
+getChatSponsoredMessages chat_id:int53 = SponsoredMessages;
+
+//@description Informs TDLib that a sponsored message was viewed by the user @chat_id Chat identifier @message_id The identifier of the sponsored message being viewed
+viewSponsoredMessage chat_id:int53 message_id:bytes = Ok;
+
 
 //@description Removes an active notification from notification list. Needs to be called only if the notification is removed by the current user @notification_group_id Identifier of notification group to which the notification belongs @notification_id Identifier of removed notification
 removeNotification notification_group_id:int32 notification_id:int32 = Ok;
@@ -4254,9 +4329,10 @@ sendInlineQueryResultMessage chat_id:int53 message_thread_id:int53 reply_to_mess
 //@from_chat_id Identifier of the chat from which to forward messages
 //@message_ids Identifiers of the messages to forward. Message identifiers must be in a strictly increasing order. At most 100 messages can be forwarded simultaneously
 //@options Options to be used to send the messages
-//@send_copy True, if content of the messages needs to be copied without links to the original messages. Always true if the messages are forwarded to a secret chat
-//@remove_caption True, if media caption of message copies needs to be removed. Ignored if send_copy is false
-forwardMessages chat_id:int53 from_chat_id:int53 message_ids:vector<int53> options:messageSendOptions send_copy:Bool remove_caption:Bool = Messages;
+//@send_copy If true, content of the messages will be copied without links to the original messages. Always true if the messages are forwarded to a secret chat
+//@remove_caption If true, media caption of message copies will be removed. Ignored if send_copy is false
+//@only_preview If true, messages will not be forwarded and instead fake messages will be returned
+forwardMessages chat_id:int53 from_chat_id:int53 message_ids:vector<int53> options:messageSendOptions send_copy:Bool remove_caption:Bool only_preview:Bool = Messages;
 
 //@description Resends messages which failed to send. Can be called only for messages for which messageSendingStateFailed.can_retry is true and after specified in messageSendingStateFailed.retry_after time passed.
 //-If a message is re-sent, the corresponding failed to send message is deleted. Returns the sent messages in the same order as the message identifiers passed in message_ids. If a message can't be re-sent, null will be returned instead of the message
@@ -4545,6 +4621,10 @@ setChatMessageTtlSetting chat_id:int53 ttl:int32 = Ok;
 //@description Changes the chat members permissions. Supported only for basic groups and supergroups. Requires can_restrict_members administrator right
 //@chat_id Chat identifier @permissions New non-administrator members permissions in the chat
 setChatPermissions chat_id:int53 permissions:chatPermissions = Ok;
+
+//@description Changes the chat theme. Requires can_change_info administrator right in groups, supergroups and channels @chat_id Chat identifier
+//@theme_name Name of the new chat theme; may be empty to return the default theme
+setChatTheme chat_id:int53 theme_name:string = Ok;
 
 //@description Changes the draft message in a chat @chat_id Chat identifier @message_thread_id If not 0, a message thread identifier in which the draft was changed @draft_message New draft message; may be null
 setChatDraftMessage chat_id:int53 message_thread_id:int53 draft_message:draftMessage = Ok;
@@ -4861,7 +4941,8 @@ inviteGroupCallParticipants group_call_id:int32 user_ids:vector<int32> = Ok;
 getGroupCallInviteLink group_call_id:int32 can_self_unmute:Bool = HttpUrl;
 
 //@description Starts recording of an active group call. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier @title Group call recording title; 0-64 characters
-startGroupCallRecording group_call_id:int32 title:string = Ok;
+//@record_video Pass true to record a video file instead of an audio file @use_portrait_orientation Pass true to use portrait orientation for video instead of landscape one
+startGroupCallRecording group_call_id:int32 title:string record_video:Bool use_portrait_orientation:Bool = Ok;
 
 //@description Ends recording of an active group call. Requires groupCall.can_be_managed group call flag @group_call_id Group call identifier
 endGroupCallRecording group_call_id:int32 = Ok;
@@ -4900,11 +4981,13 @@ leaveGroupCall group_call_id:int32 = Ok;
 //@description Discards a group call. Requires groupCall.can_be_managed @group_call_id Group call identifier
 discardGroupCall group_call_id:int32 = Ok;
 
-//@description Returns a file with a segment of a group call stream in a modified OGG format
+//@description Returns a file with a segment of a group call stream in a modified OGG format for audio or MPEG-4 format for video
 //@group_call_id Group call identifier
 //@time_offset Point in time when the stream segment begins; Unix timestamp in milliseconds
 //@scale Segment duration scale; 0-1. Segment's duration is 1000/(2**scale) milliseconds
-getGroupCallStreamSegment group_call_id:int32 time_offset:int53 scale:int32 = FilePart;
+//@channel_id Identifier of an audio/video channel to get as received from tgcalls
+//@video_quality Video quality as received from tgcalls
+getGroupCallStreamSegment group_call_id:int32 time_offset:int53 scale:int32 channel_id:int32 video_quality:GroupCallVideoQuality = FilePart;
 
 
 //@description Changes the block state of a message sender. Currently, only users and supergroup chats can be blocked @sender Message Sender @is_blocked New value of is_blocked
@@ -5205,6 +5288,10 @@ removeBackground background_id:int64 = Ok;
 resetBackgrounds = Ok;
 
 
+//@description Returns the list of available chat themes
+getChatThemes = ChatThemes;
+
+
 //@description Returns information about the current localization target. This is an offline request if only_local is true. Can be called before authorization @only_local If true, returns only locally available information without sending network requests
 getLocalizationTargetInfo only_local:Bool = LocalizationTargetInfo;
 
@@ -5480,6 +5567,10 @@ getCountryCode = Text;
 
 //@description Returns information about a phone number by its prefix. Can be called before authorization @phone_number_prefix The phone number prefix
 getPhoneNumberInfo phone_number_prefix:string = PhoneNumberInfo;
+
+//@description Returns information about a phone number by its prefix synchronously. getCountries must be called at least once after changing localization to the specified language if properly localized country information is expected. Can be called synchronously
+//@language_code A two-letter ISO 639-1 country code for country information localization @phone_number_prefix The phone number prefix
+getPhoneNumberInfoSync language_code:string phone_number_prefix:string = PhoneNumberInfo;
 
 //@description Returns the link for downloading official Telegram application to be used when the current user invites friends to Telegram
 getApplicationDownloadLink = HttpUrl;

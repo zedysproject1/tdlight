@@ -31,7 +31,6 @@
 
 #include <algorithm>
 #include <iterator>
-#include <type_traits>
 
 namespace td {
 
@@ -192,7 +191,6 @@ unique_ptr<RawConnection> SessionConnection::move_as_raw_connection() {
   return std::move(raw_connection_);
 }
 
-/*** SessionConnection ***/
 BufferSlice SessionConnection::as_buffer_slice(Slice packet) {
   return current_buffer_slice_->from_slice(packet);
 }
@@ -250,6 +248,10 @@ Status SessionConnection::on_packet_rpc_result(const MsgInfo &info, Slice packet
   if (parser.get_error()) {
     return Status::Error(PSLICE() << "Failed to parse mtproto_api::rpc_result: " << parser.get_error());
   }
+  if (req_msg_id == 0) {
+    LOG(ERROR) << "Receive an update in rpc_result: message_id = " << info.message_id << ", seq_no = " << info.seq_no;
+    return Status::Error("Receive an update in rpc_result");
+  }
 
   auto object_begin_pos = packet.size() - parser.get_left_len();
   int32 id = parser.fetch_int();
@@ -304,8 +306,7 @@ Status SessionConnection::on_packet(const MsgInfo &info, uint64 req_msg_id, cons
   if (req_msg_id != 0) {
     callback_->on_message_result_error(req_msg_id, rpc_error.error_code_, rpc_error.error_message_.str());
   } else {
-    LOG(ERROR) << "Receive rpc_error as update: [" << rpc_error.error_code_ << "][" << rpc_error.error_message_
-               << "]";
+    LOG(ERROR) << "Receive rpc_error as update: [" << rpc_error.error_code_ << "][" << rpc_error.error_message_ << "]";
   }
   return Status::OK();
 }
@@ -426,7 +427,7 @@ Status SessionConnection::on_packet(const MsgInfo &info, const mtproto_api::pong
 }
 Status SessionConnection::on_packet(const MsgInfo &info, const mtproto_api::future_salts &salts) {
   VLOG(mtproto) << "FUTURE_SALTS";
-  std::vector<ServerSalt> new_salts;
+  vector<ServerSalt> new_salts;
   for (auto &it : salts.salts_) {
     new_salts.push_back(
         ServerSalt{it->salt_, static_cast<double>(it->valid_since_), static_cast<double>(it->valid_until_)});
@@ -437,7 +438,7 @@ Status SessionConnection::on_packet(const MsgInfo &info, const mtproto_api::futu
   return Status::OK();
 }
 
-Status SessionConnection::on_msgs_state_info(const std::vector<int64> &ids, Slice info) {
+Status SessionConnection::on_msgs_state_info(const vector<int64> &ids, Slice info) {
   if (ids.size() != info.size()) {
     return Status::Error(PSLICE() << tag("ids.size()", ids.size()) << " != " << tag("info.size()", info.size()));
   }
@@ -497,14 +498,25 @@ Status SessionConnection::on_slice_packet(const MsgInfo &info, Slice packet) {
 
     // It is an update... I hope.
     auto status = auth_data_->check_update(info.message_id);
+    auto recheck_status = auth_data_->recheck_update(info.message_id);
+    if (recheck_status.is_error() && recheck_status.code() == 2) {
+      LOG(WARNING) << "Receive very old update from " << get_name() << " created in " << (Time::now() - created_at_)
+                   << " in container " << container_id_ << " from session " << auth_data_->get_session_id()
+                   << " with message_id " << info.message_id << ", main_message_id = " << main_message_id_
+                   << ", seq_no = " << info.seq_no << " and original size " << info.size << ": " << status << ' '
+                   << recheck_status;
+    }
     if (status.is_error()) {
       if (status.code() == 2) {
-        LOG(WARNING) << "Receive too old update: " << status;
+        LOG(WARNING) << "Receive too old update from " << get_name() << " created in " << (Time::now() - created_at_)
+                     << " in container " << container_id_ << " from session " << auth_data_->get_session_id()
+                     << " with message_id " << info.message_id << ", main_message_id = " << main_message_id_
+                     << ", seq_no = " << info.seq_no << " and original size " << info.size << ": " << status;
         callback_->on_session_failed(Status::Error("Receive too old update"));
         return status;
       }
-      VLOG(mtproto) << "Skip update " << info.message_id << " from " << get_name() << " created in "
-                    << (Time::now() - created_at_) << ": " << status;
+      VLOG(mtproto) << "Skip update " << info.message_id << " of size " << info.size << " with seq_no " << info.seq_no
+                    << " from " << get_name() << " created in " << (Time::now() - created_at_) << ": " << status;
       return Status::OK();
     } else {
       VLOG(mtproto) << "Got update from " << get_name() << " created in " << (Time::now() - created_at_)
@@ -891,7 +903,7 @@ void SessionConnection::flush_packet() {
       send_till++;
     }
   }
-  std::vector<MtprotoQuery> queries;
+  vector<MtprotoQuery> queries;
   if (send_till == to_send_.size()) {
     queries = std::move(to_send_);
   } else if (send_till != 0) {
@@ -916,14 +928,16 @@ void SessionConnection::flush_packet() {
                 << tag("resend", to_resend_answer_.size()) << tag("cancel", to_cancel_answer_.size())
                 << tag("destroy_key", destroy_auth_key) << tag("auth_id", auth_data_->get_auth_key().id());
 
-  auto cut_tail = [](auto &v, size_t size, Slice name) {
+  auto cut_tail = [](vector<int64> &v, size_t size, Slice name) {
     if (size >= v.size()) {
-      return std::move(v);
+      auto result = std::move(v);
+      v.clear();
+      return result;
     }
-    LOG(WARNING) << "Too much ids in container: " << v.size() << " " << name;
-    std::decay_t<decltype(v)> res(std::make_move_iterator(v.end() - size), std::make_move_iterator(v.end()));
+    LOG(WARNING) << "Too much message identifiers in container " << name << ": " << v.size() << " instead of " << size;
+    vector<int64> result(v.end() - size, v.end());
     v.resize(v.size() - size);
-    return res;
+    return result;
   };
 
   // no more than 8192 ids per container..

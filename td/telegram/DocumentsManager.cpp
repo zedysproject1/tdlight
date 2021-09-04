@@ -27,7 +27,6 @@
 #include "td/telegram/VoiceNotesManager.h"
 
 #include "td/utils/common.h"
-#include "td/utils/format.h"
 #include "td/utils/HttpUrl.h"
 #include "td/utils/logging.h"
 #include "td/utils/MimeType.h"
@@ -47,19 +46,17 @@ namespace td {
 DocumentsManager::DocumentsManager(Td *td) : td_(td) {
 }
 
-tl_object_ptr<td_api::document> DocumentsManager::get_document_object(FileId file_id, PhotoFormat thumbnail_format) {
+tl_object_ptr<td_api::document> DocumentsManager::get_document_object(FileId file_id,
+                                                                      PhotoFormat thumbnail_format) const {
   if (!file_id.is_valid()) {
     return nullptr;
   }
 
-  LOG(INFO) << "Return document " << file_id << " object";
   auto document_it = documents_.find(file_id);
   if (document_it == documents_.end() || document_it->second == nullptr) {
       return nullptr;
   }
-  auto &document = document_it->second;
-  LOG_CHECK(document != nullptr) << tag("file_id", file_id);
-  document->is_changed = false;
+  auto document = document_it->second.get();
   return make_tl_object<td_api::document>(
       document->file_name, document->mime_type, get_minithumbnail_object(document->minithumbnail),
       get_thumbnail_object(td_->file_manager_.get(), document->thumbnail, thumbnail_format),
@@ -490,16 +487,13 @@ FileId DocumentsManager::on_get_document(unique_ptr<GeneralDocument> new_documen
     if (d->mime_type != new_document->mime_type) {
       LOG(DEBUG) << "Document " << file_id << " mime_type has changed";
       d->mime_type = new_document->mime_type;
-      d->is_changed = true;
     }
     if (d->file_name != new_document->file_name) {
       LOG(DEBUG) << "Document " << file_id << " file_name has changed";
       d->file_name = new_document->file_name;
-      d->is_changed = true;
     }
     if (d->minithumbnail != new_document->minithumbnail) {
       d->minithumbnail = std::move(new_document->minithumbnail);
-      d->is_changed = true;
     }
     if (d->thumbnail != new_document->thumbnail) {
       if (!d->thumbnail.file_id.is_valid()) {
@@ -509,7 +503,6 @@ FileId DocumentsManager::on_get_document(unique_ptr<GeneralDocument> new_documen
                   << new_document->thumbnail;
       }
       d->thumbnail = new_document->thumbnail;
-      d->is_changed = true;
     }
   }
 
@@ -665,25 +658,19 @@ FileId DocumentsManager::dup_document(FileId new_id, FileId old_id) {
   return new_id;
 }
 
-bool DocumentsManager::merge_documents(FileId new_id, FileId old_id, bool can_delete_old) {
-  if (!old_id.is_valid()) {
-    LOG(ERROR) << "Old file identifier is invalid";
-    return true;
-  }
+void DocumentsManager::merge_documents(FileId new_id, FileId old_id, bool can_delete_old) {
+  CHECK(old_id.is_valid() && new_id.is_valid());
+  CHECK(new_id != old_id);
 
   LOG(INFO) << "Merge documents " << new_id << " and " << old_id;
   const GeneralDocument *old_ = get_document(old_id);
   CHECK(old_ != nullptr);
-  if (old_id == new_id) {
-    return old_->is_changed;
-  }
 
   auto new_it = documents_.find(new_id);
   if (new_it == documents_.end() || new_it->second == nullptr) {
     auto old_it = documents_.find(old_id);
     if (old_it != documents_.end() && old_it->second != nullptr) {
     auto &old = old_it->second;
-    old->is_changed = true;
     if (!can_delete_old) {
       dup_document(new_id, old_id);
     } else {
@@ -698,14 +685,11 @@ bool DocumentsManager::merge_documents(FileId new_id, FileId old_id, bool can_de
     if (old_->thumbnail != new_->thumbnail) {
       // LOG_STATUS(td_->file_manager_->merge(new_->thumbnail.file_id, old_->thumbnail.file_id));
     }
-
-    new_->is_changed = true;
   }
   LOG_STATUS(td_->file_manager_->merge(new_id, old_id));
   if (can_delete_old) {
     documents_.erase(old_id);
   }
-  return true;
 }
 
 void DocumentsManager::memory_cleanup() {

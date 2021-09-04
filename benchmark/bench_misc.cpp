@@ -6,6 +6,7 @@
 //
 #include "td/utils/benchmark.h"
 #include "td/utils/common.h"
+#include "td/utils/format.h"
 #include "td/utils/logging.h"
 #include "td/utils/port/Clocks.h"
 #include "td/utils/port/EventFd.h"
@@ -16,6 +17,7 @@
 #include "td/utils/port/thread.h"
 #include "td/utils/Slice.h"
 #include "td/utils/SliceBuilder.h"
+#include "td/utils/Status.h"
 #include "td/utils/ThreadSafeCounter.h"
 
 #include "td/telegram/telegram_api.h"
@@ -30,8 +32,11 @@
 #include <semaphore.h>
 #endif
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
+#include <set>
 
 class F {
   td::uint32 &sum;
@@ -99,7 +104,7 @@ BENCH(NewObj, "new struct, then delete") {
 }
 
 #if !TD_THREAD_UNSUPPORTED
-BENCH(ThreadNew, "new struct, then delete in several threads") {
+BENCH(ThreadNew, "new struct, then delete in 2 threads") {
   NewObjBench a, b;
   td::thread ta([&] { a.run(n / 2); });
   td::thread tb([&] { b.run(n - n / 2); });
@@ -418,8 +423,267 @@ std::atomic<td::int64> AtomicCounterBench<StrictOrder>::counter_;
 
 #endif
 
+class IdDuplicateCheckerOld {
+ public:
+  static td::string get_description() {
+    return "Old";
+  }
+  td::Status check(td::int64 message_id) {
+    if (saved_message_ids_.size() == MAX_SAVED_MESSAGE_IDS) {
+      auto oldest_message_id = *saved_message_ids_.begin();
+      if (message_id < oldest_message_id) {
+        return td::Status::Error(2, PSLICE() << "Ignore very old message_id "
+                                             << td::tag("oldest message_id", oldest_message_id)
+                                             << td::tag("got message_id", message_id));
+      }
+    }
+    if (saved_message_ids_.count(message_id) != 0) {
+      return td::Status::Error(1, PSLICE() << "Ignore duplicated message_id " << td::tag("message_id", message_id));
+    }
+
+    saved_message_ids_.insert(message_id);
+    if (saved_message_ids_.size() > MAX_SAVED_MESSAGE_IDS) {
+      saved_message_ids_.erase(saved_message_ids_.begin());
+    }
+    return td::Status::OK();
+  }
+
+ private:
+  static constexpr size_t MAX_SAVED_MESSAGE_IDS = 1000;
+  std::set<td::int64> saved_message_ids_;
+};
+
+template <size_t MAX_SAVED_MESSAGE_IDS>
+class IdDuplicateCheckerNew {
+ public:
+  static td::string get_description() {
+    return PSTRING() << "New" << MAX_SAVED_MESSAGE_IDS;
+  }
+  td::Status check(td::int64 message_id) {
+    auto insert_result = saved_message_ids_.insert(message_id);
+    if (!insert_result.second) {
+      return td::Status::Error(1, PSLICE() << "Ignore duplicated message_id " << td::tag("message_id", message_id));
+    }
+    if (saved_message_ids_.size() == MAX_SAVED_MESSAGE_IDS + 1) {
+      auto begin_it = saved_message_ids_.begin();
+      bool is_very_old = begin_it == insert_result.first;
+      saved_message_ids_.erase(begin_it);
+      if (is_very_old) {
+        return td::Status::Error(2, PSLICE() << "Ignore very old message_id "
+                                             << td::tag("oldest message_id", *saved_message_ids_.begin())
+                                             << td::tag("got message_id", message_id));
+      }
+    }
+    return td::Status::OK();
+  }
+
+ private:
+  std::set<td::int64> saved_message_ids_;
+};
+
+class IdDuplicateCheckerNewOther {
+ public:
+  static td::string get_description() {
+    return "NewOther";
+  }
+  td::Status check(td::int64 message_id) {
+    if (!saved_message_ids_.insert(message_id).second) {
+      return td::Status::Error(1, PSLICE() << "Ignore duplicated message_id " << td::tag("message_id", message_id));
+    }
+    if (saved_message_ids_.size() == MAX_SAVED_MESSAGE_IDS + 1) {
+      auto begin_it = saved_message_ids_.begin();
+      bool is_very_old = *begin_it == message_id;
+      saved_message_ids_.erase(begin_it);
+      if (is_very_old) {
+        return td::Status::Error(2, PSLICE() << "Ignore very old message_id "
+                                             << td::tag("oldest message_id", *saved_message_ids_.begin())
+                                             << td::tag("got message_id", message_id));
+      }
+    }
+    return td::Status::OK();
+  }
+
+ private:
+  static constexpr size_t MAX_SAVED_MESSAGE_IDS = 1000;
+  std::set<td::int64> saved_message_ids_;
+};
+
+class IdDuplicateCheckerNewSimple {
+ public:
+  static td::string get_description() {
+    return "NewSimple";
+  }
+  td::Status check(td::int64 message_id) {
+    auto insert_result = saved_message_ids_.insert(message_id);
+    if (!insert_result.second) {
+      return td::Status::Error(1, "Ignore duplicated message_id");
+    }
+    if (saved_message_ids_.size() == MAX_SAVED_MESSAGE_IDS + 1) {
+      auto begin_it = saved_message_ids_.begin();
+      bool is_very_old = begin_it == insert_result.first;
+      saved_message_ids_.erase(begin_it);
+      if (is_very_old) {
+        return td::Status::Error(2, "Ignore very old message_id");
+      }
+    }
+    return td::Status::OK();
+  }
+
+ private:
+  static constexpr size_t MAX_SAVED_MESSAGE_IDS = 1000;
+  std::set<td::int64> saved_message_ids_;
+};
+
+template <size_t max_size>
+class IdDuplicateCheckerArray {
+ public:
+  static td::string get_description() {
+    return PSTRING() << "Array" << max_size;
+  }
+  td::Status check(td::int64 message_id) {
+    if (end_pos_ == 2 * max_size) {
+      std::copy_n(&saved_message_ids_[max_size], max_size, &saved_message_ids_[0]);
+      end_pos_ = max_size;
+    }
+    if (end_pos_ == 0 || message_id > saved_message_ids_[end_pos_ - 1]) {
+      // fast path
+      saved_message_ids_[end_pos_++] = message_id;
+      return td::Status::OK();
+    }
+    if (end_pos_ >= max_size && message_id < saved_message_ids_[0]) {
+      return td::Status::Error(2, PSLICE() << "Ignore very old message_id "
+                                           << td::tag("oldest message_id", saved_message_ids_[0])
+                                           << td::tag("got message_id", message_id));
+    }
+    auto it = std::lower_bound(&saved_message_ids_[0], &saved_message_ids_[end_pos_], message_id);
+    if (*it == message_id) {
+      return td::Status::Error(1, PSLICE() << "Ignore duplicated message_id " << td::tag("message_id", message_id));
+    }
+    std::copy_backward(it, &saved_message_ids_[end_pos_], &saved_message_ids_[end_pos_ + 1]);
+    *it = message_id;
+    ++end_pos_;
+    return td::Status::OK();
+  }
+
+ private:
+  std::array<td::int64, 2 * max_size> saved_message_ids_;
+  std::size_t end_pos_ = 0;
+};
+
+template <class T>
+class DuplicateCheckerBench final : public td::Benchmark {
+  td::string get_description() const final {
+    return PSTRING() << "DuplicateCheckerBench" << T::get_description();
+  }
+  void run(int n) final {
+    T checker_;
+    for (int i = 0; i < n; i++) {
+      checker_.check(i).ensure();
+    }
+  }
+};
+
+template <class T>
+class DuplicateCheckerBenchRepeat final : public td::Benchmark {
+  td::string get_description() const final {
+    return PSTRING() << "DuplicateCheckerBenchRepeat" << T::get_description();
+  }
+  void run(int n) final {
+    T checker_;
+    for (int i = 0; i < n; i++) {
+      auto iter = i >> 10;
+      auto pos = i - (iter << 10);
+      if (pos < 768) {
+        if (iter >= 3 && pos == 0) {
+          auto error = checker_.check((iter - 3) * 768 + pos);
+          CHECK(error.error().code() == 2);
+        }
+        checker_.check(iter * 768 + pos).ensure();
+      } else {
+        checker_.check(iter * 768 + pos - 256).ensure_error();
+      }
+    }
+  }
+};
+
+template <class T>
+class DuplicateCheckerBenchRepeatOnly final : public td::Benchmark {
+  td::string get_description() const final {
+    return PSTRING() << "DuplicateCheckerBenchRepeatOnly" << T::get_description();
+  }
+  void run(int n) final {
+    T checker_;
+    for (int i = 0; i < n; i++) {
+      auto result = checker_.check(i & 255);
+      CHECK(result.is_error() == (i >= 256));
+    }
+  }
+};
+
+template <class T>
+class DuplicateCheckerBenchReverse final : public td::Benchmark {
+  td::string get_description() const final {
+    return PSTRING() << "DuplicateCheckerBenchReverseAdd" << T::get_description();
+  }
+  void run(int n) final {
+    T checker_;
+    for (int i = 0; i < n; i++) {
+      auto pos = i & 255;
+      checker_.check(i - pos + (255 - pos)).ensure();
+    }
+  }
+};
+
+template <class T>
+class DuplicateCheckerBenchEvenOdd final : public td::Benchmark {
+  td::string get_description() const final {
+    return PSTRING() << "DuplicateCheckerBenchEvenOdd" << T::get_description();
+  }
+  void run(int n) final {
+    T checker_;
+    for (int i = 0; i < n; i++) {
+      auto pos = i & 255;
+      checker_.check(i - pos + (pos * 2) % 256 + (pos * 2) / 256).ensure();
+    }
+  }
+};
+
 int main() {
   SET_VERBOSITY_LEVEL(VERBOSITY_NAME(DEBUG));
+
+  td::bench(DuplicateCheckerBenchEvenOdd<IdDuplicateCheckerNew<1000>>());
+  td::bench(DuplicateCheckerBenchEvenOdd<IdDuplicateCheckerNew<300>>());
+  td::bench(DuplicateCheckerBenchEvenOdd<IdDuplicateCheckerArray<1000>>());
+  td::bench(DuplicateCheckerBenchEvenOdd<IdDuplicateCheckerArray<300>>());
+
+  td::bench(DuplicateCheckerBenchReverse<IdDuplicateCheckerNew<1000>>());
+  td::bench(DuplicateCheckerBenchReverse<IdDuplicateCheckerNew<300>>());
+  td::bench(DuplicateCheckerBenchReverse<IdDuplicateCheckerArray<1000>>());
+  td::bench(DuplicateCheckerBenchReverse<IdDuplicateCheckerArray<300>>());
+
+  td::bench(DuplicateCheckerBenchRepeatOnly<IdDuplicateCheckerNew<1000>>());
+  td::bench(DuplicateCheckerBenchRepeatOnly<IdDuplicateCheckerNew<300>>());
+  td::bench(DuplicateCheckerBenchRepeatOnly<IdDuplicateCheckerArray<1000>>());
+  td::bench(DuplicateCheckerBenchRepeatOnly<IdDuplicateCheckerArray<300>>());
+
+  td::bench(DuplicateCheckerBenchRepeat<IdDuplicateCheckerOld>());
+  td::bench(DuplicateCheckerBenchRepeat<IdDuplicateCheckerNew<1000>>());
+  td::bench(DuplicateCheckerBenchRepeat<IdDuplicateCheckerNewOther>());
+  td::bench(DuplicateCheckerBenchRepeat<IdDuplicateCheckerNewSimple>());
+  td::bench(DuplicateCheckerBenchRepeat<IdDuplicateCheckerNew<300>>());
+  td::bench(DuplicateCheckerBenchRepeat<IdDuplicateCheckerArray<1000>>());
+  td::bench(DuplicateCheckerBenchRepeat<IdDuplicateCheckerArray<300>>());
+
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerOld>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerNew<1000>>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerNewOther>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerNewSimple>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerNew<300>>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerNew<100>>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerNew<10>>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerArray<1000>>());
+  td::bench(DuplicateCheckerBench<IdDuplicateCheckerArray<300>>());
+
 #if !TD_THREAD_UNSUPPORTED
   for (int i = 1; i <= 16; i *= 2) {
     td::bench(ThreadSafeCounterBench(i));

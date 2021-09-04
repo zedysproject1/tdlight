@@ -74,6 +74,7 @@ class SecretChatsManager;
 class StickersManager;
 class StorageManager;
 class MemoryManager;
+class ThemeManager;
 class TopDialogManager;
 class UpdatesManager;
 class VideoNotesManager;
@@ -181,6 +182,8 @@ class Td final : public NetQueryCallback {
   ActorOwn<PollManager> poll_manager_actor_;
   unique_ptr<StickersManager> stickers_manager_;
   ActorOwn<StickersManager> stickers_manager_actor_;
+  unique_ptr<ThemeManager> theme_manager_;
+  ActorOwn<ThemeManager> theme_manager_actor_;
   unique_ptr<UpdatesManager> updates_manager_;
   ActorOwn<UpdatesManager> updates_manager_actor_;
   unique_ptr<MemoryManager> memory_manager_;
@@ -248,7 +251,7 @@ class Td final : public NetQueryCallback {
   static td_api::object_ptr<td_api::Object> static_request(td_api::object_ptr<td_api::Function> function);
 
  private:
-  static constexpr const char *TDLIB_VERSION = "1.7.6";
+  static constexpr const char *TDLIB_VERSION = "1.7.7";
   static constexpr int64 ONLINE_ALARM_ID = 0;
   static constexpr int64 PING_SERVER_ALARM_ID = -1;
   static constexpr int32 PING_SERVER_TIMEOUT = 300;
@@ -524,6 +527,10 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, const td_api::getMessages &request);
 
+  void on_request(uint64 id, const td_api::getChatSponsoredMessages &request);
+
+  void on_request(uint64 id, const td_api::viewSponsoredMessage &request);
+
   void on_request(uint64 id, const td_api::getMessageLink &request);
 
   void on_request(uint64 id, const td_api::getMessageEmbeddingCode &request);
@@ -563,6 +570,8 @@ class Td final : public NetQueryCallback {
   void on_request(uint64 id, td_api::getTopChats &request);
 
   void on_request(uint64 id, const td_api::removeTopChat &request);
+
+  void on_request(uint64 id, const td_api::loadChats &request);
 
   void on_request(uint64 id, const td_api::getChats &request);
 
@@ -780,7 +789,7 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, const td_api::discardGroupCall &request);
 
-  void on_request(uint64 id, const td_api::getGroupCallStreamSegment &request);
+  void on_request(uint64 id, td_api::getGroupCallStreamSegment &request);
 
   void on_request(uint64 id, const td_api::upgradeBasicGroupChatToSupergroupChat &request);
 
@@ -807,6 +816,8 @@ class Td final : public NetQueryCallback {
   void on_request(uint64 id, const td_api::setChatMessageTtlSetting &request);
 
   void on_request(uint64 id, const td_api::setChatPermissions &request);
+
+  void on_request(uint64 id, td_api::setChatTheme &request);
 
   void on_request(uint64 id, td_api::setChatDraftMessage &request);
 
@@ -1180,6 +1191,8 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, const td_api::resetBackgrounds &request);
 
+  void on_request(uint64 id, const td_api::getChatThemes &request);
+
   void on_request(uint64 id, td_api::getRecentlyVisitedTMeUrls &request);
 
   void on_request(uint64 id, td_api::setBotUpdatesStatus &request);
@@ -1242,6 +1255,8 @@ class Td final : public NetQueryCallback {
 
   void on_request(uint64 id, const td_api::getLanguagePackString &request);
 
+  void on_request(uint64 id, const td_api::getPhoneNumberInfoSync &request);
+
   void on_request(uint64 id, const td_api::getPushReceiverId &request);
 
   void on_request(uint64 id, const td_api::getChatFilterDefaultIconName &request);
@@ -1293,6 +1308,7 @@ class Td final : public NetQueryCallback {
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getFileExtension &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::cleanFileName &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getLanguagePackString &request);
+  static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getPhoneNumberInfoSync &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getPushReceiverId &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getChatFilterDefaultIconName &request);
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::getJsonValue &request);
