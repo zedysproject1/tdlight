@@ -938,6 +938,12 @@ void BackgroundManager::on_reset_background(Result<Unit> &&result, Promise<Unit>
   if (result.is_error()) {
     return promise.set_error(result.move_as_error());
   }
+  reset_backgrounds_data();
+
+  promise.set_value(Unit());
+}
+
+void BackgroundManager::reset_backgrounds_data() {
   installed_backgrounds_.clear();
   set_background_id(BackgroundId(), BackgroundType(), false);
   set_background_id(BackgroundId(), BackgroundType(), true);
@@ -949,8 +955,6 @@ void BackgroundManager::on_reset_background(Result<Unit> &&result, Promise<Unit>
     local_background_ids_[1].clear();
     save_local_backgrounds(true);
   }
-
-  promise.set_value(Unit());
 }
 
 void BackgroundManager::add_background(const Background &background, bool replace_type) {
@@ -1056,7 +1060,7 @@ string BackgroundManager::get_background_name_database_key(const string &name) {
 std::pair<BackgroundId, BackgroundType> BackgroundManager::on_get_background(
     BackgroundId expected_background_id, const string &expected_background_name,
     telegram_api::object_ptr<telegram_api::WallPaper> wallpaper_ptr, bool replace_type) {
-  if (!(wallpaper_ptr != nullptr)) return BackgroundId();
+  if (!(wallpaper_ptr != nullptr)) return {};
 
   if (wallpaper_ptr->get_id() == telegram_api::wallPaperNoFile::ID) {
     auto wallpaper = move_tl_object_as<telegram_api::wallPaperNoFile>(wallpaper_ptr);
@@ -1282,7 +1286,7 @@ void BackgroundManager::memory_cleanup(bool full) {
   file_id_to_background_id_.rehash(0);
   loaded_from_database_backgrounds_.clear();
   loaded_from_database_backgrounds_.rehash(0);
-  installed_background_ids_.clear();
+  reset_backgrounds_data();
 }
 
 void BackgroundManager::memory_stats(vector<string> &output) {
@@ -1296,7 +1300,7 @@ void BackgroundManager::memory_stats(vector<string> &output) {
   output.push_back(",");
   output.push_back("\"loaded_from_database_backgrounds_\":"); output.push_back(std::to_string(loaded_from_database_backgrounds_.size()));
   output.push_back(",");
-  output.push_back("\"installed_background_ids_\":"); output.push_back(std::to_string(installed_background_ids_.size()));
+  output.push_back("\"installed_backgrounds_\":"); output.push_back(std::to_string(installed_backgrounds_.size()));
 }
 
 }  // namespace td

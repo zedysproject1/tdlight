@@ -1737,8 +1737,6 @@ void PollManager::memory_cleanup(bool full) {
   polls_.rehash(0);
   poll_messages_.clear();
   poll_messages_.rehash(0);
-  pending_answers_.clear();
-  pending_answers_.rehash(0);
   poll_voters_.clear();
   poll_voters_.rehash(0);
   loaded_from_database_polls_.clear();

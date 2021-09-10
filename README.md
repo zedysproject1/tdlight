@@ -31,8 +31,8 @@ We added some options:
 * **receive_access_hashes** (true/**false**) Receive chats and users access hash as updates
 * **experiment_enable_file_reference_cleanup** (**true**/false) During cleanup, free the memory of the file references
 * **experiment_enable_chat_access_hash_cleanup** (**true**/false) During cleanup, clean chats and channels access hash
-* **enable_reactive_pull_backpressure** (true/**false**) Enable manual `get_channel_difference` execution by calling `getChannelDifference(channel_difference_id)`.
-    Don't modify this option unless you have a very large bot that struggles to keep up with start-up updates throughput, or you want to implement a backpressure-aware pull-based library.
+* **enable_reactive_channel_difference** (true/**false**) Enable manual `get_channel_difference` execution by calling `getChannelDifference(channel_difference_id)`.
+    Don't modify this option unless you have a very large bot that struggles to keep up with start-up updates throughput, or you want to use a reactive library.
   
 ## Custom API functions
 ### TdApi.OptimizeMemory

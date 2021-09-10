@@ -12,12 +12,12 @@
     should become
     
     ```cpp
-    auto enable_reactive_pull_backpressure
+    auto enable_reactive_channel_difference
       = G()->shared_config()
-        .get_option_boolean("enable_reactive_pull_backpressure", false);
+        .get_option_boolean("enable_reactive_channel_difference", false);
 
     get_channel_difference_delayed(dialog_id, old_pts, true,
-      enable_reactive_pull_backpressure,
+      enable_reactive_channel_difference,
       "add_pending_channel_update pts mismatch");
     ```
 

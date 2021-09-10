@@ -150,6 +150,8 @@ class BackgroundManager final : public Actor {
 
   void on_reset_background(Result<Unit> &&result, Promise<Unit> &&promise);
 
+  void reset_backgrounds_data();
+
   void upload_background_file(FileId file_id, const BackgroundType &type, bool for_dark_theme, Promise<Unit> &&promise);
 
   void on_upload_background_file(FileId file_id, tl_object_ptr<telegram_api::InputFile> input_file);

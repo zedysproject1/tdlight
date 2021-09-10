@@ -15850,6 +15850,8 @@ tl_object_ptr<td_api::accessHash> ContactsManager::get_user_access_hash_object(U
     tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeUser>();
     DialogId dialog_id(user_id);
     return make_tl_object<td_api::accessHash>(dialog_id.get(), std::move(type), u->access_hash);
+  } else {
+    return nullptr;
   }
 }
 
@@ -15861,6 +15863,8 @@ tl_object_ptr<td_api::accessHash> ContactsManager::get_channel_access_hash_objec
     tl_object_ptr<td_api::AccessHashType> type = make_tl_object<td_api::accessHashTypeChannel>();
     DialogId dialog_id(channel_id);
     return make_tl_object<td_api::accessHash>(dialog_id.get(), std::move(type), c->access_hash);
+  } else {
+    return nullptr;
   }
 }
 
@@ -16274,8 +16278,6 @@ void ContactsManager::memory_cleanup(bool full) {
   user_photos_.rehash(0);
   unknown_users_.clear();
   unknown_users_.rehash(0);
-  pending_user_photos_.clear();
-  pending_user_photos_.rehash(0);
   user_profile_photo_file_source_ids_.clear();
   user_profile_photo_file_source_ids_.rehash(0);
   my_photo_file_id_.clear();
