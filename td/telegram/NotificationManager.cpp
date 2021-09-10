@@ -1063,7 +1063,7 @@ void NotificationManager::flush_pending_updates(int32 group_id, const char *sour
   // all edits of notifications from edited_notification_ids
   // deletions of a notification can be removed, only if the addition of the notification has already been deleted
   // deletions of all unkept notifications can be moved to the first updateNotificationGroup
-  // after that at every moment there is no more active notifications than in the last moment,
+  // after that at every moment there are no more active notifications than in the last moment,
   // so left deletions after add/edit can be safely removed and following additions can be treated as edits
   // we still need to keep deletions coming first, because we can't have 2 consequent additions
   // from all additions of the same notification, we need to preserve the first, because it can be with sound,
@@ -2808,6 +2808,9 @@ string NotificationManager::convert_loc_key(const string &loc_key) {
       }
       if (loc_key == "MESSAGE_NOTEXT") {
         return "MESSAGE";
+      }
+      if (loc_key == "MESSAGE_NOTHEME") {
+        return "MESSAGE_CHAT_CHANGE_THEME";
       }
       if (loc_key == "PINNED_INVOICE") {
         return "PINNED_MESSAGE_INVOICE";

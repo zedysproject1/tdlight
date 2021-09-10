@@ -467,20 +467,6 @@ class MessagesManager final : public Actor {
                                      td_api::object_ptr<td_api::MessageSchedulingState> &&scheduling_state,
                                      Promise<Unit> &&promise);
 
-  void set_game_score(FullMessageId full_message_id, bool edit_message, UserId user_id, int32 score, bool force,
-                      Promise<Unit> &&promise);
-
-  void set_inline_game_score(const string &inline_message_id, bool edit_message, UserId user_id, int32 score,
-                             bool force, Promise<Unit> &&promise);
-
-  int64 get_game_high_scores(FullMessageId full_message_id, UserId user_id, Promise<Unit> &&promise);
-
-  int64 get_inline_game_high_scores(const string &inline_message_id, UserId user_id, Promise<Unit> &&promise);
-
-  void on_get_game_high_scores(int64 random_id, tl_object_ptr<telegram_api::messages_highScores> &&high_scores);
-
-  tl_object_ptr<td_api::gameHighScores> get_game_high_scores_object(int64 random_id);
-
   void send_dialog_action(DialogId dialog_id, MessageId top_thread_message_id, DialogAction action,
                           Promise<Unit> &&promise);
 
@@ -917,9 +903,13 @@ class MessagesManager final : public Actor {
 
   Result<ServerMessageId> get_payment_successful_message_id(FullMessageId full_message_id);
 
+  bool can_set_game_score(FullMessageId full_message_id) const;
+
   void get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const;
 
   ActorOwn<MultiSequenceDispatcher> sequence_dispatcher_;
+
+  static uint64 get_sequence_dispatcher_id(DialogId dialog_id, MessageContentType message_content_type);
 
  private:
   class PendingPtsUpdate {
@@ -1149,10 +1139,10 @@ class MessagesManager final : public Actor {
 
     MessageId last_new_message_id;  // identifier of the last known server message received from update, there should be
                                     // no server messages after it
-    MessageId last_message_id;      // identifier of the message after which currently there is no any message, i.e. a
+    MessageId last_message_id;      // identifier of the message after which currently there are no messages, i.e. a
                                     // message without a gap after it, memory only
     MessageId first_database_message_id;  // identifier of the first message in the database, needed
-                                          // until there is no gaps in the database
+                                          // until there are no gaps in the database
     MessageId last_database_message_id;   // identifier of the last local or server message, if last_database_message_id
                                           // is known and last_message_id is known, then last_database_message_id <=
                                           // last_message_id
@@ -2985,8 +2975,6 @@ class MessagesManager final : public Actor {
 
   void set_sponsored_dialog(DialogId dialog_id, DialogSource source);
 
-  static uint64 get_sequence_dispatcher_id(DialogId dialog_id, MessageContentType message_content_type);
-
   Dialog *get_service_notifications_dialog();
 
   void save_auth_notification_ids();
@@ -3320,8 +3308,6 @@ class MessagesManager final : public Actor {
   std::unordered_map<DialogId, MessageEmbeddingCodes, DialogIdHash> message_embedding_codes_[2];
 
   std::unordered_map<int64, tl_object_ptr<td_api::chatEvents>> chat_events_;  // random_id -> chat events
-
-  std::unordered_map<int64, tl_object_ptr<td_api::gameHighScores>> game_high_scores_;  // random_id -> high scores
 
   std::unordered_map<DialogId, vector<Promise<Unit>>, DialogIdHash> get_dialog_notification_settings_queries_;
 

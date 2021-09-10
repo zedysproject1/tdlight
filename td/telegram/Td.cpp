@@ -43,6 +43,7 @@
 #include "td/telegram/files/FileType.h"
 #include "td/telegram/FolderId.h"
 #include "td/telegram/FullMessageId.h"
+#include "td/telegram/GameManager.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/GroupCallId.h"
 #include "td/telegram/GroupCallManager.h"
@@ -90,7 +91,7 @@
 #include "td/telegram/SecretChatsManager.h"
 #include "td/telegram/SecureManager.h"
 #include "td/telegram/SecureValue.h"
-#include "td/telegram/SponsoredMessages.h"
+#include "td/telegram/SponsoredMessageManager.h"
 #include "td/telegram/StateManager.h"
 #include "td/telegram/StickerSetId.h"
 #include "td/telegram/StickersManager.h"
@@ -1265,82 +1266,6 @@ class EditMessageReplyMarkupRequest final : public RequestOnceActor {
       : RequestOnceActor(std::move(td), request_id)
       , full_message_id_(DialogId(dialog_id), MessageId(message_id))
       , reply_markup_(std::move(reply_markup)) {
-  }
-};
-
-class SetGameScoreRequest final : public RequestOnceActor {
-  FullMessageId full_message_id_;
-  bool edit_message_;
-  UserId user_id_;
-  int32 score_;
-  bool force_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    td->messages_manager_->set_game_score(full_message_id_, edit_message_, user_id_, score_, force_,
-                                          std::move(promise));
-  }
-
-  void do_send_result() final {
-    send_result(td->messages_manager_->get_message_object(full_message_id_));
-  }
-
- public:
-  SetGameScoreRequest(ActorShared<Td> td, uint64 request_id, int64 dialog_id, int64 message_id, bool edit_message,
-                      int32 user_id, int32 score, bool force)
-      : RequestOnceActor(std::move(td), request_id)
-      , full_message_id_(DialogId(dialog_id), MessageId(message_id))
-      , edit_message_(edit_message)
-      , user_id_(user_id)
-      , score_(score)
-      , force_(force) {
-  }
-};
-
-class GetGameHighScoresRequest final : public RequestOnceActor {
-  FullMessageId full_message_id_;
-  UserId user_id_;
-
-  int64 random_id_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    random_id_ = td->messages_manager_->get_game_high_scores(full_message_id_, user_id_, std::move(promise));
-  }
-
-  void do_send_result() final {
-    CHECK(random_id_ != 0);
-    send_result(td->messages_manager_->get_game_high_scores_object(random_id_));
-  }
-
- public:
-  GetGameHighScoresRequest(ActorShared<Td> td, uint64 request_id, int64 dialog_id, int64 message_id, int32 user_id)
-      : RequestOnceActor(std::move(td), request_id)
-      , full_message_id_(DialogId(dialog_id), MessageId(message_id))
-      , user_id_(user_id)
-      , random_id_(0) {
-  }
-};
-
-class GetInlineGameHighScoresRequest final : public RequestOnceActor {
-  string inline_message_id_;
-  UserId user_id_;
-
-  int64 random_id_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    random_id_ = td->messages_manager_->get_inline_game_high_scores(inline_message_id_, user_id_, std::move(promise));
-  }
-
-  void do_send_result() final {
-    CHECK(random_id_ != 0);
-    send_result(td->messages_manager_->get_game_high_scores_object(random_id_));
-  }
-
- public:
-  GetInlineGameHighScoresRequest(ActorShared<Td> td, uint64 request_id, string inline_message_id, int32 user_id)
-      : RequestOnceActor(std::move(td), request_id)
-      , inline_message_id_(std::move(inline_message_id))
-      , user_id_(user_id)
-      , random_id_(0) {
   }
 };
 
@@ -3706,6 +3631,8 @@ void Td::dec_actor_refcnt() {
       LOG(DEBUG) << "FileManager was cleared" << timer;
       file_reference_manager_.reset();
       LOG(DEBUG) << "FileReferenceManager was cleared" << timer;
+      game_manager_.reset();
+      LOG(DEBUG) << "GameManager was cleared" << timer;
       group_call_manager_.reset();
       LOG(DEBUG) << "GroupCallManager was cleared" << timer;
       inline_queries_manager_.reset();
@@ -3718,6 +3645,8 @@ void Td::dec_actor_refcnt() {
       LOG(DEBUG) << "NotificationManager was cleared" << timer;
       poll_manager_.reset();
       LOG(DEBUG) << "PollManager was cleared" << timer;
+      sponsored_message_manager_.reset();
+      LOG(DEBUG) << "SponsoredMessageManager was cleared" << timer;
       stickers_manager_.reset();
       LOG(DEBUG) << "StickersManager was cleared" << timer;
       memory_manager_.reset();
@@ -3909,6 +3838,8 @@ void Td::clear() {
   LOG(DEBUG) << "FileManager actor was cleared" << timer;
   file_reference_manager_actor_.reset();
   LOG(DEBUG) << "FileReferenceManager actor was cleared" << timer;
+  game_manager_actor_.reset();
+  LOG(DEBUG) << "GameManager actor was cleared" << timer;
   group_call_manager_actor_.reset();
   LOG(DEBUG) << "GroupCallManager actor was cleared" << timer;
   inline_queries_manager_actor_.reset();
@@ -3921,6 +3852,8 @@ void Td::clear() {
   LOG(DEBUG) << "NotificationManager actor was cleared" << timer;
   poll_manager_actor_.reset();
   LOG(DEBUG) << "PollManager actor was cleared" << timer;
+  sponsored_message_manager_actor_.reset();
+  LOG(DEBUG) << "SponsoredMessageManager actor was cleared" << timer;
   stickers_manager_actor_.reset();
   LOG(DEBUG) << "StickersManager actor was cleared" << timer;
   memory_manager_actor_.reset();
@@ -4371,6 +4304,9 @@ void Td::init_managers() {
   G()->set_contacts_manager(contacts_manager_actor_.get());
   country_info_manager_ = make_unique<CountryInfoManager>(this, create_reference());
   country_info_manager_actor_ = register_actor("CountryInfoManager", country_info_manager_.get());
+  game_manager_ = make_unique<GameManager>(this, create_reference());
+  game_manager_actor_ = register_actor("GameManager", game_manager_.get());
+  G()->set_game_manager(game_manager_actor_.get());
   group_call_manager_ = make_unique<GroupCallManager>(this, create_reference());
   group_call_manager_actor_ = register_actor("GroupCallManager", group_call_manager_.get());
   G()->set_group_call_manager(group_call_manager_actor_.get());
@@ -4387,6 +4323,9 @@ void Td::init_managers() {
   poll_manager_ = make_unique<PollManager>(this, create_reference());
   poll_manager_actor_ = register_actor("PollManager", poll_manager_.get());
   G()->set_notification_manager(notification_manager_actor_.get());
+  sponsored_message_manager_ = make_unique<SponsoredMessageManager>(this, create_reference());
+  sponsored_message_manager_actor_ = register_actor("SponsoredMessageManager", sponsored_message_manager_.get());
+  G()->set_sponsored_message_manager(sponsored_message_manager_actor_.get());
   stickers_manager_ = make_unique<StickersManager>(this, create_reference());
   stickers_manager_actor_ = register_actor("StickersManager", stickers_manager_.get());
   G()->set_stickers_manager(stickers_manager_actor_.get());
@@ -5097,13 +5036,14 @@ void Td::on_request(uint64 id, const td_api::getMessages &request) {
 void Td::on_request(uint64 id, const td_api::getChatSponsoredMessages &request) {
   CHECK_IS_USER();
   CREATE_REQUEST_PROMISE();
-  get_dialog_sponsored_messages(this, DialogId(request.chat_id_), std::move(promise));
+  sponsored_message_manager_->get_dialog_sponsored_messages(DialogId(request.chat_id_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::viewSponsoredMessage &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  view_sponsored_message(this, DialogId(request.chat_id_), request.message_id_, std::move(promise));
+  sponsored_message_manager_->view_sponsored_message(DialogId(request.chat_id_), request.message_id_,
+                                                     std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::getMessageThread &request) {
@@ -5831,28 +5771,31 @@ void Td::on_request(uint64 id, td_api::editMessageSchedulingState &request) {
 
 void Td::on_request(uint64 id, td_api::setGameScore &request) {
   CHECK_IS_BOT();
-  CREATE_REQUEST(SetGameScoreRequest, request.chat_id_, request.message_id_, request.edit_message_, request.user_id_,
-                 request.score_, request.force_);
+  CREATE_REQUEST_PROMISE();
+  game_manager_->set_game_score({DialogId(request.chat_id_), MessageId(request.message_id_)}, request.edit_message_,
+                                UserId(request.user_id_), request.score_, request.force_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::setInlineGameScore &request) {
   CHECK_IS_BOT();
   CLEAN_INPUT_STRING(request.inline_message_id_);
   CREATE_OK_REQUEST_PROMISE();
-  messages_manager_->set_inline_game_score(std::move(request.inline_message_id_), request.edit_message_,
-                                           UserId(request.user_id_), request.score_, request.force_,
-                                           std::move(promise));
+  game_manager_->set_inline_game_score(std::move(request.inline_message_id_), request.edit_message_,
+                                       UserId(request.user_id_), request.score_, request.force_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::getGameHighScores &request) {
   CHECK_IS_BOT();
-  CREATE_REQUEST(GetGameHighScoresRequest, request.chat_id_, request.message_id_, request.user_id_);
+  CREATE_REQUEST_PROMISE();
+  game_manager_->get_game_high_scores({DialogId(request.chat_id_), MessageId(request.message_id_)},
+                                      UserId(request.user_id_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::getInlineGameHighScores &request) {
   CHECK_IS_BOT();
   CLEAN_INPUT_STRING(request.inline_message_id_);
-  CREATE_REQUEST(GetInlineGameHighScoresRequest, std::move(request.inline_message_id_), request.user_id_);
+  CREATE_REQUEST_PROMISE();
+  game_manager_->get_inline_game_high_scores(request.inline_message_id_, UserId(request.user_id_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::deleteChatReplyMarkup &request) {

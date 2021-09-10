@@ -60,15 +60,15 @@ if (POLICY CMP0069)
       # set_property(DIRECTORY PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) do not work?
       string(REPLACE ";" " " CXX_FLAGS_IPO "${CMAKE_CXX_COMPILE_OPTIONS_IPO}")
       message(STATUS "Use link time optimization CXX options: ${CXX_FLAGS_IPO}")
-      set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${CXX_FLAGS_IPO}")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_FLAGS_IPO}")
 
       string(REPLACE ";" " " C_FLAGS_IPO "${CMAKE_C_COMPILE_OPTIONS_IPO}")
       message(STATUS "Use link time optimization C options: ${C_FLAGS_IPO}")
-      set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ${C_FLAGS_IPO}")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS_IPO}")
 
       string(REPLACE ";" " " LINK_FLAGS_IPO "${CMAKE_CXX_LINK_OPTIONS_IPO}")
       message(STATUS "Use link time optimization linker options: ${LINK_FLAGS_IPO}")
-      set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} ${LINK_FLAGS_IPO}")
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LINK_FLAGS_IPO}")
     endif()
   endif()
 endif()
@@ -335,6 +335,7 @@ set(TDLIB_SOURCE
   td/telegram/files/PartsManager.cpp
   td/telegram/files/ResourceManager.cpp
   td/telegram/Game.cpp
+  td/telegram/GameManager.cpp
   td/telegram/Global.cpp
   td/telegram/GroupCallManager.cpp
   td/telegram/GroupCallParticipant.cpp
@@ -403,7 +404,7 @@ set(TDLIB_SOURCE
   td/telegram/SendCodeHelper.cpp
   td/telegram/SequenceDispatcher.cpp
   td/telegram/SpecialStickerSetType.cpp
-  td/telegram/SponsoredMessages.cpp
+  td/telegram/SponsoredMessageManager.cpp
   td/telegram/StateManager.cpp
   td/telegram/StickersManager.cpp
   td/telegram/StorageManager.cpp
@@ -524,6 +525,7 @@ set(TDLIB_SOURCE
   td/telegram/FolderId.h
   td/telegram/FullMessageId.h
   td/telegram/Game.h
+  td/telegram/GameManager.h
   td/telegram/Global.h
   td/telegram/GroupCallId.h
   td/telegram/GroupCallManager.h
@@ -618,7 +620,7 @@ set(TDLIB_SOURCE
   td/telegram/ServerMessageId.h
   td/telegram/SetWithPosition.h
   td/telegram/SpecialStickerSetType.h
-  td/telegram/SponsoredMessages.h
+  td/telegram/SponsoredMessageManager.h
   td/telegram/StateManager.h
   td/telegram/StickerSetId.h
   td/telegram/StickersManager.h

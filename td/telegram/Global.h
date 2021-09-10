@@ -38,6 +38,7 @@ class ConnectionCreator;
 class ContactsManager;
 class FileManager;
 class FileReferenceManager;
+class GameManager;
 class GroupCallManager;
 class LanguagePackManager;
 class LinkManager;
@@ -47,6 +48,7 @@ class NetQueryDispatcher;
 class NotificationManager;
 class PasswordManager;
 class SecretChatsManager;
+class SponsoredMessageManager;
 class StateManager;
 class StickersManager;
 class StorageManager;
@@ -219,6 +221,13 @@ class Global final : public ActorContext {
     file_reference_manager_ = std::move(file_reference_manager);
   }
 
+  ActorId<GameManager> game_manager() const {
+    return game_manager_;
+  }
+  void set_game_manager(ActorId<GameManager> game_manager) {
+    game_manager_ = game_manager;
+  }
+
   ActorId<GroupCallManager> group_call_manager() const {
     return group_call_manager_;
   }
@@ -266,6 +275,13 @@ class Global final : public ActorContext {
   }
   void set_secret_chats_manager(ActorId<SecretChatsManager> secret_chats_manager) {
     secret_chats_manager_ = secret_chats_manager;
+  }
+
+  ActorId<SponsoredMessageManager> sponsored_message_manager() const {
+    return sponsored_message_manager_;
+  }
+  void set_sponsored_message_manager(ActorId<SponsoredMessageManager> sponsored_message_manager) {
+    sponsored_message_manager_ = sponsored_message_manager;
   }
 
   ActorId<StickersManager> stickers_manager() const {
@@ -417,6 +433,7 @@ class Global final : public ActorContext {
   ActorId<ContactsManager> contacts_manager_;
   ActorId<FileManager> file_manager_;
   ActorId<FileReferenceManager> file_reference_manager_;
+  ActorId<GameManager> game_manager_;
   ActorId<GroupCallManager> group_call_manager_;
   ActorId<LanguagePackManager> language_pack_manager_;
   ActorId<LinkManager> link_manager_;
@@ -424,6 +441,7 @@ class Global final : public ActorContext {
   ActorId<NotificationManager> notification_manager_;
   ActorId<PasswordManager> password_manager_;
   ActorId<SecretChatsManager> secret_chats_manager_;
+  ActorId<SponsoredMessageManager> sponsored_message_manager_;
   ActorId<StickersManager> stickers_manager_;
   ActorId<StorageManager> storage_manager_;
   ActorId<MemoryManager> memory_manager_;
