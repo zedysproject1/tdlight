@@ -60,9 +60,6 @@ class ThemeManager;
 class TopDialogManager;
 class UpdatesManager;
 class WebPagesManager;
-}  // namespace td
-
-namespace td {
 
 class Global final : public ActorContext {
  public:

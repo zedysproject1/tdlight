@@ -3343,8 +3343,28 @@ void Td::invalidate_handler(ResultHandler *handler) {
 void Td::send(NetQueryPtr &&query) {
   VLOG(net_query) << "Send " << query << " to dispatcher";
   query->debug("Td: send to NetQueryDispatcher");
-  query->set_callback(actor_shared(this, 1));
   G()->net_query_dispatcher().dispatch(std::move(query));
+}
+
+void Td::on_update(BufferSlice &&update) {
+  if (close_flag_ > 1) {
+    return;
+  }
+
+  TlBufferParser parser(&update);
+  auto ptr = telegram_api::Updates::fetch(parser);
+  parser.fetch_end();
+  if (parser.get_error()) {
+    LOG(ERROR) << "Failed to fetch update: " << parser.get_error() << format::as_hex_dump<4>(update.as_slice());
+    updates_manager_->schedule_get_difference("failed to fetch update");
+  } else {
+    updates_manager_->on_get_updates(std::move(ptr), Promise<Unit>());
+    if (auth_manager_->is_bot() && auth_manager_->is_authorized()) {
+      alarm_timeout_.set_timeout_in(PING_SERVER_ALARM_ID,
+                                    PING_SERVER_TIMEOUT + Random::fast(0, PING_SERVER_TIMEOUT / 5));
+      set_is_bot_online(true);
+    }
+  }
 }
 
 void Td::on_result(NetQueryPtr query) {
@@ -3354,30 +3374,6 @@ void Td::on_result(NetQueryPtr query) {
     return;
   }
 
-  if (query->id() == 0) {
-    if (query->is_error()) {
-      query->clear();
-      updates_manager_->schedule_get_difference("error in update");
-      LOG(ERROR) << "Error in update";
-      return;
-    }
-    auto ok = query->move_as_ok();
-    TlBufferParser parser(&ok);
-    auto ptr = telegram_api::Updates::fetch(parser);
-    parser.fetch_end();
-    if (parser.get_error()) {
-      LOG(ERROR) << "Failed to fetch update: " << parser.get_error() << format::as_hex_dump<4>(ok.as_slice());
-      updates_manager_->schedule_get_difference("failed to fetch update");
-    } else {
-      updates_manager_->on_get_updates(std::move(ptr), Promise<Unit>());
-      if (auth_manager_->is_bot() && auth_manager_->is_authorized()) {
-        alarm_timeout_.set_timeout_in(PING_SERVER_ALARM_ID,
-                                      PING_SERVER_TIMEOUT + Random::fast(0, PING_SERVER_TIMEOUT / 5));
-        set_is_bot_online(true);
-      }
-    }
-    return;
-  }
   auto handler = extract_handler(query->id());
   if (handler == nullptr) {
     query->clear();
@@ -3575,7 +3571,7 @@ void Td::hangup_shared() {
   auto type = Container<int>::type_from_id(token);
 
   if (type == RequestActorIdType) {
-    request_actors_.erase(get_link_token());
+    request_actors_.erase(token);
     dec_request_actor_refcnt();
   } else if (type == ActorIdType) {
     dec_actor_refcnt();
@@ -5042,7 +5038,7 @@ void Td::on_request(uint64 id, const td_api::getChatSponsoredMessages &request) 
 void Td::on_request(uint64 id, const td_api::viewSponsoredMessage &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  sponsored_message_manager_->view_sponsored_message(DialogId(request.chat_id_), request.message_id_,
+  sponsored_message_manager_->view_sponsored_message(DialogId(request.chat_id_), request.sponsored_message_id_,
                                                      std::move(promise));
 }
 

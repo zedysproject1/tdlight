@@ -253,26 +253,31 @@ Status SessionConnection::on_packet_rpc_result(const MsgInfo &info, Slice packet
     return Status::Error("Receive an update in rpc_result");
   }
 
-  auto object_begin_pos = packet.size() - parser.get_left_len();
-  int32 id = parser.fetch_int();
-  if (id == mtproto_api::rpc_error::ID) {
-    mtproto_api::rpc_error rpc_error(parser);
-    if (parser.get_error()) {
-      return Status::Error(PSLICE() << "Failed to parse mtproto_api::rpc_error: " << parser.get_error());
+  switch (parser.fetch_int()) {
+    case mtproto_api::rpc_error::ID: {
+      mtproto_api::rpc_error rpc_error(parser);
+      if (parser.get_error()) {
+        return Status::Error(PSLICE() << "Failed to parse mtproto_api::rpc_error: " << parser.get_error());
+      }
+      VLOG(mtproto) << "ERROR " << tag("code", rpc_error.error_code_) << tag("message", rpc_error.error_message_)
+                    << tag("req_msg_id", req_msg_id);
+      callback_->on_message_result_error(req_msg_id, rpc_error.error_code_, rpc_error.error_message_.str());
+      return Status::OK();
     }
-    return on_packet(info, req_msg_id, rpc_error);
-  } else if (id == mtproto_api::gzip_packed::ID) {
-    mtproto_api::gzip_packed gzip(parser);
-    if (parser.get_error()) {
-      return Status::Error(PSLICE() << "Failed to parse mtproto_api::gzip_packed: " << parser.get_error());
+    case mtproto_api::gzip_packed::ID: {
+      mtproto_api::gzip_packed gzip(parser);
+      if (parser.get_error()) {
+        return Status::Error(PSLICE() << "Failed to parse mtproto_api::gzip_packed: " << parser.get_error());
+      }
+      // yep, gzip in rpc_result
+      BufferSlice object = gzdecode(gzip.packed_data_);
+      // send header no more optimization
+      return callback_->on_message_result_ok(req_msg_id, std::move(object), info.size);
     }
-    // yep, gzip in rpc_result
-    BufferSlice object = gzdecode(gzip.packed_data_);
-    // send header no more optimization
-    return callback_->on_message_result_ok(req_msg_id, std::move(object), info.size);
+    default:
+      packet.remove_prefix(4 + sizeof(req_msg_id));
+      return callback_->on_message_result_ok(req_msg_id, as_buffer_slice(packet), info.size);
   }
-
-  return callback_->on_message_result_ok(req_msg_id, as_buffer_slice(packet.substr(object_begin_pos)), info.size);
 }
 
 template <class T>
@@ -297,17 +302,7 @@ Status SessionConnection::on_destroy_auth_key(const mtproto_api::DestroyAuthKeyR
 }
 
 Status SessionConnection::on_packet(const MsgInfo &info, const mtproto_api::rpc_error &rpc_error) {
-  return on_packet(info, 0, rpc_error);
-}
-
-Status SessionConnection::on_packet(const MsgInfo &info, uint64 req_msg_id, const mtproto_api::rpc_error &rpc_error) {
-  VLOG(mtproto) << "ERROR " << tag("code", rpc_error.error_code_) << tag("message", rpc_error.error_message_)
-                << tag("req_msg_id", req_msg_id);
-  if (req_msg_id != 0) {
-    callback_->on_message_result_error(req_msg_id, rpc_error.error_code_, rpc_error.error_message_.str());
-  } else {
-    LOG(ERROR) << "Receive rpc_error as update: [" << rpc_error.error_code_ << "][" << rpc_error.error_message_ << "]";
-  }
+  LOG(ERROR) << "Receive rpc_error as update: [" << rpc_error.error_code_ << "][" << rpc_error.error_message_ << "]";
   return Status::OK();
 }
 
@@ -523,7 +518,7 @@ Status SessionConnection::on_slice_packet(const MsgInfo &info, Slice packet) {
                     << " in container " << container_id_ << " from session " << auth_data_->get_session_id()
                     << " with message_id " << info.message_id << ", main_message_id = " << main_message_id_
                     << ", seq_no = " << info.seq_no << " and original size " << info.size;
-      return callback_->on_message_result_ok(0, as_buffer_slice(packet), info.size);
+      return callback_->on_update(as_buffer_slice(packet));
     }
   }
 

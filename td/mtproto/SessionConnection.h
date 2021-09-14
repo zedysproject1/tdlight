@@ -109,6 +109,8 @@ class SessionConnection final
     virtual void on_container_sent(uint64 container_id, vector<uint64> msgs_id) = 0;
     virtual Status on_pong() = 0;
 
+    virtual Status on_update(BufferSlice packet) = 0;
+
     virtual void on_message_ack(uint64 id) = 0;
     virtual Status on_message_result_ok(uint64 id, BufferSlice packet, size_t original_size) = 0;
     virtual void on_message_result_error(uint64 id, int code, string message) = 0;
@@ -216,8 +218,6 @@ class SessionConnection final
   Status parse_packet(TlParser &parser) TD_WARN_UNUSED_RESULT;
   Status on_packet_container(const MsgInfo &info, Slice packet) TD_WARN_UNUSED_RESULT;
   Status on_packet_rpc_result(const MsgInfo &info, Slice packet) TD_WARN_UNUSED_RESULT;
-  Status on_packet(const MsgInfo &info, uint64 req_msg_id,
-                   const mtproto_api::rpc_error &rpc_error) TD_WARN_UNUSED_RESULT;
 
   template <class T>
   Status on_packet(const MsgInfo &info, const T &packet) TD_WARN_UNUSED_RESULT;

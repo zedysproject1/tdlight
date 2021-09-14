@@ -803,7 +803,7 @@ foundMessages total_count:int32 messages:vector<message> next_offset:string = Fo
 
 //@description Describes a sponsored message @id Unique sponsored message identifier @sponsor_chat_id Chat identifier
 //@start_parameter Parameter for the bot start message if the sponsored chat is a chat with a bot @content Content of the message
-sponsoredMessage id:bytes sponsor_chat_id:int53 start_parameter:string content:MessageContent = SponsoredMessage;
+sponsoredMessage id:int32 sponsor_chat_id:int53 start_parameter:string content:MessageContent = SponsoredMessage;
 
 //@description Contains a list of sponsored messages @messages List of sponsored messages
 sponsoredMessages messages:vector<sponsoredMessage> = SponsoredMessages;
@@ -4267,8 +4267,8 @@ getMessagePublicForwards chat_id:int53 message_id:int53 offset:string limit:int3
 //@description Returns sponsored messages to be shown in a chat; for channel chats only @chat_id Identifier of the chat
 getChatSponsoredMessages chat_id:int53 = SponsoredMessages;
 
-//@description Informs TDLib that a sponsored message was viewed by the user @chat_id Chat identifier @message_id The identifier of the sponsored message being viewed
-viewSponsoredMessage chat_id:int53 message_id:bytes = Ok;
+//@description Informs TDLib that a sponsored message was viewed by the user @chat_id Identifier of the chat with the sponsored message @sponsored_message_id The identifier of the sponsored message being viewed
+viewSponsoredMessage chat_id:int53 sponsored_message_id:int32 = Ok;
 
 
 //@description Removes an active notification from notification list. Needs to be called only if the notification is removed by the current user @notification_group_id Identifier of notification group to which the notification belongs @notification_id Identifier of removed notification
@@ -4368,7 +4368,8 @@ editMessageText chat_id:int53 message_id:int53 reply_markup:ReplyMarkup input_me
 //@proximity_alert_radius The new maximum distance for proximity alerts, in meters (0-100000). Pass 0 if the notification is disabled
 editMessageLiveLocation chat_id:int53 message_id:int53 reply_markup:ReplyMarkup location:location heading:int32 proximity_alert_radius:int32 = Message;
 
-//@description Edits the content of a message with an animation, an audio, a document, a photo or a video. The media in the message can't be replaced if the message was set to self-destruct. Media can't be replaced by self-destructing media. Media in an album can be edited only to contain a photo or a video. Returns the edited message after the edit is completed on the server side
+//@description Edits the content of a message with an animation, an audio, a document, a photo or a video, including message caption. If only the caption needs to be edited, use editMessageCaption instead.
+//-The media can't be edited if the message was set to self-destruct or to a self-destructing media. The type of message content in an album can't be changed with exception of replacing a photo with a video or vice versa. Returns the edited message after the edit is completed on the server side
 //@chat_id The chat the message belongs to @message_id Identifier of the message @reply_markup The new message reply markup; for bots only @input_message_content New content of the message. Must be one of the following types: inputMessageAnimation, inputMessageAudio, inputMessageDocument, inputMessagePhoto or inputMessageVideo
 editMessageMedia chat_id:int53 message_id:int53 reply_markup:ReplyMarkup input_message_content:InputMessageContent = Message;
 
@@ -4623,7 +4624,7 @@ setChatMessageTtlSetting chat_id:int53 ttl:int32 = Ok;
 //@chat_id Chat identifier @permissions New non-administrator members permissions in the chat
 setChatPermissions chat_id:int53 permissions:chatPermissions = Ok;
 
-//@description Changes the chat theme. Requires can_change_info administrator right in groups, supergroups and channels @chat_id Chat identifier
+//@description Changes the chat theme. Supported only in private and secret chats @chat_id Chat identifier
 //@theme_name Name of the new chat theme; may be empty to return the default theme
 setChatTheme chat_id:int53 theme_name:string = Ok;
 

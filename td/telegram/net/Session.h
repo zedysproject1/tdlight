@@ -61,9 +61,8 @@ class Session final
     virtual void request_raw_connection(unique_ptr<mtproto::AuthData> auth_data,
                                         Promise<unique_ptr<mtproto::RawConnection>>) = 0;
     virtual void on_tmp_auth_key_updated(mtproto::AuthKey auth_key) = 0;
-    virtual void on_server_salt_updated(std::vector<mtproto::ServerSalt> server_salts) {
-    }
-    // one still have to call close after on_closed
+    virtual void on_server_salt_updated(std::vector<mtproto::ServerSalt> server_salts) = 0;
+    virtual void on_update(BufferSlice &&update) = 0;
     virtual void on_result(NetQueryPtr net_query) = 0;
   };
 
@@ -205,6 +204,8 @@ class Session final
   void on_session_failed(Status status) final;
 
   void on_container_sent(uint64 container_id, vector<uint64> msg_ids) final;
+
+  Status on_update(BufferSlice packet) final;
 
   void on_message_ack(uint64 id) final;
   Status on_message_result_ok(uint64 id, BufferSlice packet, size_t original_size) final;
