@@ -42,6 +42,7 @@
 #include "td/telegram/NotificationGroupType.h"
 #include "td/telegram/NotificationId.h"
 #include "td/telegram/NotificationSettings.h"
+#include "td/telegram/RecentDialogList.h"
 #include "td/telegram/ReplyMarkup.h"
 #include "td/telegram/ReportReason.h"
 #include "td/telegram/RestrictionReason.h"
@@ -374,6 +375,8 @@ class MessagesManager final : public Actor {
 
   void clear_recently_found_dialogs();
 
+  std::pair<int32, vector<DialogId>> get_recently_opened_dialogs(int32 limit, Promise<Unit> &&promise);
+
   DialogId resolve_dialog_username(const string &username) const;
 
   DialogId search_public_dialog(const string &username_to_search, bool force, Promise<Unit> &&promise);
@@ -580,6 +583,8 @@ class MessagesManager final : public Actor {
                                   MessageId expected_message_id, Promise<MessageThreadInfo> promise);
 
   bool is_message_edited_recently(FullMessageId full_message_id, int32 seconds);
+
+  bool is_deleted_secret_chat(DialogId dialog_id) const;
 
   Result<std::pair<string, bool>> get_message_link(FullMessageId full_message_id, int32 media_timestamp, bool for_group,
                                                    bool for_comment);
@@ -1670,7 +1675,7 @@ class MessagesManager final : public Actor {
   static constexpr int32 MIN_CHANNEL_DIFFERENCE = 1;
   static constexpr int32 MAX_CHANNEL_DIFFERENCE = 100;
   static constexpr int32 MAX_BOT_CHANNEL_DIFFERENCE = 100000;   // server side limit
-  static constexpr int32 MAX_RECENTLY_FOUND_DIALOGS = 50;       // some reasonable value
+  static constexpr int32 MAX_RECENT_DIALOGS = 50;               // some reasonable value
   static constexpr size_t MAX_TITLE_LENGTH = 128;               // server side limit for chat title
   static constexpr size_t MAX_DESCRIPTION_LENGTH = 255;         // server side limit for chat description
   static constexpr size_t MAX_DIALOG_FILTER_TITLE_LENGTH = 12;  // server side limit for dialog filter title
@@ -2987,16 +2992,6 @@ class MessagesManager final : public Actor {
 
   static MessageId get_next_yet_unsent_scheduled_message_id(Dialog *d, int32 date);
 
-  bool add_recently_found_dialog_internal(DialogId dialog_id);
-
-  bool remove_recently_found_dialog_internal(DialogId dialog_id);
-
-  void update_recently_found_dialogs();
-
-  void save_recently_found_dialogs();
-
-  bool load_recently_found_dialogs(Promise<Unit> &promise);
-
   void reget_message_from_server_if_needed(DialogId dialog_id, const Message *m);
 
   void speculatively_update_active_group_call_id(Dialog *d, const Message *m);
@@ -3091,10 +3086,8 @@ class MessagesManager final : public Actor {
 
   static DialogId get_message_original_sender(const Message *m);
 
-  int32 recently_found_dialogs_loaded_ = 0;  // 0 - not loaded, 1 - load request was sent, 2 - loaded
-  MultiPromiseActor resolve_recently_found_dialogs_multipromise_{"ResolveRecentlyFoundDialogsMultiPromiseActor"};
-
-  vector<DialogId> recently_found_dialog_ids_;
+  RecentDialogList recently_found_dialogs_;
+  RecentDialogList recently_opened_dialogs_;
 
   class UploadMediaCallback;
   class UploadThumbnailCallback;

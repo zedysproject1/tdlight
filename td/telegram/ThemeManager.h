@@ -25,7 +25,11 @@ class ThemeManager final : public Actor {
  public:
   ThemeManager(Td *td, ActorShared<> parent);
 
-  void get_chat_themes(Promise<td_api::object_ptr<td_api::chatThemes>> &&promise);
+  void init();
+
+  void on_update_theme(telegram_api::object_ptr<telegram_api::theme> &&theme, Promise<Unit> &&promise);
+
+  void get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const;
 
  private:
   enum class BaseTheme : int32 { Classic, Day, Night, Tinted, Arctic };
@@ -41,8 +45,14 @@ class ThemeManager final : public Actor {
     bool animate_message_colors = false;
   };
 
+  friend bool operator==(const ThemeSettings &lhs, const ThemeSettings &rhs);
+
+  friend bool operator!=(const ThemeSettings &lhs, const ThemeSettings &rhs);
+
   struct ChatTheme {
     string emoji;
+    int64 light_id = 0;
+    int64 dark_id = 0;
     ThemeSettings light_theme;
     ThemeSettings dark_theme;
   };
@@ -53,6 +63,10 @@ class ThemeManager final : public Actor {
     vector<ChatTheme> themes;
   };
 
+  void start_up() final;
+
+  void loop() final;
+
   void tear_down() final;
 
   void on_get_chat_themes(Result<telegram_api::object_ptr<telegram_api::account_ChatThemes>> result);
@@ -61,13 +75,13 @@ class ThemeManager final : public Actor {
 
   td_api::object_ptr<td_api::chatTheme> get_chat_theme_object(const ChatTheme &theme) const;
 
-  td_api::object_ptr<td_api::chatThemes> get_chat_themes_object() const;
+  td_api::object_ptr<td_api::updateChatThemes> get_update_chat_themes_object() const;
+
+  void send_update_chat_themes() const;
 
   static BaseTheme get_base_theme(const telegram_api::object_ptr<telegram_api::BaseTheme> &base_theme);
 
   ThemeSettings get_chat_theme_settings(telegram_api::object_ptr<telegram_api::themeSettings> settings);
-
-  vector<Promise<td_api::object_ptr<td_api::chatThemes>>> pending_get_chat_themes_queries_;
 
   ChatThemes chat_themes_;
 

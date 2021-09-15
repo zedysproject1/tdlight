@@ -950,7 +950,7 @@ voiceChat group_call_id:int32 has_participants:Bool default_participant_id:Messa
 //@unread_mention_count Number of unread messages with a mention/reply in the chat
 //@notification_settings Notification settings for this chat
 //@message_ttl_setting Current message Time To Live setting (self-destruct timer) for the chat; 0 if not defined. TTL is counted from the time message or its content is viewed in secret chats and from the send date in other chats
-//@theme_name If non-empty, name of the theme set for the chat
+//@theme_name If non-empty, name of a theme set for the chat
 //@action_bar Describes actions which should be possible to do through a chat action bar; may be null
 //@voice_chat Contains information about voice chat of the chat
 //@reply_markup_message_id Identifier of the message from which reply markup needs to be used; 0 if there is no default custom reply markup in the chat
@@ -1790,7 +1790,7 @@ messagePinMessage message_id:int53 = MessageContent;
 //@description A screenshot of a message in the chat has been taken
 messageScreenshotTaken = MessageContent;
 
-//@description A theme in the chat has been changed @theme_name If non-empty, name of the new theme set for the chat. Otherwise chat theme was reset to the default one
+//@description A theme in the chat has been changed @theme_name If non-empty, name of a new theme set for the chat. Otherwise chat theme was reset to the default one
 messageChatSetTheme theme_name:string = MessageContent;
 
 //@description The TTL (Time To Live) setting for messages in the chat has been changed @ttl New message TTL setting
@@ -2532,7 +2532,7 @@ chatEventUsernameChanged old_username:string new_username:string = ChatEventActi
 //@description The chat photo was changed @old_photo Previous chat photo value; may be null @new_photo New chat photo value; may be null
 chatEventPhotoChanged old_photo:chatPhoto new_photo:chatPhoto = ChatEventAction;
 
-//@description The chat theme was changed @old_theme_name Previous chat theme name; empty if default one @new_theme_name New chat theme name; empty if default one
+//@description The chat theme was changed. This event shouldn't be received until chat themes would be supported in supergroups @old_theme_name Previous chat theme name; empty if the previous theme was default one @new_theme_name New chat theme name; empty if the new theme is default one
 chatEventThemeChanged old_theme_name:string new_theme_name:string = ChatEventAction;
 
 //@description The can_invite_users permission of a supergroup chat was toggled @can_invite_users New value of can_invite_users permission
@@ -2702,9 +2702,10 @@ backgroundTypeWallpaper is_blurred:Bool is_moving:Bool = BackgroundType;
 
 //@description A PNG or TGV (gzipped subset of SVG with MIME type "application/x-tgwallpattern") pattern to be combined with the background fill chosen by the user
 //@fill Description of the background fill
-//@intensity Intensity of the pattern when it is shown above the filled background; -100-100. If negative, the pattern color and the filled background colors needs to be inverted
+//@intensity Intensity of the pattern when it is shown above the filled background; 0-100.
+//@is_inverted True, if the background fill must be applied only to the pattern itself. All other pixels are black in this case. For dark themes only
 //@is_moving True, if the background needs to be slightly moved when device is tilted
-backgroundTypePattern fill:BackgroundFill intensity:int32 is_moving:Bool = BackgroundType;
+backgroundTypePattern fill:BackgroundFill intensity:int32 is_inverted:Bool is_moving:Bool = BackgroundType;
 
 //@description A filled background @fill Description of the background fill
 backgroundTypeFill fill:BackgroundFill = BackgroundType;
@@ -2746,9 +2747,6 @@ themeSettings accent_color:int32 background:background message_fill:BackgroundFi
 //@light_settings Theme settings for a light chat theme
 //@dark_settings Theme settings for a dark chat theme
 chatTheme name:string light_settings:themeSettings dark_settings:themeSettings = ChatTheme;
-
-//@description Contains a list of chat themes @chat_themes A list of chat themes
-chatThemes chat_themes:vector<chatTheme> = ChatThemes;
 
 
 //@description Contains a list of hashtags @hashtags A list of hashtags
@@ -2893,7 +2891,7 @@ pushMessageContentChatChangePhoto = PushMessageContent;
 //@description A chat title was edited @title New chat title
 pushMessageContentChatChangeTitle title:string = PushMessageContent;
 
-//@description A chat theme was edited @theme_name If non-empty, name of the new theme set for the chat. Otherwise chat theme was reset to the default one
+//@description A chat theme was edited @theme_name If non-empty, name of a new theme set for the chat. Otherwise chat theme was reset to the default one
 pushMessageContentChatChangeTheme theme_name:string = PushMessageContent;
 
 //@description A chat member was deleted @member_name Name of the deleted member @is_current_user True, if the current user was deleted from the group
@@ -3700,7 +3698,7 @@ updateChatMessageTtlSetting chat_id:int53 message_ttl_setting:int32 = Update;
 //@description The chat action bar was changed @chat_id Chat identifier @action_bar The new value of the action bar; may be null
 updateChatActionBar chat_id:int53 action_bar:ChatActionBar = Update;
 
-//@description The chat theme was changed @chat_id Chat identifier @theme_name The new name of the chat theme; may be empty if none
+//@description The chat theme was changed @chat_id Chat identifier @theme_name The new name of the chat theme; may be empty if theme was reset to default
 updateChatTheme chat_id:int53 theme_name:string = Update;
 
 //@description The default chat reply markup was changed. Can occur because new messages with reply markup were received or because an old reply markup was hidden by the user
@@ -3840,6 +3838,9 @@ updateSavedAnimations animation_ids:vector<int32> = Update;
 
 //@description The selected background has changed @for_dark_theme True, if background for dark theme has changed @background The new selected background; may be null
 updateSelectedBackground for_dark_theme:Bool background:background = Update;
+
+//@description The list of available chat themes has changed @chat_themes The new list of chat themes
+updateChatThemes chat_themes:vector<chatTheme> = Update;
 
 //@description Some language pack strings have been updated @localization_target Localization target to which the language pack belongs @language_pack_id Identifier of the updated language pack @strings List of changed language pack strings
 updateLanguagePackStrings localization_target:string language_pack_id:string strings:vector<languagePackString> = Update;
@@ -4155,6 +4156,9 @@ removeRecentlyFoundChat chat_id:int53 = Ok;
 
 //@description Clears the list of recently found chats
 clearRecentlyFoundChats = Ok;
+
+//@description Returns recently opened chats, this is an offline request. Returns chats in the order of last opening @limit The maximum number of chats to be returned
+getRecentlyOpenedChats limit:int32 = Chats;
 
 //@description Checks whether a username can be set for a chat @chat_id Chat identifier; should be identifier of a supergroup chat, or a channel chat, or a private chat with self, or zero if the chat is being created @username Username to be checked
 checkChatUsername chat_id:int53 username:string = CheckChatUsernameResult;
@@ -4624,8 +4628,7 @@ setChatMessageTtlSetting chat_id:int53 ttl:int32 = Ok;
 //@chat_id Chat identifier @permissions New non-administrator members permissions in the chat
 setChatPermissions chat_id:int53 permissions:chatPermissions = Ok;
 
-//@description Changes the chat theme. Supported only in private and secret chats @chat_id Chat identifier
-//@theme_name Name of the new chat theme; may be empty to return the default theme
+//@description Changes the chat theme. Supported only in private and secret chats @chat_id Chat identifier @theme_name Name of the new chat theme; may be empty to return the default theme
 setChatTheme chat_id:int53 theme_name:string = Ok;
 
 //@description Changes the draft message in a chat @chat_id Chat identifier @message_thread_id If not 0, a message thread identifier in which the draft was changed @draft_message New draft message; may be null
@@ -5288,10 +5291,6 @@ removeBackground background_id:int64 = Ok;
 
 //@description Resets list of installed backgrounds to its default value
 resetBackgrounds = Ok;
-
-
-//@description Returns the list of available chat themes
-getChatThemes = ChatThemes;
 
 
 //@description Returns information about the current localization target. This is an offline request if only_local is true. Can be called before authorization @only_local If true, returns only locally available information without sending network requests
