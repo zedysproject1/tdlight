@@ -6222,9 +6222,10 @@ void MessagesManager::memory_cleanup(bool teardown) {
     }
   }
   if (teardown) {
-    recently_found_dialogs_loaded_ = 2;
-    recently_found_dialog_ids_.clear();
+    recently_found_dialogs_.clear_dialogs();
+    recently_opened_dialogs_.clear_dialogs();
   } else {
+    recently_opened_dialogs_.clear_dialogs();
     clear_recently_found_dialogs();
   }
   if (teardown) {
