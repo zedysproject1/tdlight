@@ -22,11 +22,12 @@
 #include "td/telegram/Td.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/TdDb.h"
+#include "td/telegram/TdParameters.h"
 #include "td/telegram/telegram_api.h"
 
-#include "td/actor/PromiseFuture.h"
-
 #include "td/db/SqliteKeyValueAsync.h"
+
+#include "td/actor/PromiseFuture.h"
 
 #include "td/utils/algorithm.h"
 #include "td/utils/logging.h"
@@ -43,7 +44,7 @@ class GetSavedGifsQuery final : public Td::ResultHandler {
   bool is_repair_ = false;
 
  public:
-  void send(bool is_repair, int32 hash) {
+  void send(bool is_repair, int64 hash) {
     is_repair_ = is_repair;
     LOG(INFO) << "Send get saved animations request with hash = " << hash;
     send_query(G()->net_query_creator().create(telegram_api::messages_getSavedGifs(hash)));
@@ -691,9 +692,9 @@ void AnimationsManager::on_get_saved_animations_failed(bool is_repair, Status er
   }
 }
 
-int32 AnimationsManager::get_saved_animations_hash(const char *source) const {
-  vector<uint32> numbers;
-  numbers.reserve(saved_animation_ids_.size() * 2);
+int64 AnimationsManager::get_saved_animations_hash(const char *source) const {
+  vector<uint64> numbers;
+  numbers.reserve(saved_animation_ids_.size());
   for (auto animation_id : saved_animation_ids_) {
     auto animation = get_animation(animation_id);
     if (animation == nullptr) {
@@ -705,18 +706,13 @@ int32 AnimationsManager::get_saved_animations_hash(const char *source) const {
       LOG(ERROR) << "Saved animation remote location is not document: " << source << " " << file_view.remote_location();
       continue;
     }
-    auto id = static_cast<uint64>(file_view.remote_location().get_id());
-    numbers.push_back(static_cast<uint32>(id >> 32));
-    numbers.push_back(static_cast<uint32>(id & 0xFFFFFFFF));
+    numbers.push_back(file_view.remote_location().get_id());
   }
   return get_vector_hash(numbers);
 }
 
 void AnimationsManager::add_saved_animation(const tl_object_ptr<td_api::InputFile> &input_file,
                                             Promise<Unit> &&promise) {
-  if (td_->auth_manager_->is_bot()) {
-    return promise.set_error(Status::Error(7, "Method is not available for bots"));
-  }
   if (!are_saved_animations_loaded_) {
     load_saved_animations(std::move(promise));
     return;
@@ -724,7 +720,7 @@ void AnimationsManager::add_saved_animation(const tl_object_ptr<td_api::InputFil
 
   auto r_file_id = td_->file_manager_->get_input_file_id(FileType::Animation, input_file, DialogId(), false, false);
   if (r_file_id.is_error()) {
-    return promise.set_error(Status::Error(7, r_file_id.error().message()));  // TODO do not drop error code
+    return promise.set_error(Status::Error(400, r_file_id.error().message()));  // TODO do not drop error code
   }
 
   add_saved_animation_impl(r_file_id.ok(), true, std::move(promise));
@@ -763,7 +759,7 @@ void AnimationsManager::add_saved_animation_impl(FileId animation_id, bool add_o
 
   auto file_view = td_->file_manager_->get_file_view(animation_id);
   if (file_view.empty()) {
-    return promise.set_error(Status::Error(7, "Animation file not found"));
+    return promise.set_error(Status::Error(400, "Animation file not found"));
   }
 
   LOG(INFO) << "Add saved animation " << animation_id << " with main file " << file_view.file_id();
@@ -797,20 +793,20 @@ void AnimationsManager::add_saved_animation_impl(FileId animation_id, bool add_o
 
   auto animation = get_animation(animation_id);
   if (animation == nullptr) {
-    return promise.set_error(Status::Error(7, "Animation not found"));
+    return promise.set_error(Status::Error(400, "Animation not found"));
   }
   if (animation->mime_type != "video/mp4") {
-    return promise.set_error(Status::Error(7, "Only MPEG4 animations can be saved"));
+    return promise.set_error(Status::Error(400, "Only MPEG4 animations can be saved"));
   }
 
   if (!file_view.has_remote_location()) {
-    return promise.set_error(Status::Error(7, "Can save only sent animations"));
+    return promise.set_error(Status::Error(400, "Can save only sent animations"));
   }
   if (file_view.remote_location().is_web()) {
-    return promise.set_error(Status::Error(7, "Can't save web animations"));
+    return promise.set_error(Status::Error(400, "Can't save web animations"));
   }
   if (!file_view.remote_location().is_document()) {
-    return promise.set_error(Status::Error(7, "Can't save encrypted animations"));
+    return promise.set_error(Status::Error(400, "Can't save encrypted animations"));
   }
 
   auto it = std::find_if(saved_animation_ids_.begin(), saved_animation_ids_.end(), is_equal);
@@ -836,9 +832,6 @@ void AnimationsManager::add_saved_animation_impl(FileId animation_id, bool add_o
 
 void AnimationsManager::remove_saved_animation(const tl_object_ptr<td_api::InputFile> &input_file,
                                                Promise<Unit> &&promise) {
-  if (td_->auth_manager_->is_bot()) {
-    return promise.set_error(Status::Error(7, "Method is not available for bots"));
-  }
   if (!are_saved_animations_loaded_) {
     load_saved_animations(std::move(promise));
     return;
@@ -846,7 +839,7 @@ void AnimationsManager::remove_saved_animation(const tl_object_ptr<td_api::Input
 
   auto r_file_id = td_->file_manager_->get_input_file_id(FileType::Animation, input_file, DialogId(), false, false);
   if (r_file_id.is_error()) {
-    return promise.set_error(Status::Error(7, r_file_id.error().message()));  // TODO do not drop error code
+    return promise.set_error(Status::Error(400, r_file_id.error().message()));  // TODO do not drop error code
   }
 
   FileId file_id = r_file_id.ok();
@@ -856,7 +849,7 @@ void AnimationsManager::remove_saved_animation(const tl_object_ptr<td_api::Input
 
   auto animation = get_animation(file_id);
   if (animation == nullptr) {
-    return promise.set_error(Status::Error(7, "Animation not found"));
+    return promise.set_error(Status::Error(400, "Animation not found"));
   }
 
   send_save_gif_query(file_id, true, std::move(promise));

@@ -6,7 +6,7 @@ if (POLICY CMP0065)
   cmake_policy(SET CMP0065 NEW)
 endif()
 
-project(TDLib VERSION 1.7.7 LANGUAGES CXX C)
+project(TDLib VERSION 1.7.8 LANGUAGES CXX C)
 
 if (NOT DEFINED CMAKE_MODULE_PATH)
   set(CMAKE_MODULE_PATH "")
@@ -41,7 +41,6 @@ prevent_in_source_build()
 
 option(TD_ENABLE_JNI "Use \"ON\" to enable JNI-compatible TDLib API.")
 option(TD_ENABLE_DOTNET "Use \"ON\" to enable generation of C++/CLI or C++/CX TDLib API bindings.")
-option(TD_EXPERIMENTAL_WATCH_OS "Use \"ON\" to enable watch os support.")
 
 if (TD_ENABLE_DOTNET AND (CMAKE_VERSION VERSION_LESS "3.1.0"))
   message(FATAL_ERROR "CMake 3.1.0 or higher is required. You are running version ${CMAKE_VERSION}.")
@@ -262,6 +261,7 @@ set(TL_DOTNET_SCHEME_SOURCE
 
 set(TDLIB_SOURCE
   td/mtproto/AuthData.cpp
+  td/mtproto/ConnectionManager.cpp
   td/mtproto/DhHandshake.cpp
   td/mtproto/Handshake.cpp
   td/mtproto/HandshakeActor.cpp
@@ -295,6 +295,7 @@ set(TDLIB_SOURCE
   td/telegram/ClientActor.cpp
   td/telegram/ConfigManager.cpp
   td/telegram/ConfigShared.cpp
+  td/telegram/ConnectionState.cpp
   td/telegram/Contact.cpp
   td/telegram/ContactsManager.cpp
   td/telegram/CountryInfoManager.cpp
@@ -426,6 +427,7 @@ set(TDLIB_SOURCE
 
   td/mtproto/AuthData.h
   td/mtproto/AuthKey.h
+  td/mtproto/ConnectionManager.h
   td/mtproto/CryptoStorer.h
   td/mtproto/DhCallback.h
   td/mtproto/DhHandshake.h
@@ -472,6 +474,7 @@ set(TDLIB_SOURCE
   td/telegram/ClientActor.h
   td/telegram/ConfigManager.h
   td/telegram/ConfigShared.h
+  td/telegram/ConnectionState.h
   td/telegram/Contact.h
   td/telegram/ContactsManager.h
   td/telegram/CountryInfoManager.h

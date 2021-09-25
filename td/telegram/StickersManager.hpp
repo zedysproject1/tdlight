@@ -12,6 +12,7 @@
 #include "td/telegram/misc.h"
 #include "td/telegram/Photo.hpp"
 
+#include "td/utils/emoji.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
 #include "td/utils/Slice.h"
@@ -313,7 +314,7 @@ void StickersManager::parse_sticker_set(StickerSet *sticker_set, ParserT &parser
         vector<string> emojis;
         parse(emojis, parser);
         for (auto &emoji : emojis) {
-          auto &sticker_ids = sticker_set->emoji_stickers_map_[remove_emoji_modifiers(emoji)];
+          auto &sticker_ids = sticker_set->emoji_stickers_map_[remove_emoji_modifiers(emoji).str()];
           if (sticker_ids.empty() || sticker_ids.back() != sticker_id) {
             sticker_ids.push_back(sticker_id);
           }

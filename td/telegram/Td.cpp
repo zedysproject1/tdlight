@@ -98,7 +98,9 @@
 #include "td/telegram/StorageManager.h"
 #include "td/telegram/MemoryManager.h"
 #include "td/telegram/SuggestedAction.h"
+#include "td/telegram/td_api.hpp"
 #include "td/telegram/TdDb.h"
+#include "td/telegram/telegram_api.hpp"
 #include "td/telegram/ThemeManager.h"
 #include "td/telegram/TopDialogCategory.h"
 #include "td/telegram/TopDialogManager.h"
@@ -110,13 +112,6 @@
 #include "td/telegram/WebPageId.h"
 #include "td/telegram/WebPagesManager.h"
 
-#include "td/telegram/td_api.hpp"
-#include "td/telegram/telegram_api.h"
-#include "td/telegram/telegram_api.hpp"
-
-#include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
-
 #include "td/db/binlog/BinlogEvent.h"
 
 #include "td/mtproto/DhCallback.h"
@@ -125,6 +120,9 @@
 #include "td/mtproto/RawConnection.h"
 #include "td/mtproto/RSA.h"
 #include "td/mtproto/TransportType.h"
+
+#include "td/actor/actor.h"
+#include "td/actor/PromiseFuture.h"
 
 #include "td/utils/algorithm.h"
 #include "td/utils/buffer.h"
@@ -639,7 +637,7 @@ class GetUserRequest final : public RequestActor<> {
   }
 
  public:
-  GetUserRequest(ActorShared<Td> td, uint64 request_id, int32 user_id)
+  GetUserRequest(ActorShared<Td> td, uint64 request_id, int64 user_id)
       : RequestActor(std::move(td), request_id), user_id_(user_id) {
     set_tries(3);
   }
@@ -657,7 +655,7 @@ class GetUserFullInfoRequest final : public RequestActor<> {
   }
 
  public:
-  GetUserFullInfoRequest(ActorShared<Td> td, uint64 request_id, int32 user_id)
+  GetUserFullInfoRequest(ActorShared<Td> td, uint64 request_id, int64 user_id)
       : RequestActor(std::move(td), request_id), user_id_(user_id) {
   }
 };
@@ -674,7 +672,7 @@ class GetGroupRequest final : public RequestActor<> {
   }
 
  public:
-  GetGroupRequest(ActorShared<Td> td, uint64 request_id, int32 chat_id)
+  GetGroupRequest(ActorShared<Td> td, uint64 request_id, int64 chat_id)
       : RequestActor(std::move(td), request_id), chat_id_(chat_id) {
     set_tries(3);
   }
@@ -692,7 +690,7 @@ class GetGroupFullInfoRequest final : public RequestActor<> {
   }
 
  public:
-  GetGroupFullInfoRequest(ActorShared<Td> td, uint64 request_id, int32 chat_id)
+  GetGroupFullInfoRequest(ActorShared<Td> td, uint64 request_id, int64 chat_id)
       : RequestActor(std::move(td), request_id), chat_id_(chat_id) {
   }
 };
@@ -709,7 +707,7 @@ class GetSupergroupRequest final : public RequestActor<> {
   }
 
  public:
-  GetSupergroupRequest(ActorShared<Td> td, uint64 request_id, int32 channel_id)
+  GetSupergroupRequest(ActorShared<Td> td, uint64 request_id, int64 channel_id)
       : RequestActor(std::move(td), request_id), channel_id_(channel_id) {
     set_tries(3);
   }
@@ -728,7 +726,7 @@ class GetSupergroupFullInfoRequest final : public RequestActor<> {
   }
 
  public:
-  GetSupergroupFullInfoRequest(ActorShared<Td> td, uint64 request_id, int32 channel_id)
+  GetSupergroupFullInfoRequest(ActorShared<Td> td, uint64 request_id, int64 channel_id)
       : RequestActor(std::move(td), request_id), channel_id_(channel_id) {
   }
 };
@@ -909,7 +907,7 @@ class GetGroupsInCommonRequest final : public RequestActor<> {
   }
 
  public:
-  GetGroupsInCommonRequest(ActorShared<Td> td, uint64 request_id, int32 user_id, int64 offset_dialog_id, int32 limit)
+  GetGroupsInCommonRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, int64 offset_dialog_id, int32 limit)
       : RequestActor(std::move(td), request_id), user_id_(user_id), offset_dialog_id_(offset_dialog_id), limit_(limit) {
   }
 };
@@ -1625,34 +1623,6 @@ class GetChatScheduledMessagesRequest final : public RequestActor<> {
   }
 };
 
-class GetMessagePublicForwardsRequest final : public RequestActor<> {
-  FullMessageId full_message_id_;
-  string offset_;
-  int32 limit_;
-  int64 random_id_;
-
-  MessagesManager::FoundMessages messages_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    messages_ = td->messages_manager_->get_message_public_forwards(full_message_id_, offset_, limit_, random_id_,
-                                                                   std::move(promise));
-  }
-
-  void do_send_result() final {
-    send_result(td->messages_manager_->get_found_messages_object(messages_));
-  }
-
- public:
-  GetMessagePublicForwardsRequest(ActorShared<Td> td, uint64 request_id, int64 dialog_id, int64 message_id,
-                                  string offset, int32 limit)
-      : RequestActor(std::move(td), request_id)
-      , full_message_id_(DialogId(dialog_id), MessageId(message_id))
-      , offset_(std::move(offset))
-      , limit_(limit)
-      , random_id_(0) {
-  }
-};
-
 class GetWebPagePreviewRequest final : public RequestOnceActor {
   td_api::object_ptr<td_api::formattedText> text_;
 
@@ -1767,7 +1737,7 @@ class CreateNewSecretChatRequest final : public RequestActor<SecretChatId> {
   }
 
  public:
-  CreateNewSecretChatRequest(ActorShared<Td> td, uint64 request_id, int32 user_id)
+  CreateNewSecretChatRequest(ActorShared<Td> td, uint64 request_id, int64 user_id)
       : RequestActor(std::move(td), request_id), user_id_(user_id) {
   }
 };
@@ -2107,7 +2077,7 @@ class GetUserProfilePhotosRequest final : public RequestActor<> {
   }
 
  public:
-  GetUserProfilePhotosRequest(ActorShared<Td> td, uint64 request_id, int32 user_id, int32 offset, int32 limit)
+  GetUserProfilePhotosRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, int32 offset, int32 limit)
       : RequestActor(std::move(td), request_id), user_id_(user_id), offset_(offset), limit_(limit) {
   }
 };
@@ -2400,7 +2370,7 @@ class UploadStickerFileRequest final : public RequestOnceActor {
   }
 
  public:
-  UploadStickerFileRequest(ActorShared<Td> td, uint64 request_id, int32 user_id,
+  UploadStickerFileRequest(ActorShared<Td> td, uint64 request_id, int64 user_id,
                            tl_object_ptr<td_api::InputSticker> &&sticker)
       : RequestOnceActor(std::move(td), request_id), user_id_(user_id), sticker_(std::move(sticker)) {
   }
@@ -2428,7 +2398,7 @@ class CreateNewStickerSetRequest final : public RequestOnceActor {
   }
 
  public:
-  CreateNewStickerSetRequest(ActorShared<Td> td, uint64 request_id, int32 user_id, string &&title, string &&name,
+  CreateNewStickerSetRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, string &&title, string &&name,
                              bool is_masks, vector<tl_object_ptr<td_api::InputSticker>> &&stickers, string &&software)
       : RequestOnceActor(std::move(td), request_id)
       , user_id_(user_id)
@@ -2458,7 +2428,7 @@ class AddStickerToSetRequest final : public RequestOnceActor {
   }
 
  public:
-  AddStickerToSetRequest(ActorShared<Td> td, uint64 request_id, int32 user_id, string &&name,
+  AddStickerToSetRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, string &&name,
                          tl_object_ptr<td_api::InputSticker> &&sticker)
       : RequestOnceActor(std::move(td), request_id)
       , user_id_(user_id)
@@ -2485,7 +2455,7 @@ class SetStickerSetThumbnailRequest final : public RequestOnceActor {
   }
 
  public:
-  SetStickerSetThumbnailRequest(ActorShared<Td> td, uint64 request_id, int32 user_id, string &&name,
+  SetStickerSetThumbnailRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, string &&name,
                                 tl_object_ptr<td_api::InputFile> &&thumbnail)
       : RequestOnceActor(std::move(td), request_id)
       , user_id_(user_id)
@@ -2734,7 +2704,7 @@ class GetInlineQueryResultsRequest final : public RequestOnceActor {
   }
 
  public:
-  GetInlineQueryResultsRequest(ActorShared<Td> td, uint64 request_id, int32 bot_user_id, int64 dialog_id,
+  GetInlineQueryResultsRequest(ActorShared<Td> td, uint64 request_id, int64 bot_user_id, int64 dialog_id,
                                const tl_object_ptr<td_api::location> &user_location, string query, string offset)
       : RequestOnceActor(std::move(td), request_id)
       , bot_user_id_(bot_user_id)
@@ -3411,7 +3381,8 @@ bool Td::is_internal_config_option(Slice name) {
       return name == "base_language_pack_version";
     case 'c':
       return name == "call_ring_timeout_ms" || name == "call_receive_timeout_ms" ||
-             name == "channels_read_media_period";
+             name == "channels_read_media_period" || name == "chat_read_mark_expire_period" ||
+             name == "chat_read_mark_size_threshold";
     case 'd':
       return name == "dc_txt_domain_name" || name == "dice_emojis" || name == "dice_success_values";
     case 'e':
@@ -3462,7 +3433,7 @@ void Td::on_config_option_updated(const string &name) {
     stickers_manager_->on_update_favorite_stickers_limit(
         narrow_cast<int32>(G()->shared_config().get_option_integer(name)));
   } else if (name == "my_id") {
-    G()->set_my_id(static_cast<int32>(G()->shared_config().get_option_integer(name)));
+    G()->set_my_id(G()->shared_config().get_option_integer(name));
   } else if (name == "session_count") {
     G()->net_query_dispatcher().update_session_count();
   } else if (name == "use_pfs") {
@@ -3523,36 +3494,17 @@ void Td::on_config_option_updated(const string &name) {
   send_update(make_tl_object<td_api::updateOption>(name, G()->shared_config().get_option_value(name)));
 }
 
-tl_object_ptr<td_api::ConnectionState> Td::get_connection_state_object(StateManager::State state) {
-  switch (state) {
-    case StateManager::State::Empty:
-      UNREACHABLE();
-      return nullptr;
-    case StateManager::State::WaitingForNetwork:
-      return make_tl_object<td_api::connectionStateWaitingForNetwork>();
-    case StateManager::State::ConnectingToProxy:
-      return make_tl_object<td_api::connectionStateConnectingToProxy>();
-    case StateManager::State::Connecting:
-      return make_tl_object<td_api::connectionStateConnecting>();
-    case StateManager::State::Updating:
-      return make_tl_object<td_api::connectionStateUpdating>();
-    case StateManager::State::Ready:
-      return make_tl_object<td_api::connectionStateReady>();
-    default:
-      UNREACHABLE();
-      return nullptr;
-  }
-}
-
-void Td::on_connection_state_changed(StateManager::State new_state) {
+void Td::on_connection_state_changed(ConnectionState new_state) {
   if (new_state == connection_state_) {
     LOG(ERROR) << "State manager sends update about unchanged state " << static_cast<int32>(new_state);
     return;
   }
+  if (G()->close_flag()) {
+    return;
+  }
   connection_state_ = new_state;
 
-  send_closure(actor_id(this), &Td::send_update,
-               make_tl_object<td_api::updateConnectionState>(get_connection_state_object(connection_state_)));
+  send_closure(actor_id(this), &Td::send_update, get_update_connection_state_object(connection_state_));
 }
 
 void Td::start_up() {
@@ -4033,7 +3985,7 @@ Status Td::init(DbKey key) {
 
   init_managers();
 
-  G()->set_my_id(static_cast<int32>(G()->shared_config().get_option_integer("my_id")));
+  G()->set_my_id(G()->shared_config().get_option_integer("my_id"));
 
   storage_manager_ = create_actor<StorageManager>("StorageManager", create_reference(),
                                                   min(current_scheduler_id + 2, scheduler_count - 1));
@@ -4122,7 +4074,7 @@ void Td::init_options_and_network() {
    public:
     explicit StateManagerCallback(ActorShared<Td> td) : td_(std::move(td)) {
     }
-    bool on_state(StateManager::State state) final {
+    bool on_state(ConnectionState state) final {
       send_closure(td_, &Td::on_connection_state_changed, state);
       return td_.is_alive();
     }
@@ -4133,7 +4085,6 @@ void Td::init_options_and_network() {
   state_manager_ = create_actor<StateManager>("State manager", create_reference());
   send_closure(state_manager_, &StateManager::add_callback, make_unique<StateManagerCallback>(create_reference()));
   G()->set_state_manager(state_manager_.get());
-  connection_state_ = StateManager::State::Empty;
 
   VLOG(td_init) << "Create ConfigShared";
   G()->set_shared_config(td::make_unique<ConfigShared>(G()->td_db()->get_config_pmc_shared()));
@@ -4402,6 +4353,7 @@ void Td::send_update(tl_object_ptr<td_api::Update> &&object) {
                         << ", count = " << sticker_sets->sets_.size() << " }";
       break;
     }
+    case td_api::updateAnimatedEmojiMessageClicked::ID / 2:
     case td_api::updateOption::ID / 2:
     case td_api::updateChatReadInbox::ID / 2:
     case td_api::updateUnreadMessageCount::ID / 2:
@@ -4742,7 +4694,7 @@ void Td::on_request(uint64 id, const td_api::getCurrentState &request) {
     updates.push_back(td_api::make_object<td_api::updateAuthorizationState>(std::move(state)));
   }
 
-  updates.push_back(td_api::make_object<td_api::updateConnectionState>(get_connection_state_object(connection_state_)));
+  updates.push_back(get_update_connection_state_object(connection_state_));
 
   if (auth_manager_->is_authorized()) {
     contacts_manager_->get_current_state(updates);
@@ -5065,6 +5017,13 @@ void Td::on_request(uint64 id, const td_api::viewSponsoredMessage &request) {
 void Td::on_request(uint64 id, const td_api::getMessageThread &request) {
   CHECK_IS_USER();
   CREATE_REQUEST(GetMessageThreadRequest, request.chat_id_, request.message_id_);
+}
+
+void Td::on_request(uint64 id, const td_api::getMessageViewers &request) {
+  CHECK_IS_USER();
+  CREATE_REQUEST_PROMISE();
+  messages_manager_->get_message_viewers({DialogId(request.chat_id_), MessageId(request.message_id_)},
+                                         std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::getMessageLink &request) {
@@ -5483,6 +5442,13 @@ void Td::on_request(uint64 id, const td_api::openMessageContent &request) {
       id, messages_manager_->open_message_content({DialogId(request.chat_id_), MessageId(request.message_id_)}));
 }
 
+void Td::on_request(uint64 id, const td_api::clickAnimatedEmojiMessage &request) {
+  CHECK_IS_USER();
+  CREATE_REQUEST_PROMISE();
+  messages_manager_->click_animated_emoji_message({DialogId(request.chat_id_), MessageId(request.message_id_)},
+                                                  std::move(promise));
+}
+
 void Td::on_request(uint64 id, const td_api::getInternalLinkType &request) {
   auto type = link_manager_->parse_internal_link(request.link_);
   send_closure(actor_id(this), &Td::send_result, id, type == nullptr ? nullptr : type->get_internal_link_type_object());
@@ -5602,8 +5568,9 @@ void Td::on_request(uint64 id, const td_api::getChatScheduledMessages &request) 
 void Td::on_request(uint64 id, td_api::getMessagePublicForwards &request) {
   CHECK_IS_USER();
   CLEAN_INPUT_STRING(request.offset_);
-  CREATE_REQUEST(GetMessagePublicForwardsRequest, request.chat_id_, request.message_id_, request.offset_,
-                 request.limit_);
+  CREATE_REQUEST_PROMISE();
+  messages_manager_->get_message_public_forwards({DialogId(request.chat_id_), MessageId(request.message_id_)},
+                                                 std::move(request.offset_), request.limit_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::removeNotification &request) {
@@ -6665,7 +6632,7 @@ void Td::on_request(uint64 id, const td_api::getFileDownloadedPrefixSize &reques
   }
   auto file_view = file_manager_->get_file_view(FileId(request.file_id_, 0));
   if (file_view.empty()) {
-    return send_closure(actor_id(this), &Td::send_error, id, Status::Error(10, "Unknown file ID"));
+    return send_closure(actor_id(this), &Td::send_error, id, Status::Error(400, "Unknown file ID"));
   }
   send_closure(actor_id(this), &Td::send_result, id,
                td_api::make_object<td_api::count>(narrow_cast<int32>(file_view.downloaded_prefix(request.offset_))));

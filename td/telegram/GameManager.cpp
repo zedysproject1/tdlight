@@ -92,7 +92,7 @@ class SetInlineGameScoreQuery final : public Td::ResultHandler {
   explicit SetInlineGameScoreQuery(Promise<Unit> &&promise) : promise_(std::move(promise)) {
   }
 
-  void send(tl_object_ptr<telegram_api::inputBotInlineMessageID> input_bot_inline_message_id, bool edit_message,
+  void send(tl_object_ptr<telegram_api::InputBotInlineMessageID> input_bot_inline_message_id, bool edit_message,
             tl_object_ptr<telegram_api::InputUser> input_user, int32 score, bool force) {
     CHECK(input_bot_inline_message_id != nullptr);
     CHECK(input_user != nullptr);
@@ -105,7 +105,7 @@ class SetInlineGameScoreQuery final : public Td::ResultHandler {
       flags |= telegram_api::messages_setInlineGameScore::FORCE_MASK;
     }
 
-    auto dc_id = DcId::internal(input_bot_inline_message_id->dc_id_);
+    auto dc_id = DcId::internal(InlineQueriesManager::get_inline_message_dc_id(input_bot_inline_message_id));
     send_query(G()->net_query_creator().create(
         telegram_api::messages_setInlineGameScore(flags, false /*ignored*/, false /*ignored*/,
                                                   std::move(input_bot_inline_message_id), std::move(input_user), score),
@@ -172,12 +172,12 @@ class GetInlineGameHighScoresQuery final : public Td::ResultHandler {
       : promise_(std::move(promise)) {
   }
 
-  void send(tl_object_ptr<telegram_api::inputBotInlineMessageID> input_bot_inline_message_id,
+  void send(tl_object_ptr<telegram_api::InputBotInlineMessageID> input_bot_inline_message_id,
             tl_object_ptr<telegram_api::InputUser> input_user) {
     CHECK(input_bot_inline_message_id != nullptr);
     CHECK(input_user != nullptr);
 
-    auto dc_id = DcId::internal(input_bot_inline_message_id->dc_id_);
+    auto dc_id = DcId::internal(InlineQueriesManager::get_inline_message_dc_id(input_bot_inline_message_id));
     send_query(G()->net_query_creator().create(
         telegram_api::messages_getInlineGameHighScores(std::move(input_bot_inline_message_id), std::move(input_user)),
         dc_id));
@@ -211,12 +211,12 @@ void GameManager::set_game_score(FullMessageId full_message_id, bool edit_messag
   CHECK(td_->auth_manager_->is_bot());
 
   if (!td_->messages_manager_->have_message_force(full_message_id, "set_game_score")) {
-    return promise.set_error(Status::Error(5, "Message not found"));
+    return promise.set_error(Status::Error(400, "Message not found"));
   }
 
   auto dialog_id = full_message_id.get_dialog_id();
   if (!td_->messages_manager_->have_input_peer(dialog_id, AccessRights::Edit)) {
-    return promise.set_error(Status::Error(5, "Can't access the chat"));
+    return promise.set_error(Status::Error(400, "Can't access the chat"));
   }
 
   auto input_user = td_->contacts_manager_->get_input_user(user_id);
@@ -225,7 +225,7 @@ void GameManager::set_game_score(FullMessageId full_message_id, bool edit_messag
   }
 
   if (!td_->messages_manager_->can_set_game_score(full_message_id)) {
-    return promise.set_error(Status::Error(5, "Game score can't be set"));
+    return promise.set_error(Status::Error(400, "Game score can't be set"));
   }
 
   auto query_promise = PromiseCreator::lambda(
@@ -268,16 +268,16 @@ void GameManager::get_game_high_scores(FullMessageId full_message_id, UserId use
   CHECK(td_->auth_manager_->is_bot());
 
   if (!td_->messages_manager_->have_message_force(full_message_id, "get_game_high_scores")) {
-    return promise.set_error(Status::Error(5, "Message not found"));
+    return promise.set_error(Status::Error(400, "Message not found"));
   }
 
   auto dialog_id = full_message_id.get_dialog_id();
   if (!td_->messages_manager_->have_input_peer(dialog_id, AccessRights::Read)) {
-    return promise.set_error(Status::Error(5, "Can't access the chat"));
+    return promise.set_error(Status::Error(400, "Can't access the chat"));
   }
   auto message_id = full_message_id.get_message_id();
   if (message_id.is_scheduled() || !message_id.is_server()) {
-    return promise.set_error(Status::Error(5, "Wrong message identifier specified"));
+    return promise.set_error(Status::Error(400, "Wrong message identifier specified"));
   }
 
   auto input_user = td_->contacts_manager_->get_input_user(user_id);

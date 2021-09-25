@@ -17,6 +17,7 @@
 #include "td/telegram/Contact.h"
 #include "td/telegram/ContactsManager.h"
 #include "td/telegram/Dependencies.h"
+#include "td/telegram/DialogAction.h"
 #include "td/telegram/DialogParticipant.h"
 #include "td/telegram/Document.h"
 #include "td/telegram/DocumentsManager.h"
@@ -73,6 +74,7 @@
 #include "td/actor/PromiseFuture.h"
 
 #include "td/utils/algorithm.h"
+#include "td/utils/emoji.h"
 #include "td/utils/format.h"
 #include "td/utils/HttpUrl.h"
 #include "td/utils/logging.h"
@@ -655,9 +657,8 @@ class MessageDice final : public MessageContent {
   static constexpr const char *DEFAULT_EMOJI = "🎲";
 
   MessageDice() = default;
-  MessageDice(string emoji, int32 dice_value)
-      : emoji(emoji.empty() ? string(DEFAULT_EMOJI) : remove_emoji_modifiers(std::move(emoji)))
-      , dice_value(dice_value) {
+  MessageDice(const string &emoji, int32 dice_value)
+      : emoji(emoji.empty() ? string(DEFAULT_EMOJI) : remove_emoji_modifiers(emoji).str()), dice_value(dice_value) {
   }
 
   MessageContentType get_type() const final {
@@ -1397,9 +1398,8 @@ static void parse(unique_ptr<MessageContent> &content, ParserT &parser) {
     case MessageContentType::Dice: {
       auto m = make_unique<MessageDice>();
       if (parser.version() >= static_cast<int32>(Version::AddDiceEmoji)) {
-        string emoji;
-        parse(emoji, parser);
-        m->emoji = remove_emoji_modifiers(std::move(emoji));
+        parse(m->emoji, parser);
+        remove_emoji_modifiers_in_place(m->emoji);
       } else {
         m->emoji = MessageDice::DEFAULT_EMOJI;
       }
@@ -1676,7 +1676,7 @@ static Result<InputMessageContent> create_input_message_content(
       if (!clean_input_string(input_dice->emoji_)) {
         return Status::Error(400, "Dice emoji must be encoded in UTF-8");
       }
-      content = td::make_unique<MessageDice>(std::move(input_dice->emoji_), 0);
+      content = td::make_unique<MessageDice>(input_dice->emoji_, 0);
       clear_draft = input_dice->clear_draft_;
       break;
     }
@@ -1995,7 +1995,7 @@ Result<InputMessageContent> get_input_message_content(
   FileId file_id;
   if (have_file) {
     if (r_file_id.is_error()) {
-      return Status::Error(7, r_file_id.error().message());
+      return Status::Error(400, r_file_id.error().message());
     }
     file_id = r_file_id.ok();
     CHECK(file_id.is_valid());
@@ -3971,9 +3971,9 @@ unique_ptr<MessageContent> get_secret_message_content(
       if (!clean_input_string(message_contact->last_name_)) {
         message_contact->last_name_.clear();
       }
-      return make_unique<MessageContact>(
-          Contact(std::move(message_contact->phone_number_), std::move(message_contact->first_name_),
-                  std::move(message_contact->last_name_), string(), UserId(message_contact->user_id_)));
+      return make_unique<MessageContact>(Contact(std::move(message_contact->phone_number_),
+                                                 std::move(message_contact->first_name_),
+                                                 std::move(message_contact->last_name_), string(), UserId()));
     }
     case secret_api::decryptedMessageMediaWebPage::ID: {
       auto media_web_page = move_tl_object_as<secret_api::decryptedMessageMediaWebPage>(media);
@@ -5304,6 +5304,36 @@ string get_message_content_search_text(const Td *td, const MessageContent *conte
   }
 }
 
+void get_message_content_animated_emoji_click_sticker(const MessageContent *content, FullMessageId full_message_id,
+                                                      Td *td, Promise<td_api::object_ptr<td_api::sticker>> &&promise) {
+  if (content->get_type() != MessageContentType::Text) {
+    return promise.set_error(Status::Error(400, "Message is not an animated emoji message"));
+  }
+
+  auto &text = static_cast<const MessageText *>(content)->text;
+  if (!text.entities.empty()) {
+    return promise.set_error(Status::Error(400, "Message is not an animated emoji message"));
+  }
+  td->stickers_manager_->get_animated_emoji_click_sticker(text.text, full_message_id, std::move(promise));
+}
+
+void on_message_content_animated_emoji_clicked(const MessageContent *content, FullMessageId full_message_id, Td *td,
+                                               Slice emoji, string data) {
+  if (content->get_type() != MessageContentType::Text) {
+    return;
+  }
+
+  emoji = remove_emoji_modifiers(emoji);
+  auto &text = static_cast<const MessageText *>(content)->text;
+  if (!text.entities.empty() || remove_emoji_modifiers(text.text) != emoji) {
+    return;
+  }
+  auto error = td->stickers_manager_->on_animated_emoji_message_clicked(emoji, full_message_id, data);
+  if (error.is_error()) {
+    LOG(WARNING) << "Failed to process animated emoji click with data \"" << data << "\": " << error;
+  }
+}
+
 bool need_reget_message_content(const MessageContent *content) {
   CHECK(content != nullptr);
   switch (content->get_type()) {
@@ -5529,6 +5559,15 @@ void on_sent_message_content(Td *td, const MessageContent *content) {
 
 StickerSetId add_sticker_set(Td *td, tl_object_ptr<telegram_api::InputStickerSet> &&input_sticker_set) {
   return td->stickers_manager_->add_sticker_set(std::move(input_sticker_set));
+}
+
+bool is_unsent_animated_emoji_click(Td *td, DialogId dialog_id, const DialogAction &action) {
+  auto emoji = action.get_watching_animations_emoji();
+  if (emoji.empty()) {
+    // not a WatchingAnimations action
+    return false;
+  }
+  return !td->stickers_manager_->is_sent_animated_emoji_click(dialog_id, remove_emoji_modifiers(emoji));
 }
 
 void on_dialog_used(TopDialogCategory category, DialogId dialog_id, int32 date) {

@@ -6,12 +6,6 @@
 //
 #include "td/telegram/CallbackQueriesManager.h"
 
-#include "td/telegram/td_api.h"
-#include "td/telegram/telegram_api.h"
-
-#include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
-
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/ContactsManager.h"
@@ -20,6 +14,11 @@
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/PasswordManager.h"
 #include "td/telegram/Td.h"
+#include "td/telegram/td_api.h"
+#include "td/telegram/telegram_api.h"
+
+#include "td/actor/actor.h"
+#include "td/actor/PromiseFuture.h"
 
 #include "td/utils/common.h"
 #include "td/utils/logging.h"
@@ -204,7 +203,7 @@ void CallbackQueriesManager::on_new_query(int32 flags, int64 callback_query_id, 
 
 void CallbackQueriesManager::on_new_inline_query(
     int32 flags, int64 callback_query_id, UserId sender_user_id,
-    tl_object_ptr<telegram_api::inputBotInlineMessageID> &&inline_message_id, BufferSlice &&data, int64 chat_instance,
+    tl_object_ptr<telegram_api::InputBotInlineMessageID> &&inline_message_id, BufferSlice &&data, int64 chat_instance,
     string &&game_short_name) {
   if (!sender_user_id.is_valid()) {
     LOG(ERROR) << "Receive new callback query from invalid " << sender_user_id;
@@ -233,32 +232,32 @@ int64 CallbackQueriesManager::send_callback_query(FullMessageId full_message_id,
                                                   tl_object_ptr<td_api::CallbackQueryPayload> &&payload,
                                                   Promise<Unit> &&promise) {
   if (td_->auth_manager_->is_bot()) {
-    promise.set_error(Status::Error(5, "Bot can't send callback queries to other bot"));
+    promise.set_error(Status::Error(400, "Bot can't send callback queries to other bot"));
     return 0;
   }
 
   if (payload == nullptr) {
-    promise.set_error(Status::Error(5, "Payload must be non-empty"));
+    promise.set_error(Status::Error(400, "Payload must be non-empty"));
     return 0;
   }
 
   auto dialog_id = full_message_id.get_dialog_id();
   td_->messages_manager_->have_dialog_force(dialog_id, "send_callback_query");
   if (!td_->messages_manager_->have_input_peer(dialog_id, AccessRights::Read)) {
-    promise.set_error(Status::Error(5, "Can't access the chat"));
+    promise.set_error(Status::Error(400, "Can't access the chat"));
     return 0;
   }
 
   if (!td_->messages_manager_->have_message_force(full_message_id, "send_callback_query")) {
-    promise.set_error(Status::Error(5, "Message not found"));
+    promise.set_error(Status::Error(400, "Message not found"));
     return 0;
   }
   if (full_message_id.get_message_id().is_valid_scheduled()) {
-    promise.set_error(Status::Error(5, "Can't send callback queries from scheduled messages"));
+    promise.set_error(Status::Error(400, "Can't send callback queries from scheduled messages"));
     return 0;
   }
   if (!full_message_id.get_message_id().is_server()) {
-    promise.set_error(Status::Error(5, "Bad message identifier"));
+    promise.set_error(Status::Error(400, "Bad message identifier"));
     return 0;
   }
 
@@ -299,7 +298,7 @@ void CallbackQueriesManager::send_get_callback_answer_query(
     return promise.set_error(Status::Error(400, "Can't access the chat"));
   }
   if (!td_->messages_manager_->have_message_force(full_message_id, "send_callback_query")) {
-    return promise.set_error(Status::Error(5, "Message not found"));
+    return promise.set_error(Status::Error(400, "Message not found"));
   }
 
   td_->create_handler<GetBotCallbackAnswerQuery>(std::move(promise))

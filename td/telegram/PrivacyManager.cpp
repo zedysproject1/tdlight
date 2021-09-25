@@ -30,7 +30,7 @@ namespace td {
 Result<PrivacyManager::UserPrivacySetting> PrivacyManager::UserPrivacySetting::get_user_privacy_setting(
     tl_object_ptr<td_api::UserPrivacySetting> key) {
   if (!key) {
-    return Status::Error(5, "UserPrivacySetting must be non-empty");
+    return Status::Error(400, "UserPrivacySetting must be non-empty");
   }
   return UserPrivacySetting(*key);
 }
@@ -279,7 +279,7 @@ tl_object_ptr<telegram_api::InputPrivacyRule> PrivacyManager::UserPrivacySetting
     case Type::AllowUsers:
       return make_tl_object<telegram_api::inputPrivacyValueAllowUsers>(get_input_users());
     case Type::AllowChatParticipants:
-      return make_tl_object<telegram_api::inputPrivacyValueAllowChatParticipants>(vector<int32>{chat_ids_});
+      return make_tl_object<telegram_api::inputPrivacyValueAllowChatParticipants>(vector<int64>{chat_ids_});
     case Type::RestrictContacts:
       return make_tl_object<telegram_api::inputPrivacyValueDisallowContacts>();
     case Type::RestrictAll:
@@ -287,7 +287,7 @@ tl_object_ptr<telegram_api::InputPrivacyRule> PrivacyManager::UserPrivacySetting
     case Type::RestrictUsers:
       return make_tl_object<telegram_api::inputPrivacyValueDisallowUsers>(get_input_users());
     case Type::RestrictChatParticipants:
-      return make_tl_object<telegram_api::inputPrivacyValueDisallowChatParticipants>(vector<int32>{chat_ids_});
+      return make_tl_object<telegram_api::inputPrivacyValueDisallowChatParticipants>(vector<int64>{chat_ids_});
     default:
       UNREACHABLE();
   }
@@ -379,12 +379,12 @@ Result<PrivacyManager::UserPrivacySettingRules> PrivacyManager::UserPrivacySetti
 Result<PrivacyManager::UserPrivacySettingRules> PrivacyManager::UserPrivacySettingRules::get_user_privacy_setting_rules(
     tl_object_ptr<td_api::userPrivacySettingRules> rules) {
   if (!rules) {
-    return Status::Error(5, "UserPrivacySettingRules must be non-empty");
+    return Status::Error(400, "UserPrivacySettingRules must be non-empty");
   }
   UserPrivacySettingRules result;
   for (auto &rule : rules->rules_) {
     if (!rule) {
-      return Status::Error(5, "UserPrivacySettingRule must be non-empty");
+      return Status::Error(400, "UserPrivacySettingRule must be non-empty");
     }
     result.rules_.emplace_back(*rule);
   }
@@ -463,7 +463,7 @@ void PrivacyManager::set_privacy(tl_object_ptr<td_api::UserPrivacySetting> key,
   auto &info = get_info(user_privacy_setting);
   if (info.has_set_query) {
     // TODO cancel previous query
-    return promise.set_error(Status::Error(5, "Another set_privacy query is active"));
+    return promise.set_error(Status::Error(400, "Another set_privacy query is active"));
   }
   auto net_query = G()->net_query_creator().create(telegram_api::account_setPrivacy(
       user_privacy_setting.get_input_privacy_key(), privacy_rules.get_input_privacy_rules()));

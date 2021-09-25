@@ -1805,7 +1805,7 @@ static UserId get_link_user_id(Slice url) {
     Slice value;
     std::tie(key, value) = split(parameter, '=');
     if (key == Slice("id")) {
-      auto r_user_id = to_integer_safe<int32>(value);
+      auto r_user_id = to_integer_safe<int64>(value);
       if (r_user_id.is_error()) {
         return UserId();
       }
@@ -3267,7 +3267,7 @@ Result<vector<MessageEntity>> get_message_entities(const ContactsManager *contac
         auto entity_mention_name = static_cast<td_api::textEntityTypeMentionName *>(entity->type_.get());
         UserId user_id(entity_mention_name->user_id_);
         if (contacts_manager != nullptr && !contacts_manager->have_input_user(user_id)) {
-          return Status::Error(7, "Have no access to the user");
+          return Status::Error(400, "Have no access to the user");
         }
         entities.emplace_back(entity->offset_, entity->length_, user_id);
         break;
@@ -3972,7 +3972,7 @@ Status fix_formatted_text(string &text, vector<MessageEntity> &entities, bool al
       entities.clear();
       return Status::OK();
     }
-    return Status::Error(3, "Message must be non-empty");
+    return Status::Error(400, "Message must be non-empty");
   }
 
   // re-fix entities if needed after removal of some characters
@@ -4023,7 +4023,7 @@ Status fix_formatted_text(string &text, vector<MessageEntity> &entities, bool al
   LOG_CHECK(check_utf8(text)) << text;
 
   if (!allow_empty && is_empty_string(text)) {
-    return Status::Error(3, "Message must be non-empty");
+    return Status::Error(400, "Message must be non-empty");
   }
 
   constexpr size_t LENGTH_LIMIT = 35000;  // server side limit

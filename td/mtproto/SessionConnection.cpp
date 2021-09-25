@@ -9,6 +9,8 @@
 #include "td/mtproto/AuthData.h"
 #include "td/mtproto/AuthKey.h"
 #include "td/mtproto/CryptoStorer.h"
+#include "td/mtproto/mtproto_api.h"
+#include "td/mtproto/mtproto_api.hpp"
 #include "td/mtproto/PacketStorer.h"
 #include "td/mtproto/Transport.h"
 #include "td/mtproto/utils.h"
@@ -26,9 +28,6 @@
 #include "td/utils/Time.h"
 #include "td/utils/tl_parsers.h"
 #include "td/utils/TlDowncastHelper.h"
-
-#include "td/mtproto/mtproto_api.h"
-#include "td/mtproto/mtproto_api.hpp"
 
 #include <algorithm>
 #include <iterator>
@@ -662,6 +661,7 @@ bool SessionConnection::must_flush_packet() {
 }
 
 Status SessionConnection::before_write() {
+  CHECK(raw_connection_);
   while (must_flush_packet()) {
     flush_packet();
   }
@@ -715,12 +715,14 @@ void SessionConnection::on_read(size_t size) {
 
 SessionConnection::SessionConnection(Mode mode, unique_ptr<RawConnection> raw_connection, AuthData *auth_data)
     : raw_connection_(std::move(raw_connection)), auth_data_(auth_data) {
+  CHECK(raw_connection_);
   state_ = Init;
   mode_ = mode;
   created_at_ = Time::now();
 }
 
 PollableFdInfo &SessionConnection::get_poll_info() {
+  CHECK(raw_connection_);
   return raw_connection_->get_poll_info();
 }
 

@@ -6,16 +6,15 @@
 //
 #pragma once
 
+#include "td/telegram/files/FileId.h"
+#include "td/telegram/files/FileSourceId.h"
+#include "td/telegram/Photo.h"
+#include "td/telegram/SecretInputMedia.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
 
 #include "td/actor/actor.h"
 #include "td/actor/PromiseFuture.h"
-
-#include "td/telegram/files/FileId.h"
-#include "td/telegram/files/FileSourceId.h"
-#include "td/telegram/Photo.h"
-#include "td/telegram/SecretInputMedia.h"
 
 #include "td/utils/buffer.h"
 #include "td/utils/common.h"
@@ -122,7 +121,7 @@ class AnimationsManager final : public Actor {
 
   FileId on_get_animation(unique_ptr<Animation> new_animation, bool replace);
 
-  int32 get_saved_animations_hash(const char *source) const;
+  int64 get_saved_animations_hash(const char *source) const;
 
   void add_saved_animation_impl(FileId animation_id, bool add_on_server, Promise<Unit> &&promise);
 

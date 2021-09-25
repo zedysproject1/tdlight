@@ -29,6 +29,7 @@
 #include "td/telegram/StateManager.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/TdDb.h"
+#include "td/telegram/TdParameters.h"
 #include "td/telegram/telegram_api.h"
 
 #include "td/mtproto/AuthKey.h"
@@ -3061,7 +3062,7 @@ Status NotificationManager::process_push_notification_payload(string payload, bo
 
   DialogId dialog_id;
   if (has_json_object_field(custom, "from_id")) {
-    TRY_RESULT(user_id_int, get_json_object_int_field(custom, "from_id"));
+    TRY_RESULT(user_id_int, get_json_object_long_field(custom, "from_id"));
     UserId user_id(user_id_int);
     if (!user_id.is_valid()) {
       return Status::Error("Receive invalid user_id");
@@ -3069,7 +3070,7 @@ Status NotificationManager::process_push_notification_payload(string payload, bo
     dialog_id = DialogId(user_id);
   }
   if (has_json_object_field(custom, "chat_id")) {
-    TRY_RESULT(chat_id_int, get_json_object_int_field(custom, "chat_id"));
+    TRY_RESULT(chat_id_int, get_json_object_long_field(custom, "chat_id"));
     ChatId chat_id(chat_id_int);
     if (!chat_id.is_valid()) {
       return Status::Error("Receive invalid chat_id");
@@ -3077,7 +3078,7 @@ Status NotificationManager::process_push_notification_payload(string payload, bo
     dialog_id = DialogId(chat_id);
   }
   if (has_json_object_field(custom, "channel_id")) {
-    TRY_RESULT(channel_id_int, get_json_object_int_field(custom, "channel_id"));
+    TRY_RESULT(channel_id_int, get_json_object_long_field(custom, "channel_id"));
     ChannelId channel_id(channel_id_int);
     if (!channel_id.is_valid()) {
       return Status::Error("Receive invalid channel_id");
@@ -3151,25 +3152,27 @@ Status NotificationManager::process_push_notification_payload(string payload, bo
   UserId sender_user_id;
   DialogId sender_dialog_id;
   if (has_json_object_field(custom, "chat_from_broadcast_id")) {
-    TRY_RESULT(sender_channel_id_int, get_json_object_int_field(custom, "chat_from_broadcast_id"));
+    TRY_RESULT(sender_channel_id_int, get_json_object_long_field(custom, "chat_from_broadcast_id"));
     sender_dialog_id = DialogId(ChannelId(sender_channel_id_int));
     if (!sender_dialog_id.is_valid()) {
       return Status::Error("Receive invalid chat_from_broadcast_id");
     }
   } else if (has_json_object_field(custom, "chat_from_group_id")) {
-    TRY_RESULT(sender_channel_id_int, get_json_object_int_field(custom, "chat_from_group_id"));
+    TRY_RESULT(sender_channel_id_int, get_json_object_long_field(custom, "chat_from_group_id"));
     sender_dialog_id = DialogId(ChannelId(sender_channel_id_int));
     if (!sender_dialog_id.is_valid()) {
       return Status::Error("Receive invalid chat_from_group_id");
     }
   } else if (has_json_object_field(custom, "chat_from_id")) {
-    TRY_RESULT(sender_user_id_int, get_json_object_int_field(custom, "chat_from_id"));
+    TRY_RESULT(sender_user_id_int, get_json_object_long_field(custom, "chat_from_id"));
     sender_user_id = UserId(sender_user_id_int);
     if (!sender_user_id.is_valid()) {
       return Status::Error("Receive invalid chat_from_id");
     }
   } else if (dialog_id.get_type() == DialogType::User) {
     sender_user_id = dialog_id.get_user_id();
+  } else if (dialog_id.get_type() == DialogType::Channel) {
+    sender_dialog_id = dialog_id;
   }
 
   TRY_RESULT(contains_mention_int, get_json_object_int_field(custom, "mention"));
@@ -3841,7 +3844,7 @@ Result<int64> NotificationManager::get_push_receiver_id(string payload) {
       if (r_user_id.ok() <= 0) {
         return Status::Error(400, PSLICE() << "Receive wrong user_id " << user_id_str);
       }
-      return static_cast<int64>(r_user_id.ok());
+      return r_user_id.ok();
     }
   }
 

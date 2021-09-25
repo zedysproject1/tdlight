@@ -8,6 +8,7 @@
 
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/ConfigShared.h"
+#include "td/telegram/ConnectionState.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/JsonValue.h"
 #include "td/telegram/LinkManager.h"
@@ -850,8 +851,8 @@ class ConfigRecoverer final : public Actor {
      public:
       explicit StateCallback(ActorId<ConfigRecoverer> parent) : parent_(std::move(parent)) {
       }
-      bool on_state(StateManager::State state) final {
-        send_closure(parent_, &ConfigRecoverer::on_connecting, state == StateManager::State::Connecting);
+      bool on_state(ConnectionState state) final {
+        send_closure(parent_, &ConfigRecoverer::on_connecting, state == ConnectionState::Connecting);
         return parent_.is_alive();
       }
       bool on_network(NetType network_type, uint32 network_generation) final {
@@ -1487,6 +1488,8 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
   string animation_search_emojis;
   vector<SuggestedAction> suggested_actions;
   bool can_archive_and_mute_new_chats_from_unknown_users = false;
+  int64 chat_read_mark_expire_period = 0;
+  int64 chat_read_mark_size_threshold = 0;
   if (config->get_id() == telegram_api::jsonObject::ID) {
     for (auto &key_value : static_cast<telegram_api::jsonObject *>(config.get())->value_) {
       Slice key = key_value->key_;
@@ -1676,6 +1679,15 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
         }
         continue;
       }
+      if (key == "chat_read_mark_expire_period") {
+        chat_read_mark_expire_period = get_json_value_int(std::move(key_value->value_), "chat_read_mark_expire_period");
+        continue;
+      }
+      if (key == "chat_read_mark_size_threshold") {
+        chat_read_mark_size_threshold =
+            get_json_value_int(std::move(key_value->value_), "chat_read_mark_size_threshold");
+        continue;
+      }
 
       new_values.push_back(std::move(key_value));
     }
@@ -1731,6 +1743,16 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
   } else {
     shared_config.set_option_boolean("can_archive_and_mute_new_chats_from_unknown_users",
                                      can_archive_and_mute_new_chats_from_unknown_users);
+  }
+  if (chat_read_mark_expire_period <= 0) {
+    shared_config.set_option_empty("chat_read_mark_expire_period");
+  } else {
+    shared_config.set_option_integer("chat_read_mark_expire_period", chat_read_mark_expire_period);
+  }
+  if (chat_read_mark_size_threshold <= 0) {
+    shared_config.set_option_empty("chat_read_mark_size_threshold");
+  } else {
+    shared_config.set_option_integer("chat_read_mark_size_threshold", chat_read_mark_size_threshold);
   }
 
   shared_config.set_option_empty("default_ton_blockchain_config");

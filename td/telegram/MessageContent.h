@@ -38,6 +38,7 @@
 namespace td {
 
 struct Dependencies;
+class DialogAction;
 class Game;
 struct Photo;
 class Td;
@@ -225,6 +226,12 @@ vector<FileId> get_message_content_file_ids(const MessageContent *content, const
 
 string get_message_content_search_text(const Td *td, const MessageContent *content);
 
+void get_message_content_animated_emoji_click_sticker(const MessageContent *content, FullMessageId full_message_id,
+                                                      Td *td, Promise<td_api::object_ptr<td_api::sticker>> &&promise);
+
+void on_message_content_animated_emoji_clicked(const MessageContent *content, FullMessageId full_message_id, Td *td,
+                                               Slice emoji, string data);
+
 bool need_reget_message_content(const MessageContent *content);
 
 bool need_delay_message_content_notification(const MessageContent *content, UserId my_user_id);
@@ -238,6 +245,8 @@ void add_message_content_dependencies(Dependencies &dependencies, const MessageC
 void on_sent_message_content(Td *td, const MessageContent *content);
 
 StickerSetId add_sticker_set(Td *td, tl_object_ptr<telegram_api::InputStickerSet> &&input_sticker_set);
+
+bool is_unsent_animated_emoji_click(Td *td, DialogId dialog_id, const DialogAction &action);
 
 void on_dialog_used(TopDialogCategory category, DialogId dialog_id, int32 date);
 

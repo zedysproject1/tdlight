@@ -6,23 +6,22 @@
 //
 #pragma once
 
+#include "td/telegram/ConnectionState.h"
 #include "td/telegram/files/FileId.h"
 #include "td/telegram/net/MtprotoHeader.h"
 #include "td/telegram/net/NetQuery.h"
 #include "td/telegram/net/NetQueryStats.h"
-#include "td/telegram/StateManager.h"
+#include "td/telegram/td_api.h"
 #include "td/telegram/TdCallback.h"
 #include "td/telegram/TdParameters.h"
+#include "td/telegram/telegram_api.h"
 #include "td/telegram/TermsOfService.h"
 
-#include "td/telegram/td_api.h"
-#include "td/telegram/telegram_api.h"
+#include "td/db/DbKey.h"
 
 #include "td/actor/actor.h"
 #include "td/actor/PromiseFuture.h"
 #include "td/actor/Timeout.h"
-
-#include "td/db/DbKey.h"
 
 #include "td/utils/buffer.h"
 #include "td/utils/common.h"
@@ -73,6 +72,7 @@ class PrivacyManager;
 class SecureManager;
 class SecretChatsManager;
 class SponsoredMessageManager;
+class StateManager;
 class StickersManager;
 class StorageManager;
 class MemoryManager;
@@ -255,14 +255,14 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> static_request(td_api::object_ptr<td_api::Function> function);
 
  private:
-  static constexpr const char *TDLIB_VERSION = "1.7.7";
+  static constexpr const char *TDLIB_VERSION = "1.7.8";
   static constexpr int64 ONLINE_ALARM_ID = 0;
   static constexpr int64 PING_SERVER_ALARM_ID = -1;
   static constexpr int32 PING_SERVER_TIMEOUT = 300;
   static constexpr int64 TERMS_OF_SERVICE_ALARM_ID = -2;
   static constexpr int64 PROMO_DATA_ALARM_ID = -3;
 
-  void on_connection_state_changed(StateManager::State new_state);
+  void on_connection_state_changed(ConnectionState new_state);
 
   void send_result(uint64 id, tl_object_ptr<td_api::Object> object);
   void send_error(uint64 id, Status error);
@@ -290,7 +290,7 @@ class Td final : public Actor {
 
   TdParameters parameters_;
 
-  StateManager::State connection_state_;
+  ConnectionState connection_state_ = ConnectionState::Empty;
 
   std::unordered_multiset<uint64> request_set_;
   int actor_refcnt_ = 0;
@@ -360,8 +360,6 @@ class Td final : public Actor {
   static bool is_internal_config_option(Slice name);
 
   void on_config_option_updated(const string &name);
-
-  static tl_object_ptr<td_api::ConnectionState> get_connection_state_object(StateManager::State state);
 
   void send(NetQueryPtr &&query);
 
@@ -529,6 +527,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getMessageThread &request);
 
+  void on_request(uint64 id, const td_api::getMessageViewers &request);
+
   void on_request(uint64 id, const td_api::getMessages &request);
 
   void on_request(uint64 id, const td_api::getChatSponsoredMessages &request);
@@ -616,6 +616,8 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::viewMessages &request);
 
   void on_request(uint64 id, const td_api::openMessageContent &request);
+
+  void on_request(uint64 id, const td_api::clickAnimatedEmojiMessage &request);
 
   void on_request(uint64 id, const td_api::getInternalLinkType &request);
 

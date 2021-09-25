@@ -11,11 +11,11 @@
 #include "td/telegram/net/NetQueryCreator.h"
 #include "td/telegram/TdParameters.h"
 
+#include "td/net/NetStats.h"
+
 #include "td/actor/actor.h"
 #include "td/actor/PromiseFuture.h"
 #include "td/actor/SchedulerLocalStorage.h"
-
-#include "td/net/NetStats.h"
 
 #include "td/utils/common.h"
 #include "td/utils/logging.h"
@@ -346,10 +346,10 @@ class Global final : public ActorContext {
     return parameters_;
   }
 
-  int32 get_my_id() const {
+  int64 get_my_id() const {
     return my_id_;
   }
-  void set_my_id(int32 my_id) {
+  void set_my_id(int64 my_id) {
     my_id_ = my_id;
   }
 
@@ -479,7 +479,7 @@ class Global final : public ActorContext {
 
   unique_ptr<ConfigShared> shared_config_;
 
-  int32 my_id_ = 0;  // hack
+  int64 my_id_ = 0;  // hack
 
   static int64 get_location_key(double latitude, double longitude);
 
