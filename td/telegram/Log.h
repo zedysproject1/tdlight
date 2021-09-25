@@ -81,8 +81,6 @@ class Log {
    *                      Pass nullptr to remove the callback.
    */
   static void set_fatal_error_callback(FatalErrorCallbackPtr callback);
-
-  static void set_disable_death_handler(bool disabled);
 };
 
 }  // namespace td

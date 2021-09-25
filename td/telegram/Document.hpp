@@ -33,9 +33,7 @@ namespace td {
 template <class StorerT>
 void store(const Document &document, StorerT &storer) {
   Td *td = storer.context()->td().get_actor_unsafe();
-  if (td == nullptr) {
-      return;
-  }
+  CHECK(td != nullptr);
 
   store(document.type, storer);
   switch (document.type) {
@@ -69,9 +67,7 @@ void store(const Document &document, StorerT &storer) {
 template <class ParserT>
 void parse(Document &document, ParserT &parser) {
   Td *td = parser.context()->td().get_actor_unsafe();
-  if (td == nullptr) {
-      return;
-  }
+  CHECK(td != nullptr);
 
   parse(document.type, parser);
   switch (document.type) {

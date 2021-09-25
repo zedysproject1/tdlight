@@ -25,9 +25,7 @@ AudiosManager::AudiosManager(Td *td) : td_(td) {
 
 int32 AudiosManager::get_audio_duration(FileId file_id) const {
   auto it = audios_.find(file_id);
-  if (it == audios_.end() || it->second == nullptr) {
-      return 0;
-  }
+  CHECK(it != audios_.end());
   return it->second->duration;
 }
 
@@ -37,13 +35,9 @@ tl_object_ptr<td_api::audio> AudiosManager::get_audio_object(FileId file_id) con
   }
 
   auto it = audios_.find(file_id);
-  if (it == audios_.end()) {
-    return nullptr;
-  }
+  CHECK(it != audios_.end());
   auto audio = it->second.get();
-  if (audio == nullptr) {
-      return nullptr;
-  }
+  CHECK(audio != nullptr);
   return make_tl_object<td_api::audio>(
       audio->duration, audio->title, audio->performer, audio->file_name, audio->mime_type,
       get_minithumbnail_object(audio->minithumbnail),
@@ -93,8 +87,8 @@ FileId AudiosManager::on_get_audio(unique_ptr<Audio> new_audio, bool replace) {
 
 const AudiosManager::Audio *AudiosManager::get_audio(FileId file_id) const {
   auto audio = audios_.find(file_id);
-  if (audio == audios_.end() || audio->second == nullptr) {
-    return make_unique<Audio>().get();
+  if (audio == audios_.end()) {
+    return nullptr;
   }
 
   CHECK(audio->second->file_id == file_id);
@@ -121,7 +115,7 @@ void AudiosManager::merge_audios(FileId new_id, FileId old_id, bool can_delete_o
   CHECK(old_ != nullptr);
 
   auto new_it = audios_.find(new_id);
-  if (new_it == audios_.end() || new_it->second == nullptr) {
+  if (new_it == audios_.end()) {
     auto &old = audios_[old_id];
     if (!can_delete_old) {
       dup_audio(new_id, old_id);
@@ -149,25 +143,19 @@ void AudiosManager::merge_audios(FileId new_id, FileId old_id, bool can_delete_o
 
 string AudiosManager::get_audio_search_text(FileId file_id) const {
   auto audio = get_audio(file_id);
-  if (audio == nullptr) {
-      return "";
-  }
+  CHECK(audio != nullptr);
   return PSTRING() << audio->file_name << " " << audio->title << " " << audio->performer;
 }
 
 FileId AudiosManager::get_audio_thumbnail_file_id(FileId file_id) const {
   auto audio = get_audio(file_id);
-  if (audio == nullptr) {
-      return FileId();
-  }
+  CHECK(audio != nullptr);
   return audio->thumbnail.file_id;
 }
 
 void AudiosManager::delete_audio_thumbnail(FileId file_id) {
   auto &audio = audios_[file_id];
-  if (audio == nullptr) {
-      return;
-  }
+  CHECK(audio != nullptr);
   audio->thumbnail = PhotoSize();
 }
 
@@ -191,9 +179,7 @@ SecretInputMedia AudiosManager::get_secret_input_media(FileId audio_file_id,
                                                        tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
                                                        const string &caption, BufferSlice thumbnail) const {
   auto *audio = get_audio(audio_file_id);
-  if (audio == nullptr) {
-      return SecretInputMedia{};
-  }
+  CHECK(audio != nullptr);
   auto file_view = td_->file_manager_->get_file_view(audio_file_id);
   auto &encryption_key = file_view.encryption_key();
   if (!file_view.is_encrypted_secret() || encryption_key.empty()) {
@@ -241,9 +227,7 @@ tl_object_ptr<telegram_api::InputMedia> AudiosManager::get_input_media(
 
   if (input_file != nullptr) {
     const Audio *audio = get_audio(file_id);
-    if (audio == nullptr) {
-        return nullptr;
-    }
+    CHECK(audio != nullptr);
 
     vector<tl_object_ptr<telegram_api::DocumentAttribute>> attributes;
     attributes.push_back(make_tl_object<telegram_api::documentAttributeAudio>(
@@ -269,10 +253,7 @@ tl_object_ptr<telegram_api::InputMedia> AudiosManager::get_input_media(
 
   return nullptr;
 }
-void AudiosManager::memory_cleanup() {
-  audios_.clear();
-  audios_.rehash(0);
-}
+
 void AudiosManager::memory_stats(vector<string> &output) {
   output.push_back("\"audios_\":"); output.push_back(std::to_string(audios_.size()));
 

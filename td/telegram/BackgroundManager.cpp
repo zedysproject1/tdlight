@@ -140,9 +140,7 @@ class UploadBackgroundQuery final : public Td::ResultHandler {
 
   void send(FileId file_id, tl_object_ptr<telegram_api::InputFile> &&input_file, const BackgroundType &type,
             bool for_dark_theme) {
-    if (input_file == nullptr) {
-        return;
-    }
+    CHECK(input_file != nullptr);
     file_id_ = file_id;
     type_ = type;
     for_dark_theme_ = for_dark_theme;
@@ -773,7 +771,7 @@ void BackgroundManager::save_background_id(bool for_dark_theme) {
   auto background_id = set_background_id_[for_dark_theme];
   if (background_id.is_valid()) {
     const Background *background = get_background(background_id);
-    if (!(background != nullptr)) return;
+    CHECK(background != nullptr);
     BackgroundLogEvent log_event{*background, set_background_type_[for_dark_theme]};
     G()->td_db()->get_binlog_pmc()->set(key, log_event_store(log_event).as_slice().str());
   } else {
@@ -826,9 +824,7 @@ void BackgroundManager::on_upload_background_file(FileId file_id, tl_object_ptr<
   LOG(INFO) << "Background file " << file_id << " has been uploaded";
 
   auto it = being_uploaded_files_.find(file_id);
-  if (it == being_uploaded_files_.end()) {
-      return;
-  }
+  CHECK(it != being_uploaded_files_.end());
 
   auto type = it->second.type;
   auto for_dark_theme = it->second.for_dark_theme;
@@ -849,9 +845,7 @@ void BackgroundManager::on_upload_background_file_error(FileId file_id, Status s
   CHECK(status.is_error());
 
   auto it = being_uploaded_files_.find(file_id);
-  if (it == being_uploaded_files_.end()) {
-      return;
-  }
+  CHECK(it != being_uploaded_files_.end());
 
   auto promise = std::move(it->second.promise);
 
@@ -882,7 +876,7 @@ void BackgroundManager::do_upload_background_file(FileId file_id, const Backgrou
 void BackgroundManager::on_uploaded_background_file(FileId file_id, const BackgroundType &type, bool for_dark_theme,
                                                     telegram_api::object_ptr<telegram_api::WallPaper> wallpaper,
                                                     Promise<Unit> &&promise) {
-  if (!(wallpaper != nullptr)) promise.set_error(Status::Error(500, "Error"));
+  CHECK(wallpaper != nullptr);
 
   auto added_background = on_get_background(BackgroundId(), string(), std::move(wallpaper), true);
   auto background_id = added_background.first;
@@ -894,7 +888,7 @@ void BackgroundManager::on_uploaded_background_file(FileId file_id, const Backgr
       << "Type of uploaded background has changed from " << type << " to " << added_background.second;
 
   const auto *background = get_background(background_id);
-  if (!(background != nullptr)) return promise.set_error(Status::Error(500, "Error"));
+  CHECK(background != nullptr);
   if (!background->file_id.is_valid()) {
     td_->file_manager_->cancel_upload(file_id);
     return promise.set_error(Status::Error(500, "Receive wrong uploaded background without file"));
@@ -966,12 +960,6 @@ void BackgroundManager::on_reset_background(Result<Unit> &&result, Promise<Unit>
   if (result.is_error()) {
     return promise.set_error(result.move_as_error());
   }
-  reset_backgrounds_data();
-
-  promise.set_value(Unit());
-}
-
-void BackgroundManager::reset_backgrounds_data() {
   installed_backgrounds_.clear();
   set_background_id(BackgroundId(), BackgroundType(), false);
   set_background_id(BackgroundId(), BackgroundType(), true);
@@ -983,6 +971,8 @@ void BackgroundManager::reset_backgrounds_data() {
     local_background_ids_[1].clear();
     save_local_backgrounds(true);
   }
+
+  promise.set_value(Unit());
 }
 
 void BackgroundManager::add_background(const Background &background, bool replace_type) {
@@ -1302,24 +1292,6 @@ void BackgroundManager::get_current_state(vector<td_api::object_ptr<td_api::Upda
 
   updates.push_back(get_update_selected_background_object(false));
   updates.push_back(get_update_selected_background_object(true));
-}
-
-void BackgroundManager::memory_cleanup() {
-  memory_cleanup(false);
-}
-
-void BackgroundManager::memory_cleanup(bool full) {
-  backgrounds_.clear();
-  backgrounds_.rehash(0);
-  background_id_to_file_source_id_.clear();
-  background_id_to_file_source_id_.rehash(0);
-  name_to_background_id_.clear();
-  name_to_background_id_.rehash(0);
-  file_id_to_background_id_.clear();
-  file_id_to_background_id_.rehash(0);
-  loaded_from_database_backgrounds_.clear();
-  loaded_from_database_backgrounds_.rehash(0);
-  reset_backgrounds_data();
 }
 
 void BackgroundManager::memory_stats(vector<string> &output) {

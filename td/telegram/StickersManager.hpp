@@ -24,9 +24,7 @@ namespace td {
 template <class StorerT>
 void StickersManager::store_sticker(FileId file_id, bool in_sticker_set, StorerT &storer, const char *source) const {
   auto it = stickers_.find(file_id);
-  if (it == stickers_.end() || it->second == nullptr) {
-    return;
-  }
+  LOG_CHECK(it != stickers_.end()) << file_id << ' ' << in_sticker_set << ' ' << source;
   const Sticker *sticker = it->second.get();
   bool has_sticker_set_access_hash = sticker->set_id.is_valid() && !in_sticker_set;
   bool has_minithumbnail = !sticker->minithumbnail.empty();
@@ -41,11 +39,10 @@ void StickersManager::store_sticker(FileId file_id, bool in_sticker_set, StorerT
     store(sticker->set_id.get(), storer);
     if (has_sticker_set_access_hash) {
       auto sticker_set = get_sticker_set(sticker->set_id);
-      if (sticker_set != nullptr) {
+      CHECK(sticker_set != nullptr);
         store(sticker_set->access_hash, storer);
       }
     }
-  }
   store(sticker->alt, storer);
   store(sticker->dimensions, storer);
   store(sticker->s_thumbnail, storer);
@@ -188,9 +185,7 @@ void StickersManager::store_sticker_set(const StickerSet *sticker_set, bool with
 
 template <class ParserT>
 void StickersManager::parse_sticker_set(StickerSet *sticker_set, ParserT &parser) {
-  if (sticker_set == nullptr) {
-      return;
-  }
+  CHECK(sticker_set != nullptr);
   CHECK(!sticker_set->was_loaded);
   bool was_inited = sticker_set->is_inited;
   bool is_installed;
@@ -302,9 +297,7 @@ void StickersManager::parse_sticker_set(StickerSet *sticker_set, ParserT &parser
       sticker_set->sticker_ids.push_back(sticker_id);
 
       Sticker *sticker = get_sticker(sticker_id);
-      if (sticker == nullptr) {
-          return;
-      }
+      CHECK(sticker != nullptr);
       if (sticker->set_id != sticker_set->id) {
         LOG_IF(ERROR, sticker->set_id.is_valid()) << "Sticker " << sticker_id << " set_id has changed";
         sticker->set_id = sticker_set->id;
@@ -339,9 +332,7 @@ template <class StorerT>
 void StickersManager::store_sticker_set_id(StickerSetId sticker_set_id, StorerT &storer) const {
   CHECK(sticker_set_id.is_valid());
   const StickerSet *sticker_set = get_sticker_set(sticker_set_id);
-  if (sticker_set == nullptr) {
-      return;
-  }
+  CHECK(sticker_set != nullptr);
   store(sticker_set_id.get(), storer);
   store(sticker_set->access_hash, storer);
 }

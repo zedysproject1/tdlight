@@ -3427,10 +3427,6 @@ ContactsManager::~ContactsManager() = default;
 
 void ContactsManager::tear_down() {
   parent_.reset();
-  if (td_->memory_manager_->can_manage_memory()) {
-    // Completely clear memory when closing, to avoid memory leaks
-    memory_cleanup(true);
-  }
 }
 
 UserId ContactsManager::load_my_id() {
@@ -3468,7 +3464,7 @@ void ContactsManager::on_user_online_timeout(UserId user_id) {
   }
 
   auto u = get_user(user_id);
-  if (u == nullptr) { return; }
+  CHECK(u != nullptr);
   CHECK(u->is_update_user_sent);
 
   LOG(INFO) << "Update " << user_id << " online status to offline";
@@ -3494,7 +3490,7 @@ void ContactsManager::on_channel_unban_timeout(ChannelId channel_id) {
   }
 
   auto c = get_channel(channel_id);
-  if (c == nullptr) { return; }
+  CHECK(c != nullptr);
 
   auto old_status = c->status;
   c->status.update_restrictions();
@@ -3527,7 +3523,7 @@ void ContactsManager::on_user_nearby_timeout(UserId user_id) {
   }
 
   auto u = get_user(user_id);
-  if (u == nullptr) { return; }
+  CHECK(u != nullptr);
 
   LOG(INFO) << "Remove " << user_id << " from nearby list";
   DialogId dialog_id(user_id);
@@ -10097,14 +10093,10 @@ void ContactsManager::update_chat_full(ChatFull *chat_full, ChatId chat_id, cons
 
 void ContactsManager::update_channel_full(ChannelFull *channel_full, ChannelId channel_id, const char *source,
                                           bool from_database) {
-  if (channel_full == nullptr) {
-    return;
-  }
+  CHECK(channel_full != nullptr);
   unavailable_channel_fulls_.erase(channel_id);  // don't needed anymore
 
-  if (!(channel_full->participant_count >= channel_full->administrator_count)) {
-    return;
-  }
+  CHECK(channel_full->participant_count >= channel_full->administrator_count);
 
   if (channel_full->is_slow_mode_next_send_date_changed) {
     auto now = G()->server_time();
@@ -10143,9 +10135,7 @@ void ContactsManager::update_channel_full(ChannelFull *channel_full, ChannelId c
 
     {
       Channel *c = get_channel(channel_id);
-      if (!(c == nullptr || c->is_update_supergroup_sent)) {
-        return;
-      }
+      CHECK(c == nullptr || c->is_update_supergroup_sent);
     }
     if (!channel_full->is_update_channel_full_sent) {
       LOG(ERROR) << "Send partial updateSupergroupFullInfo for " << channel_id << " from " << source;
@@ -11475,9 +11465,8 @@ void ContactsManager::update_user_online_member_count(User *u) {
       case DialogType::Chat: {
         auto chat_id = dialog_id.get_chat_id();
         auto chat_full = get_chat_full(chat_id);
-        if (chat_full != nullptr) {
+        CHECK(chat_full != nullptr);
           update_chat_online_member_count(chat_full, chat_id, false);
-        }
         break;
       }
       case DialogType::Channel: {
@@ -13661,8 +13650,6 @@ Result<ContactsManager::BotData> ContactsManager::get_bot_data(UserId user_id) c
     return Status::Error(400, "Bot is inaccessible");
   }
 
-  user_id.set_time(); // update last access time of UserId
-
   BotData bot_data;
   bot_data.username = bot->username;
   bot_data.can_join_groups = bot->can_join_groups;
@@ -13692,7 +13679,6 @@ const ContactsManager::User *ContactsManager::get_user(UserId user_id) const {
   if (p == users_.end()) {
     return nullptr;
   } else {
-    user_id.set_time(); // update last access time of UserId
     return p->second.get();
   }
 }
@@ -13702,7 +13688,6 @@ ContactsManager::User *ContactsManager::get_user(UserId user_id) {
   if (p == users_.end()) {
     return nullptr;
   } else {
-    user_id.set_time(); // update last access time of UserId
     return p->second.get();
   }
 }
@@ -13787,7 +13772,6 @@ bool ContactsManager::get_user(UserId user_id, int left_tries, Promise<Unit> &&p
     return false;
   }
 
-  user_id.set_time();
   promise.set_value(Unit());
   return true;
 }
@@ -13798,7 +13782,6 @@ ContactsManager::User *ContactsManager::add_user(UserId user_id, const char *sou
   if (user_ptr == nullptr) {
     user_ptr = make_unique<User>();
   }
-  user_id.set_time();
   return user_ptr.get();
 }
 
@@ -13807,7 +13790,6 @@ const ContactsManager::UserFull *ContactsManager::get_user_full(UserId user_id) 
   if (p == users_full_.end()) {
     return nullptr;
   } else {
-    user_id.set_time();
     return p->second.get();
   }
 }
@@ -13817,7 +13799,6 @@ ContactsManager::UserFull *ContactsManager::get_user_full(UserId user_id) {
   if (p == users_full_.end()) {
     return nullptr;
   } else {
-    user_id.set_time();
     return p->second.get();
   }
 }
@@ -13828,7 +13809,6 @@ ContactsManager::UserFull *ContactsManager::add_user_full(UserId user_id) {
   if (user_full_ptr == nullptr) {
     user_full_ptr = make_unique<UserFull>();
   }
-  user_id.set_time();
   return user_full_ptr.get();
 }
 
@@ -13842,7 +13822,6 @@ void ContactsManager::reload_user(UserId user_id, Promise<Unit> &&promise) {
   if (input_user == nullptr) {
     return promise.set_error(Status::Error(400, "User info not found"));
   }
-  user_id.set_time();
 
   // there is no much reason to combine different requests into one request
   vector<tl_object_ptr<telegram_api::InputUser>> users;
@@ -13875,14 +13854,12 @@ void ContactsManager::load_user_full(UserId user_id, bool force, Promise<Unit> &
     send_get_user_full_query(user_id, std::move(input_user), Auto(), "load expired user_full");
   }
 
-  user_id.set_time();
   promise.set_value(Unit());
 }
 
 void ContactsManager::reload_user_full(UserId user_id) {
   auto input_user = get_input_user(user_id);
   if (input_user != nullptr) {
-    user_id.set_time();
     send_get_user_full_query(user_id, std::move(input_user), Auto(), "reload_user_full");
   }
 }
@@ -14039,7 +14016,6 @@ const ContactsManager::Chat *ContactsManager::get_chat(ChatId chat_id) const {
   if (p == chats_.end()) {
     return nullptr;
   } else {
-    chat_id.set_time(); // update last access time of ChatId
     return p->second.get();
   }
 }
@@ -14049,7 +14025,6 @@ ContactsManager::Chat *ContactsManager::get_chat(ChatId chat_id) {
   if (p == chats_.end()) {
     return nullptr;
   } else {
-    chat_id.set_time(); // update last access time of ChatId
     return p->second.get();
   }
 }
@@ -14376,7 +14351,6 @@ const ContactsManager::Channel *ContactsManager::get_channel(ChannelId channel_i
   if (p == channels_.end()) {
     return nullptr;
   } else {
-    channel_id.set_time(); // update last access time of ChannelId
     return p->second.get();
   }
 }
@@ -14386,7 +14360,6 @@ ContactsManager::Channel *ContactsManager::get_channel(ChannelId channel_id) {
   if (p == channels_.end()) {
     return nullptr;
   } else {
-    channel_id.set_time(); // update last access time of ChannelId
     return p->second.get();
   }
 }
@@ -15904,7 +15877,7 @@ td_api::object_ptr<td_api::updateUser> ContactsManager::get_update_unknown_user_
 
 int64 ContactsManager::get_user_id_object(UserId user_id, const char *source) const {
   if (user_id.is_valid() && get_user(user_id) == nullptr && unknown_users_.count(user_id) == 0) {
-    LOG(WARNING) << "Have no info about " << user_id << " from " << source;
+    LOG(ERROR) << "Have no info about " << user_id << " from " << source;
     unknown_users_.insert(user_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_user_object(user_id));
   }
@@ -15998,7 +15971,7 @@ td_api::object_ptr<td_api::updateBasicGroup> ContactsManager::get_update_unknown
 
 int64 ContactsManager::get_basic_group_id_object(ChatId chat_id, const char *source) const {
   if (chat_id.is_valid() && get_chat(chat_id) == nullptr && unknown_chats_.count(chat_id) == 0) {
-    LOG(WARNING) << "Have no info about " << chat_id << " from " << source;
+    LOG(ERROR) << "Have no info about " << chat_id << " from " << source;
     unknown_chats_.insert(chat_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_basic_group_object(chat_id));
   }
@@ -16052,7 +16025,7 @@ td_api::object_ptr<td_api::updateSupergroup> ContactsManager::get_update_unknown
 
 int64 ContactsManager::get_supergroup_id_object(ChannelId channel_id, const char *source) const {
   if (channel_id.is_valid() && get_channel(channel_id) == nullptr && unknown_channels_.count(channel_id) == 0) {
-    LOG(WARNING) << "Have no info about " << channel_id << " received from " << source;
+    LOG(ERROR) << "Have no info about " << channel_id << " received from " << source;
     unknown_channels_.insert(channel_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_supergroup_object(channel_id));
   }
@@ -16080,9 +16053,7 @@ tl_object_ptr<td_api::supergroupFullInfo> ContactsManager::get_supergroup_full_i
 
 tl_object_ptr<td_api::supergroupFullInfo> ContactsManager::get_supergroup_full_info_object(
     const ChannelFull *channel_full, ChannelId channel_id) const {
-  if(channel_full == nullptr) {
-      return nullptr;
-  }
+  CHECK(channel_full != nullptr);
   double slow_mode_delay_expires_in = 0;
   if (channel_full->slow_mode_next_send_date != 0) {
     slow_mode_delay_expires_in = max(channel_full->slow_mode_next_send_date - G()->server_time(), 1e-3);
@@ -16127,7 +16098,7 @@ td_api::object_ptr<td_api::updateSecretChat> ContactsManager::get_update_unknown
 int32 ContactsManager::get_secret_chat_id_object(SecretChatId secret_chat_id, const char *source) const {
   if (secret_chat_id.is_valid() && get_secret_chat(secret_chat_id) == nullptr &&
       unknown_secret_chats_.count(secret_chat_id) == 0) {
-    LOG(WARNING) << "Have no info about " << secret_chat_id << " from " << source;
+    LOG(ERROR) << "Have no info about " << secret_chat_id << " from " << source;
     unknown_secret_chats_.insert(secret_chat_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_secret_chat_object(secret_chat_id));
   }
@@ -16314,171 +16285,6 @@ void ContactsManager::get_current_state(vector<td_api::object_ptr<td_api::Update
   }
 }
 
-void ContactsManager::memory_cleanup() {
-  memory_cleanup(false);
-}
-
-void ContactsManager::memory_cleanup(bool full) {
-  auto time = std::time(nullptr);
-
-  auto user_ttl = full ? 0 : !G()->shared_config().get_option_integer("delete_user_reference_after_seconds", 3600);
-  auto chat_ttl = full ? 0 : !G()->shared_config().get_option_integer("delete_chat_reference_after_seconds", 3600);
-  auto chat_access_hash_cleanup = full ? true : !G()->shared_config().get_option_boolean("experiment_enable_chat_access_hash_cleanup", true);
-
-  /* DESTROY INVALID USERS */
-  if (full) {
-    users_.clear();
-  } else {
-    auto it = users_.begin();
-    while (it != users_.end()) {
-      //auto &user = it->second;
-      auto user_id = it->first;
-
-      auto is_invalid = time - user_id.get_time() > user_ttl;
-
-      if (is_invalid) {
-        user_id.reset_time();
-        it = users_.erase(it);
-      } else {
-        it++;
-      }
-    }
-  }
-  users_.rehash(0);
-  users_full_.clear();
-  users_full_.rehash(0);
-  user_photos_.clear();
-  user_photos_.rehash(0);
-  unknown_users_.clear();
-  unknown_users_.rehash(0);
-  user_profile_photo_file_source_ids_.clear();
-  user_profile_photo_file_source_ids_.rehash(0);
-  my_photo_file_id_.clear();
-  my_photo_file_id_.rehash(0);
-
-  if (full || chat_access_hash_cleanup) {
-    /* DESTROY INVALID CHATS */
-    if (full) {
-      chats_.clear();
-    } else {
-      auto it = chats_.begin();
-      while (it != chats_.end()) {
-        //auto &chat = it->second;
-        auto chat_id = it->first;
-
-        auto is_invalid = time - chat_id.get_time() > chat_ttl;
-
-        if (is_invalid) {
-          chat_id.reset_time();
-          it = chats_.erase(it);
-        } else {
-          it++;
-        }
-      }
-    }
-    chats_.rehash(0);
-  }
-  chats_full_.clear();
-  chats_full_.rehash(0);
-  unknown_chats_.clear();
-  unknown_chats_.rehash(0);
-  if (full || chat_access_hash_cleanup) {
-    chat_full_file_source_ids_.clear();
-    chat_full_file_source_ids_.rehash(0);
-    min_channels_.clear();
-    min_channels_.rehash(0);
-
-    /* DESTROY INVALID CHANNELS */
-    if (full) {
-      channels_.clear();
-    } else {
-      auto it = channels_.begin();
-      while (it != channels_.end()) {
-        //auto &channel = it->second;
-        auto channel_id = it->first;
-
-        auto is_invalid = time - channel_id.get_time() > chat_ttl;
-
-        if (is_invalid) {
-          channel_id.reset_time();
-          it = channels_.erase(it);
-        } else {
-          it++;
-        }
-      }
-    }
-
-    channels_.rehash(0);
-    channels_full_.clear();
-    channels_full_.rehash(0);
-  }
-  unknown_channels_.clear();
-  unknown_channels_.rehash(0);
-  if (full || chat_access_hash_cleanup) {
-    channel_full_file_source_ids_.clear();
-    channel_full_file_source_ids_.rehash(0);
-  }
-  if (full) {
-    secret_chats_.clear();
-    secret_chats_.rehash(0);
-    unknown_secret_chats_.clear();
-    unknown_secret_chats_.rehash(0);
-    secret_chats_with_user_.clear();
-    secret_chats_with_user_.rehash(0);
-  }
-  invite_link_infos_.clear();
-  invite_link_infos_.rehash(0);
-  dialog_access_by_invite_link_.clear();
-  dialog_access_by_invite_link_.rehash(0);
-  load_user_from_database_queries_.clear();
-  load_user_from_database_queries_.rehash(0);
-  loaded_from_database_users_.clear();
-  loaded_from_database_users_.rehash(0);
-  unavailable_user_fulls_.clear();
-  unavailable_user_fulls_.rehash(0);
-  load_chat_from_database_queries_.clear();
-  load_chat_from_database_queries_.rehash(0);
-  loaded_from_database_chats_.clear();
-  loaded_from_database_chats_.rehash(0);
-  unavailable_chat_fulls_.clear();
-  unavailable_chat_fulls_.rehash(0);
-  load_channel_from_database_queries_.clear();
-  load_channel_from_database_queries_.rehash(0);
-  loaded_from_database_channels_.clear();
-  loaded_from_database_channels_.rehash(0);
-  unavailable_channel_fulls_.clear();
-  unavailable_channel_fulls_.rehash(0);
-  if (full) {
-    load_secret_chat_from_database_queries_.clear();
-    load_secret_chat_from_database_queries_.rehash(0);
-    loaded_from_database_secret_chats_.clear();
-    loaded_from_database_secret_chats_.rehash(0);
-  }
-  dialog_administrators_.clear();
-  dialog_administrators_.rehash(0);
-  uploaded_profile_photos_.clear();
-  uploaded_profile_photos_.rehash(0);
-  imported_contacts_.clear();
-  imported_contacts_.rehash(0);
-  cached_channel_participants_.clear();
-  cached_channel_participants_.rehash(0);
-  load_contacts_queries_.clear();
-  load_imported_contacts_queries_.clear();
-  all_imported_contacts_.clear();
-  users_nearby_.clear();
-  channels_nearby_.clear();
-  all_users_nearby_.clear();
-  all_users_nearby_.rehash(0);
-  linked_channel_ids_.clear();
-  linked_channel_ids_.rehash(0);
-  restricted_user_ids_.clear();
-  restricted_user_ids_.rehash(0);
-  restricted_channel_ids_.clear();
-  restricted_channel_ids_.rehash(0);
-  next_all_imported_contacts_.clear();
-  imported_contact_user_ids_.clear();
-  unimported_contact_invites_.clear();
-}
 void ContactsManager::memory_stats(vector<string> &output) {
 
   output.push_back("\"users_\":"); output.push_back(std::to_string(users_.size()));

@@ -72,12 +72,6 @@ class FileReferenceManager final : public Actor {
   template <class ParserT>
   FileSourceId parse_file_source(Td *td, ParserT &parser);
 
-  void memory_cleanup(NodeId node_id);
-
-  vector<FileSourceId> get_all_file_sources(NodeId node_id);
-
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
  private:
@@ -145,10 +139,7 @@ class FileReferenceManager final : public Actor {
       Variant<FileSourceMessage, FileSourceUserPhoto, FileSourceChatPhoto, FileSourceChannelPhoto, FileSourceWallpapers,
               FileSourceWebPage, FileSourceSavedAnimations, FileSourceRecentStickers, FileSourceFavoriteStickers,
               FileSourceBackground, FileSourceChatFull, FileSourceChannelFull>;
-
-  std::unordered_map<u_long, FileSource> file_sources_;
-
-  u_long unique_file_source_id = 0;
+  vector<FileSource> file_sources_;
 
   int64 query_generation_{0};
 

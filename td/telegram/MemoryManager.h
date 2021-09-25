@@ -48,13 +48,7 @@ class MemoryManager : public Actor {
  public:
   MemoryManager(Td *td, ActorShared<> parent);
 
-  bool can_manage_memory() const;
-
-  static bool do_session_settings_allow_for_memory_management();
-
   void get_memory_stats(bool full, Promise<MemoryStats> promise) const;
-
-  void clean_memory(bool full, Promise<Unit> promise) const;
 
   void get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const;
 

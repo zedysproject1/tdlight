@@ -52,11 +52,10 @@ tl_object_ptr<td_api::document> DocumentsManager::get_document_object(FileId fil
     return nullptr;
   }
 
-  auto document_it = documents_.find(file_id);
-  if (document_it == documents_.end() || document_it->second == nullptr) {
-      return nullptr;
-  }
-  auto document = document_it->second.get();
+  auto it = documents_.find(file_id);
+  CHECK(it != documents_.end());
+  auto document = it->second.get();
+  CHECK(document != nullptr);
   return make_tl_object<td_api::document>(
       document->file_name, document->mime_type, get_minithumbnail_object(document->minithumbnail),
       get_thumbnail_object(td_->file_manager_.get(), document->thumbnail, thumbnail_format),
@@ -114,7 +113,7 @@ Document DocumentsManager::on_get_document(RemoteDocument remote_document, Dialo
     auto video_dimensions = get_dimensions(video->w_, video->h_, "documentAttributeVideo");
     if (dimensions.width == 0 || (video_dimensions.width != 0 && video_dimensions != dimensions)) {
       if (dimensions.width != 0) {
-        LOG(INFO) << "Receive ambiguous video dimensions " << dimensions << " and " << video_dimensions;
+        LOG(ERROR) << "Receive ambiguous video dimensions " << dimensions << " and " << video_dimensions;
       }
       dimensions = video_dimensions;
     }
@@ -524,13 +523,11 @@ void DocumentsManager::create_document(FileId file_id, string minithumbnail, Pho
 
 const DocumentsManager::GeneralDocument *DocumentsManager::get_document(FileId file_id) const {
   auto document = documents_.find(file_id);
-
-  if (document == documents_.end() ||
-      document->second == nullptr ||
-      document->second->file_id != file_id) {
-    return make_unique<GeneralDocument>().get();
+  if (document == documents_.end()) {
+    return nullptr;
   }
 
+  CHECK(document->second->file_id == file_id);
   return document->second.get();
 }
 
@@ -560,9 +557,7 @@ SecretInputMedia DocumentsManager::get_secret_input_media(FileId document_file_i
                                                           tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
                                                           const string &caption, BufferSlice thumbnail) const {
   const GeneralDocument *document = get_document(document_file_id);
-  if (document == nullptr) {
-      return SecretInputMedia{};
-  }
+  CHECK(document != nullptr);
   auto file_view = td_->file_manager_->get_file_view(document_file_id);
   auto &encryption_key = file_view.encryption_key();
   if (!file_view.is_encrypted_secret() || encryption_key.empty()) {
@@ -606,9 +601,7 @@ tl_object_ptr<telegram_api::InputMedia> DocumentsManager::get_input_media(
 
   if (input_file != nullptr) {
     const GeneralDocument *document = get_document(file_id);
-    if (document == nullptr) {
-        return nullptr;
-    }
+    CHECK(document != nullptr);
 
     vector<tl_object_ptr<telegram_api::DocumentAttribute>> attributes;
     if (document->file_name.size()) {
@@ -633,18 +626,14 @@ tl_object_ptr<telegram_api::InputMedia> DocumentsManager::get_input_media(
 
 FileId DocumentsManager::get_document_thumbnail_file_id(FileId file_id) const {
   auto document = get_document(file_id);
-  if (document == nullptr) {
-      return FileId();
-  }
+  CHECK(document != nullptr);
   return document->thumbnail.file_id;
 }
 
 void DocumentsManager::delete_document_thumbnail(FileId file_id) {
-  auto document_it = documents_.find(file_id);
-  if (document_it == documents_.end() || document_it->second == nullptr) {
-      return;
-  }
-  document_it->second->thumbnail = PhotoSize();
+  auto &document = documents_[file_id];
+  CHECK(document != nullptr);
+  document->thumbnail = PhotoSize();
 }
 
 FileId DocumentsManager::dup_document(FileId new_id, FileId old_id) {
@@ -667,16 +656,13 @@ void DocumentsManager::merge_documents(FileId new_id, FileId old_id, bool can_de
   CHECK(old_ != nullptr);
 
   auto new_it = documents_.find(new_id);
-  if (new_it == documents_.end() || new_it->second == nullptr) {
-    auto old_it = documents_.find(old_id);
-    if (old_it != documents_.end() && old_it->second != nullptr) {
-    auto &old = old_it->second;
+  if (new_it == documents_.end()) {
+    auto &old = documents_[old_id];
     if (!can_delete_old) {
       dup_document(new_id, old_id);
     } else {
       old->file_id = new_id;
       documents_.emplace(new_id, std::move(old));
-    }
     }
   } else {
     GeneralDocument *new_ = new_it->second.get();
@@ -692,10 +678,6 @@ void DocumentsManager::merge_documents(FileId new_id, FileId old_id, bool can_de
   }
 }
 
-void DocumentsManager::memory_cleanup() {
-  documents_.clear();
-  documents_.rehash(0);
-}
 void DocumentsManager::memory_stats(vector<string> &output) {
   output.push_back("\"documents_\":"); output.push_back(std::to_string(documents_.size()));
 }

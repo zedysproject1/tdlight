@@ -44,9 +44,7 @@ class GetBotCallbackAnswerQuery final : public Td::ResultHandler {
     message_id_ = message_id;
 
     auto input_peer = td->messages_manager_->get_input_peer(dialog_id, AccessRights::Read);
-    if (input_peer == nullptr) {
-        return;
-    }
+    CHECK(input_peer != nullptr);
 
     int32 flags = 0;
     BufferSlice data;

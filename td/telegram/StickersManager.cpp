@@ -1401,9 +1401,7 @@ void StickersManager::on_load_special_sticker_set(const SpecialStickerSetType &t
 
   CHECK(special_sticker_set.id_.is_valid());
   auto sticker_set = get_sticker_set(special_sticker_set.id_);
-	if (sticker_set == nullptr) {
-		return;
-	}
+  CHECK(sticker_set != nullptr);
   CHECK(sticker_set->was_loaded);
 
   if (type.type_ == SpecialStickerSetType::animated_emoji_click()) {
@@ -1442,8 +1440,6 @@ void StickersManager::on_load_special_sticker_set(const SpecialStickerSetType &t
 
 void StickersManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup();
 }
 
 tl_object_ptr<td_api::MaskPoint> StickersManager::get_mask_point_object(int32 point) {
@@ -1705,17 +1701,9 @@ tl_object_ptr<td_api::sticker> StickersManager::get_sticker_object(FileId file_i
   }
 
   auto it = stickers_.find(file_id);
-
-  if (it == stickers_.end() || it->second == nullptr) {
-    return nullptr;
-  }
-
+  CHECK(it != stickers_.end());
   auto sticker = it->second.get();
-
-  if (sticker == nullptr) {
-    return nullptr;
-  }
-
+  CHECK(sticker != nullptr);
   auto mask_position = sticker->point >= 0
                            ? make_tl_object<td_api::maskPosition>(get_mask_point_object(sticker->point),
                                                                   sticker->x_shift, sticker->y_shift, sticker->scale)
@@ -1778,9 +1766,7 @@ tl_object_ptr<td_api::DiceStickers> StickersManager::get_dice_stickers_object(co
   }
 
   auto sticker_set = get_sticker_set(sticker_set_id);
-	if (sticker_set == nullptr) {
-		return nullptr;
-	}
+  CHECK(sticker_set != nullptr);
   if (!sticker_set->was_loaded) {
     return nullptr;
   }
@@ -2056,8 +2042,8 @@ std::pair<int64, FileId> StickersManager::on_get_sticker_document(
 
 StickersManager::Sticker *StickersManager::get_sticker(FileId file_id) {
   auto sticker = stickers_.find(file_id);
-  if (sticker == stickers_.end() || sticker->second == nullptr) {
-    return make_unique<Sticker>().get();
+  if (sticker == stickers_.end()) {
+    return nullptr;
   }
 
   CHECK(sticker->second->file_id == file_id);
@@ -2066,22 +2052,18 @@ StickersManager::Sticker *StickersManager::get_sticker(FileId file_id) {
 
 const StickersManager::Sticker *StickersManager::get_sticker(FileId file_id) const {
   auto sticker = stickers_.find(file_id);
-
-  if (sticker == stickers_.end() ||
-      sticker->second == nullptr ||
-      sticker->second->file_id != file_id) {
-    return make_unique<Sticker>().get();
+  if (sticker == stickers_.end()) {
+    return nullptr;
   }
 
+  CHECK(sticker->second->file_id == file_id);
   return sticker->second.get();
 }
 
 StickersManager::StickerSet *StickersManager::get_sticker_set(StickerSetId sticker_set_id) {
   auto sticker_set = sticker_sets_.find(sticker_set_id);
-
-  if (sticker_set == sticker_sets_.end() ||
-      sticker_set->second == nullptr) {
-    return make_unique<StickerSet>().get();
+  if (sticker_set == sticker_sets_.end()) {
+    return nullptr;
   }
 
   return sticker_set->second.get();
@@ -2090,7 +2072,7 @@ StickersManager::StickerSet *StickersManager::get_sticker_set(StickerSetId stick
 const StickersManager::StickerSet *StickersManager::get_sticker_set(StickerSetId sticker_set_id) const {
   auto sticker_set = sticker_sets_.find(sticker_set_id);
   if (sticker_set == sticker_sets_.end()) {
-    return make_unique<StickerSet>().get();
+    return nullptr;
   }
 
   return sticker_set->second.get();
@@ -2184,11 +2166,7 @@ void StickersManager::delete_sticker_thumbnail(FileId file_id) {
 vector<FileId> StickersManager::get_sticker_file_ids(FileId file_id) const {
   vector<FileId> result;
   auto sticker = get_sticker(file_id);
-
-  if (sticker == nullptr) {
-    return result;
-  }
-
+  CHECK(sticker != nullptr);
   result.push_back(file_id);
   if (sticker->s_thumbnail.file_id.is_valid()) {
     result.push_back(sticker->s_thumbnail.file_id);
@@ -2220,7 +2198,7 @@ void StickersManager::merge_stickers(FileId new_id, FileId old_id, bool can_dele
   CHECK(old_ != nullptr);
 
   auto new_it = stickers_.find(new_id);
-  if (new_it == stickers_.end() || new_it->second == nullptr) {
+  if (new_it == stickers_.end()) {
     auto &old = stickers_[old_id];
     if (!can_delete_old) {
       dup_sticker(new_id, old_id);
@@ -2405,9 +2383,6 @@ bool StickersManager::has_input_media(FileId sticker_file_id, bool is_secret) co
   auto file_view = td_->file_manager_->get_file_view(sticker_file_id);
   if (is_secret) {
     const Sticker *sticker = get_sticker(sticker_file_id);
-					if (sticker == nullptr) {
-							return false;
-					}
     CHECK(sticker != nullptr);
     if (file_view.is_encrypted_secret()) {
       if (!file_view.encryption_key().empty() && file_view.has_remote_location() &&
@@ -2442,11 +2417,7 @@ SecretInputMedia StickersManager::get_secret_input_media(FileId sticker_file_id,
                                                          tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
                                                          BufferSlice thumbnail) const {
   const Sticker *sticker = get_sticker(sticker_file_id);
-
-  if (sticker == nullptr) {
-    return {};
-  }
-
+  CHECK(sticker != nullptr);
   auto file_view = td_->file_manager_->get_file_view(sticker_file_id);
   if (file_view.is_encrypted_secret()) {
     if (file_view.has_remote_location()) {
@@ -4041,13 +4012,7 @@ void StickersManager::unregister_dice(const string &emoji, int32 value, FullMess
             << source;
   auto &message_ids = dice_messages_[emoji];
   auto is_deleted = message_ids.erase(full_message_id) > 0;
-  // Start custom-patches
-  if (is_deleted) {
-  // End custom-patches
   LOG_CHECK(is_deleted) << source << " " << emoji << " " << value << " " << full_message_id;
-  // Start custom-patches
-  }
-  // End custom-patches
 
   if (message_ids.empty()) {
     dice_messages_.erase(emoji);
@@ -6009,9 +5974,7 @@ int64 StickersManager::get_recent_stickers_hash(const vector<FileId> &sticker_id
   numbers.reserve(sticker_ids.size());
   for (auto sticker_id : sticker_ids) {
     auto sticker = get_sticker(sticker_id);
-    if (sticker == nullptr) {
-      continue;
-    }
+    CHECK(sticker != nullptr);
     auto file_view = td_->file_manager_->get_file_view(sticker_id);
     CHECK(file_view.has_remote_location());
     if (!file_view.remote_location().is_document()) {
@@ -7156,24 +7119,6 @@ void StickersManager::get_current_state(vector<td_api::object_ptr<td_api::Update
   }
 }
 
-void StickersManager::memory_cleanup() {
-    stickers_.clear();
-    stickers_.rehash(0);
-    sticker_sets_.clear();
-    sticker_sets_.rehash(0);
-    short_name_to_sticker_set_id_.clear();
-    short_name_to_sticker_set_id_.rehash(0);
-    attached_sticker_sets_.clear();
-    attached_sticker_sets_.rehash(0);
-    found_stickers_.clear();
-    found_stickers_.rehash(0);
-    found_sticker_sets_.clear();
-    found_sticker_sets_.rehash(0);
-    special_sticker_sets_.clear();
-    special_sticker_sets_.rehash(0);
-    dice_messages_.clear();
-    dice_messages_.rehash(0);
-}
 void StickersManager::memory_stats(vector<string> &output) {
   output.push_back("\"found_stickers_\":"); output.push_back(std::to_string(found_stickers_.size()));
   output.push_back(",");

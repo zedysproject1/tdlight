@@ -152,9 +152,6 @@ namespace td {
 
 int VERBOSITY_NAME(td_init) = VERBOSITY_NAME(DEBUG) + 3;
 int VERBOSITY_NAME(td_requests) = VERBOSITY_NAME(INFO);
-int VERBOSITY_NAME(messages) = VERBOSITY_NAME(INFO);
-int VERBOSITY_NAME(postponed_pts_update) = VERBOSITY_NAME(DEBUG);
-int VERBOSITY_NAME(add_pending_update) = VERBOSITY_NAME(DEBUG);
 
 void Td::ResultHandler::set_td(Td *new_td) {
   CHECK(td == nullptr);
@@ -3107,7 +3104,6 @@ bool Td::is_preauthentication_request(int32 id) {
     case td_api::getStorageStatisticsFast::ID:
     case td_api::getDatabaseStatistics::ID:
     case td_api::getMemoryStatistics::ID:
-    case td_api::optimizeMemory::ID:
     case td_api::setNetworkType::ID:
     case td_api::getNetworkStatistics::ID:
     case td_api::addNetworkStatistics::ID:
@@ -4198,10 +4194,6 @@ void Td::init_file_manager() {
       send_closure(G()->storage_manager(), &StorageManager::on_new_file, size, real_size, cnt);
     }
 
-    void destroy_file_source(FileId file_id) final {
-      td_->file_reference_manager_->memory_cleanup(file_id);
-    }
-
     void on_file_updated(FileId file_id) final {
       send_closure(G()->td(), &Td::send_update,
                    make_tl_object<td_api::updateFile>(td_->file_manager_->get_file_object(file_id)));
@@ -5052,18 +5044,6 @@ void Td::on_request(uint64 id, const td_api::getFile &request) {
   send_closure(actor_id(this), &Td::send_result, id, file_manager_->get_file_object(FileId(request.file_id_, 0)));
 }
 
-void Td::on_request(uint64 id, const td_api::getChannelDifference &request) {
-  auto result = messages_manager_->run_get_channel_difference_request(request.channel_difference_id_);
-  if (result) {
-    send_closure(actor_id(this), &Td::send_result, id,
-                 td_api::make_object<td_api::ok>());
-  } else {
-    send_closure(actor_id(this), &Td::send_result, id,
-                 td_api::make_object<td_api::error>(
-                     400, "Channel diffence identifier already executed or nonexistent"));
-  }
-}
-
 void Td::on_request(uint64 id, td_api::getRemoteFile &request) {
   CLEAN_INPUT_STRING(request.remote_file_id_);
   auto file_type = request.file_type_ == nullptr ? FileType::Temp : get_file_type(*request.file_type_);
@@ -5121,18 +5101,6 @@ void Td::on_request(uint64 id, td_api::getMemoryStatistics &request) {
   });
 
   memory_manager_->get_memory_stats(request.full_, std::move(query_promise));
-}
-void Td::on_request(uint64 id, td_api::optimizeMemory &request) {
-  CREATE_REQUEST_PROMISE();
-  auto query_promise = PromiseCreator::lambda([promise = std::move(promise)](Result<Unit> result) mutable {
-    if (result.is_error()) {
-      promise.set_error(result.move_as_error());
-    } else {
-      promise.set_value(make_tl_object<td_api::ok>());
-    }
-  });
-
-  memory_manager_->clean_memory(request.full_, std::move(query_promise));
 }
 
 void Td::on_request(uint64 id, td_api::optimizeStorage &request) {
@@ -7547,15 +7515,6 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
       if (set_boolean_option("disable_group_calls")) {
         return;
       }
-      if (set_integer_option("delete_file_reference_after_seconds")) {
-        return;
-      }
-      if (set_integer_option("delete_user_reference_after_seconds")) {
-        return;
-      }
-      if (set_integer_option("delete_chat_reference_after_seconds")) {
-        return;
-      }
       // End custom-patches
       if (set_boolean_option("disable_persistent_network_statistics")) {
         return;
@@ -7567,23 +7526,6 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
         G()->td_db()->get_binlog_pmc()->erase("notification_id_current");
         G()->td_db()->get_binlog_pmc()->erase("notification_group_id_current");
         send_closure(actor_id(this), &Td::send_result, id, make_tl_object<td_api::ok>());
-        return;
-      }
-      break;
-    case 'e':
-      if (set_boolean_option("experiment_enable_file_reference_cleanup")) {
-        return;
-      }
-      if (set_boolean_option("experiment_debug_file_reference_cleanup")) {
-        return;
-      }
-      if (set_boolean_option("experiment_enable_chat_access_hash_cleanup")) {
-        return;
-      }
-      if (set_boolean_option("experiment_old_postponed_pts_updates_behavior")) {
-        return;
-      }
-      if (set_boolean_option("enable_reactive_channel_difference")) {
         return;
       }
       break;

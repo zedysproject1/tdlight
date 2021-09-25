@@ -11,7 +11,6 @@
 #include "td/utils/common.h"
 #include "td/utils/StringBuilder.h"
 
-#include <ctime>
 #include <functional>
 #include <type_traits>
 
@@ -19,13 +18,13 @@ namespace td {
 
 class UserId {
   int64 id = 0;
-  int64 time_ = INT64_MAX;
 
  public:
   static constexpr int64 MAX_USER_ID = (1ll << 40) - 1;
 
+  UserId() = default;
+
   explicit UserId(int64 user_id) : id(user_id) {
-    set_time();
   }
   template <class T, typename = std::enable_if_t<std::is_convertible<T, int64>::value>>
   UserId(T user_id) = delete;
@@ -54,18 +53,6 @@ class UserId {
 
   int64 get() const {
     return id;
-  }
-
-  void set_time() {
-    time_ = std::time(nullptr);
-  }
-
-  int64 get_time() const {
-    return time_;
-  }
-
-  void reset_time() {
-    time_ = INT64_MAX;
   }
 
   bool operator==(const UserId &other) const {

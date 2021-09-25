@@ -80,9 +80,7 @@ class SaveGifQuery final : public Td::ResultHandler {
   }
 
   void send(FileId file_id, tl_object_ptr<telegram_api::inputDocument> &&input_document, bool unsave) {
-    if (input_document == nullptr) {
-        return;
-    }
+    CHECK(input_document != nullptr);
     CHECK(file_id.is_valid());
     file_id_ = file_id;
     file_reference_ = input_document->file_reference_.as_slice().str();
@@ -146,17 +144,11 @@ AnimationsManager::AnimationsManager(Td *td, ActorShared<> parent) : td_(td), pa
 
 void AnimationsManager::tear_down() {
   parent_.reset();
-  if (td_->memory_manager_->can_manage_memory()) {
-    // Completely clear memory when closing, to avoid memory leaks
-    memory_cleanup(true);
-  }
 }
 
 int32 AnimationsManager::get_animation_duration(FileId file_id) const {
   auto it = animations_.find(file_id);
-  if (it == animations_.end() || it->second == nullptr) {
-      return 0;
-  }
+  CHECK(it != animations_.end());
   return it->second->duration;
 }
 
@@ -166,13 +158,9 @@ tl_object_ptr<td_api::animation> AnimationsManager::get_animation_object(FileId 
   }
 
   auto it = animations_.find(file_id);
-  if (it == animations_.end()) {
-    return nullptr;
-  }
+  CHECK(it != animations_.end());
   auto animation = it->second.get();
-  if (animation == nullptr) {
-      return nullptr;
-  }
+  CHECK(animation != nullptr);
   auto thumbnail =
       animation->animated_thumbnail.file_id.is_valid()
           ? get_thumbnail_object(td_->file_manager_.get(), animation->animated_thumbnail, PhotoFormat::Mpeg4)
@@ -245,8 +233,8 @@ FileId AnimationsManager::on_get_animation(unique_ptr<Animation> new_animation, 
 
 const AnimationsManager::Animation *AnimationsManager::get_animation(FileId file_id) const {
   auto animation = animations_.find(file_id);
-  if (animation == animations_.end() || animation->second == nullptr) {
-    return make_unique<Animation>().get();
+  if (animation == animations_.end()) {
+    return nullptr;
   }
 
   CHECK(animation->second->file_id == file_id);
@@ -255,25 +243,19 @@ const AnimationsManager::Animation *AnimationsManager::get_animation(FileId file
 
 FileId AnimationsManager::get_animation_thumbnail_file_id(FileId file_id) const {
   auto animation = get_animation(file_id);
-  if (animation == nullptr) {
-      return FileId();
-  }
+  CHECK(animation != nullptr);
   return animation->thumbnail.file_id;
 }
 
 FileId AnimationsManager::get_animation_animated_thumbnail_file_id(FileId file_id) const {
   auto animation = get_animation(file_id);
-  if (animation == nullptr) {
-      return FileId();
-  }
+  CHECK(animation != nullptr);
   return animation->animated_thumbnail.file_id;
 }
 
 void AnimationsManager::delete_animation_thumbnail(FileId file_id) {
   auto &animation = animations_[file_id];
-  if (animation == nullptr) {
-      return;
-  }
+  CHECK(animation != nullptr);
   animation->thumbnail = PhotoSize();
   animation->animated_thumbnail = AnimationSize();
 }
@@ -302,7 +284,7 @@ void AnimationsManager::merge_animations(FileId new_id, FileId old_id, bool can_
 
   bool need_merge = true;
   auto new_it = animations_.find(new_id);
-  if (new_it == animations_.end() || new_it->second == nullptr) {
+  if (new_it == animations_.end()) {
     auto &old = animations_[old_id];
     if (!can_delete_old) {
       dup_animation(new_id, old_id);
@@ -368,9 +350,7 @@ tl_object_ptr<telegram_api::InputMedia> AnimationsManager::get_input_media(
 
   if (input_file != nullptr) {
     const Animation *animation = get_animation(file_id);
-    if (animation == nullptr) {
-        return nullptr;
-    }
+    CHECK(animation != nullptr);
 
     vector<tl_object_ptr<telegram_api::DocumentAttribute>> attributes;
     if (!animation->file_name.empty()) {
@@ -411,9 +391,7 @@ SecretInputMedia AnimationsManager::get_secret_input_media(FileId animation_file
                                                            tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
                                                            const string &caption, BufferSlice thumbnail) const {
   auto *animation = get_animation(animation_file_id);
-  if (animation == nullptr) {
-      return SecretInputMedia{};
-  }
+  CHECK(animation != nullptr);
   auto file_view = td_->file_manager_->get_file_view(animation_file_id);
   auto &encryption_key = file_view.encryption_key();
   if (!file_view.is_encrypted_secret() || encryption_key.empty()) {
@@ -697,9 +675,7 @@ int64 AnimationsManager::get_saved_animations_hash(const char *source) const {
   numbers.reserve(saved_animation_ids_.size());
   for (auto animation_id : saved_animation_ids_) {
     auto animation = get_animation(animation_id);
-    if (animation == nullptr) {
-        continue;
-    }
+    CHECK(animation != nullptr);
     auto file_view = td_->file_manager_->get_file_view(animation_id);
     CHECK(file_view.has_remote_location());
     if (!file_view.remote_location().is_document()) {
@@ -742,9 +718,6 @@ void AnimationsManager::send_save_gif_query(FileId animation_id, bool unsave, Pr
 
 void AnimationsManager::add_saved_animation_by_id(FileId animation_id) {
   auto animation = get_animation(animation_id);
-  if (animation == nullptr) {
-    return;
-  }
   CHECK(animation != nullptr);
   if (animation->has_stickers) {
     return;
@@ -883,7 +856,6 @@ void AnimationsManager::send_update_saved_animations(bool from_database) {
     vector<FileId> new_saved_animation_file_ids = saved_animation_ids_;
     for (auto &animation_id : saved_animation_ids_) {
       auto animation = get_animation(animation_id);
-      if (animation != nullptr) {
       CHECK(animation != nullptr);
       if (animation->thumbnail.file_id.is_valid()) {
         new_saved_animation_file_ids.push_back(animation->thumbnail.file_id);
@@ -892,7 +864,6 @@ void AnimationsManager::send_update_saved_animations(bool from_database) {
         new_saved_animation_file_ids.push_back(animation->animated_thumbnail.file_id);
       }
       }
-    }
     std::sort(new_saved_animation_file_ids.begin(), new_saved_animation_file_ids.end());
     if (new_saved_animation_file_ids != saved_animation_file_ids_) {
       td_->file_manager_->change_files_source(get_saved_animations_file_source_id(), saved_animation_file_ids_,
@@ -925,9 +896,7 @@ FileSourceId AnimationsManager::get_saved_animations_file_source_id() {
 
 string AnimationsManager::get_animation_search_text(FileId file_id) const {
   auto animation = get_animation(file_id);
-  if (animation == nullptr) {
-      return "";
-  }
+  CHECK(animation != nullptr);
   return animation->file_name;
 }
 
@@ -949,17 +918,6 @@ void AnimationsManager::get_current_state(vector<td_api::object_ptr<td_api::Upda
   if (update_animation_search_parameters != nullptr) {
     updates.push_back(std::move(update_animation_search_parameters));
   }
-}
-
-void AnimationsManager::memory_cleanup() {
-  memory_cleanup(false);
-}
-
-void AnimationsManager::memory_cleanup(bool full) {
-  animations_.clear();
-  animations_.rehash(0);
-  saved_animation_ids_.clear();
-  saved_animation_file_ids_.clear();
 }
 
 void AnimationsManager::memory_stats(vector<string> &output) {

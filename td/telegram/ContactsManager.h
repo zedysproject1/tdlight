@@ -68,8 +68,6 @@ class ContactsManager final : public Actor {
 
   static UserId load_my_id();
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   static UserId get_user_id(const tl_object_ptr<telegram_api::User> &user);
@@ -1093,8 +1091,6 @@ class ContactsManager final : public Actor {
   static constexpr int32 ACCOUNT_UPDATE_FIRST_NAME = 1 << 0;
   static constexpr int32 ACCOUNT_UPDATE_LAST_NAME = 1 << 1;
   static constexpr int32 ACCOUNT_UPDATE_ABOUT = 1 << 2;
-
-  void memory_cleanup(bool full);
 
   static bool have_input_peer_user(const User *u, AccessRights access_rights);
   static bool have_input_peer_chat(const Chat *c, AccessRights access_rights);

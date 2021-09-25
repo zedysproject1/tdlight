@@ -41,8 +41,6 @@ class StickersManager final : public Actor {
  public:
   static constexpr int64 GREAT_MINDS_SET_ID = 1842540969984001;
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   static vector<StickerSetId> convert_sticker_set_ids(const vector<int64> &sticker_set_ids);

@@ -30,8 +30,6 @@ class AnimationsManager final : public Actor {
  public:
   AnimationsManager(Td *td, ActorShared<> parent);
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   int32 get_animation_duration(FileId file_id) const;
@@ -114,8 +112,6 @@ class AnimationsManager final : public Actor {
 
     FileId file_id;
   };
-
-  void memory_cleanup(bool full);
 
   const Animation *get_animation(FileId file_id) const;
 

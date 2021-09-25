@@ -70,9 +70,4 @@ void Log::set_fatal_error_callback(FatalErrorCallbackPtr callback) {
   }
 }
 
-void Log::set_disable_death_handler(bool disabled) {
-  std::lock_guard<std::mutex> lock(log_mutex);
-  set_log_disable_death_handler(disabled);
-}
-
 }  // namespace td

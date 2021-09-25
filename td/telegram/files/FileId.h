@@ -9,7 +9,6 @@
 #include "td/utils/common.h"
 #include "td/utils/StringBuilder.h"
 
-#include <ctime>
 #include <functional>
 #include <type_traits>
 
@@ -18,15 +17,11 @@ namespace td {
 class FileId {
   int32 id = 0;
   int32 remote_id = 0;
-  int64 time_ = INT64_MAX;
 
  public:
-  FileId() {
-    set_time();
-  }
+  FileId() = default;
 
   FileId(int32 file_id, int32 remote_id) : id(file_id), remote_id(remote_id) {
-    set_time();
   }
   template <class T1, class T2, typename = std::enable_if_t<std::is_convertible<T1, int32>::value>,
             typename = std::enable_if_t<std::is_convertible<T2, int32>::value>>
@@ -41,18 +36,6 @@ class FileId {
 
   int32 get() const {
     return id;
-  }
-
-  void set_time() {
-    time_ = std::time(nullptr);
-  }
-
-  int64 get_time() const {
-    return time_;
-  }
-
-  void reset_time() {
-    time_ = INT64_MAX;
   }
 
   int32 get_remote() const {

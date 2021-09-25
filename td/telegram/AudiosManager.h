@@ -26,8 +26,6 @@ class AudiosManager {
  public:
   explicit AudiosManager(Td *td);
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   int32 get_audio_duration(FileId file_id) const;

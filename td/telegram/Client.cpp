@@ -8,7 +8,6 @@
 
 #include "td/telegram/Td.h"
 #include "td/telegram/TdCallback.h"
-#include "td/telegram/Log.h"
 
 #include "td/actor/actor.h"
 #include "td/actor/ConcurrentScheduler.h"

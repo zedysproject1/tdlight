@@ -14,7 +14,6 @@
 #include "td/telegram/telegram_api.h"
 
 #include "td/telegram/ConfigShared.h"
-#include "td/telegram/Td.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
 #include "td/utils/Status.h"
@@ -26,9 +25,7 @@ VideoNotesManager::VideoNotesManager(Td *td) : td_(td) {
 
 int32 VideoNotesManager::get_video_note_duration(FileId file_id) const {
   auto it = video_notes_.find(file_id);
-  if (it == video_notes_.end() || it->second == nullptr) {
-      return 0;
-  }
+  CHECK(it != video_notes_.end());
   return it->second->duration;
 }
 
@@ -38,13 +35,8 @@ tl_object_ptr<td_api::videoNote> VideoNotesManager::get_video_note_object(FileId
   }
 
   auto it = video_notes_.find(file_id);
-  if (it == video_notes_.end()) {
-    return nullptr;
-  }
+  CHECK(it != video_notes_.end());
   auto video_note = it->second.get();
-  if (video_note == nullptr) {
-      return nullptr;
-  }
   return make_tl_object<td_api::videoNote>(
       video_note->duration, video_note->dimensions.width, get_minithumbnail_object(video_note->minithumbnail),
       get_thumbnail_object(td_->file_manager_.get(), video_note->thumbnail, PhotoFormat::Jpeg),
@@ -85,37 +77,29 @@ FileId VideoNotesManager::on_get_video_note(unique_ptr<VideoNote> new_video_note
 
 const VideoNotesManager::VideoNote *VideoNotesManager::get_video_note(FileId file_id) const {
   auto video_note = video_notes_.find(file_id);
-
-  if (video_note == video_notes_.end() ||
-      video_note->second == nullptr ||
-      video_note->second->file_id != file_id) {
-    return make_unique<VideoNote>().get();
+  if (video_note == video_notes_.end()) {
+    return nullptr;
   }
 
+  CHECK(video_note->second->file_id == file_id);
   return video_note->second.get();
 }
 
 FileId VideoNotesManager::get_video_note_thumbnail_file_id(FileId file_id) const {
   auto video_note = get_video_note(file_id);
-  if (video_note == nullptr) {
-      return FileId();
-  }
+  CHECK(video_note != nullptr);
   return video_note->thumbnail.file_id;
 }
 
 void VideoNotesManager::delete_video_note_thumbnail(FileId file_id) {
   auto &video_note = video_notes_[file_id];
-  if (video_note == nullptr) {
-      return;
-  }
+  CHECK(video_note != nullptr);
   video_note->thumbnail = PhotoSize();
 }
 
 FileId VideoNotesManager::dup_video_note(FileId new_id, FileId old_id) {
   const VideoNote *old_video_note = get_video_note(old_id);
-  if (old_video_note == nullptr) {
-      return FileId();
-  }
+  CHECK(old_video_note != nullptr);
   auto &new_video_note = video_notes_[new_id];
   CHECK(!new_video_note);
   new_video_note = make_unique<VideoNote>(*old_video_note);
@@ -133,7 +117,7 @@ void VideoNotesManager::merge_video_notes(FileId new_id, FileId old_id, bool can
   CHECK(old_ != nullptr);
 
   auto new_it = video_notes_.find(new_id);
-  if (new_it == video_notes_.end() || new_it->second == nullptr) {
+  if (new_it == video_notes_.end()) {
     auto &old = video_notes_[old_id];
     if (!can_delete_old) {
       dup_video_note(new_id, old_id);
@@ -219,9 +203,7 @@ tl_object_ptr<telegram_api::InputMedia> VideoNotesManager::get_input_media(
 
   if (input_file != nullptr) {
     const VideoNote *video_note = get_video_note(file_id);
-    if (video_note == nullptr) {
-        return nullptr;
-    }
+    CHECK(video_note != nullptr);
 
     vector<tl_object_ptr<telegram_api::DocumentAttribute>> attributes;
     attributes.push_back(make_tl_object<telegram_api::documentAttributeVideo>(
@@ -242,10 +224,6 @@ tl_object_ptr<telegram_api::InputMedia> VideoNotesManager::get_input_media(
   return nullptr;
 }
 
-void VideoNotesManager::memory_cleanup() {
-  video_notes_.clear();
-  video_notes_.rehash(0);
-}
 void VideoNotesManager::memory_stats(vector<string> &output) {
   output.push_back("\"video_notes_\":"); output.push_back(std::to_string(video_notes_.size()));
 }

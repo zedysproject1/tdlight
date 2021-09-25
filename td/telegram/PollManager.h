@@ -43,8 +43,6 @@ class PollManager final : public Actor {
   PollManager &operator=(PollManager &&) = delete;
   ~PollManager() final;
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   static bool is_local_poll_id(PollId poll_id);
@@ -146,8 +144,6 @@ class PollManager final : public Actor {
 
   void start_up() final;
   void tear_down() final;
-
-  void memory_cleanup(bool full);
 
   static void on_update_poll_timeout_callback(void *poll_manager_ptr, int64 poll_id_int);
 

@@ -25,9 +25,7 @@ VideosManager::VideosManager(Td *td) : td_(td) {
 
 int32 VideosManager::get_video_duration(FileId file_id) const {
   auto it = videos_.find(file_id);
-  if (it == videos_.end() || it->second == nullptr) {
-      return 0;
-  }
+  CHECK(it != videos_.end());
   return it->second->duration;
 }
 
@@ -37,13 +35,9 @@ tl_object_ptr<td_api::video> VideosManager::get_video_object(FileId file_id) con
   }
 
   auto it = videos_.find(file_id);
-  if (it == videos_.end()) {
-    return nullptr;
-  }
+  CHECK(it != videos_.end());
   auto video = it->second.get();
-  if (video == nullptr) {
-      return nullptr;
-  }
+  CHECK(video != nullptr);
   auto thumbnail = video->animated_thumbnail.file_id.is_valid()
                        ? get_thumbnail_object(td_->file_manager_.get(), video->animated_thumbnail, PhotoFormat::Mpeg4)
                        : get_thumbnail_object(td_->file_manager_.get(), video->thumbnail, PhotoFormat::Jpeg);
@@ -112,37 +106,29 @@ FileId VideosManager::on_get_video(unique_ptr<Video> new_video, bool replace) {
 
 const VideosManager::Video *VideosManager::get_video(FileId file_id) const {
   auto video = videos_.find(file_id);
-
-  if (video == videos_.end() ||
-      video->second == nullptr ||
-      video->second->file_id != file_id) {
-    return make_unique<Video>().get();
+  if (video == videos_.end()) {
+    return nullptr;
   }
 
+  CHECK(video->second->file_id == file_id);
   return video->second.get();
 }
 
 FileId VideosManager::get_video_thumbnail_file_id(FileId file_id) const {
   auto video = get_video(file_id);
-  if (video == nullptr) {
-      return FileId();
-  }
+  CHECK(video != nullptr);
   return video->thumbnail.file_id;
 }
 
 FileId VideosManager::get_video_animated_thumbnail_file_id(FileId file_id) const {
   auto video = get_video(file_id);
-  if (video == nullptr) {
-      return FileId();
-  }
+  CHECK(video != nullptr);
   return video->animated_thumbnail.file_id;
 }
 
 void VideosManager::delete_video_thumbnail(FileId file_id) {
   auto &video = videos_[file_id];
-  if (video == nullptr) {
-      return;
-  }
+  CHECK(video != nullptr);
   video->thumbnail = PhotoSize();
   video->animated_thumbnail = AnimationSize();
 }
@@ -168,7 +154,7 @@ void VideosManager::merge_videos(FileId new_id, FileId old_id, bool can_delete_o
   CHECK(old_ != nullptr);
 
   auto new_it = videos_.find(new_id);
-  if (new_it == videos_.end() || new_it->second == nullptr) {
+  if (new_it == videos_.end()) {
     auto &old = videos_[old_id];
     if (!can_delete_old) {
       dup_video(new_id, old_id);
@@ -316,10 +302,7 @@ string VideosManager::get_video_search_text(FileId file_id) const {
   CHECK(video != nullptr);
   return video->file_name;
 }
-void VideosManager::memory_cleanup() {
-  videos_.clear();
-  videos_.rehash(0);
-}
+
 void VideosManager::memory_stats(vector<string> &output) {
   output.push_back("\"videos_\":"); output.push_back(std::to_string(videos_.size()));
 }

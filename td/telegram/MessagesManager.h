@@ -141,8 +141,6 @@ class MessagesManager final : public Actor {
   MessagesManager &operator=(MessagesManager &&) = delete;
   ~MessagesManager() final;
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   td_api::object_ptr<td_api::MessageSender> get_message_sender_object_const(UserId user_id, DialogId dialog_id,
@@ -1147,9 +1145,6 @@ class MessagesManager final : public Actor {
 
   struct Dialog {
     DialogId dialog_id;
-
-    int64 time_ = INT64_MAX;
-
     MessageId last_new_message_id;  // identifier of the last known server message received from update, there should be
                                     // no server messages after it
     MessageId last_message_id;      // identifier of the message after which currently there are no messages, i.e. a
@@ -1356,18 +1351,6 @@ class MessagesManager final : public Actor {
     Dialog(Dialog &&other) = delete;
     Dialog &operator=(Dialog &&other) = delete;
     ~Dialog();
-
-    void set_time() {
-      time_ = std::time(nullptr);
-    }
-
-    int64 get_time() const {
-      return time_;
-    }
-
-    void reset_time() {
-      time_ = INT64_MAX;
-    }
 
     template <class StorerT>
     void store(StorerT &storer) const;
@@ -1728,10 +1711,6 @@ class MessagesManager final : public Actor {
   static constexpr const char *DELETE_MESSAGE_USER_REQUEST_SOURCE = "user request";
 
   static constexpr bool DROP_SEND_MESSAGE_UPDATES = false;
-
-  void memory_cleanup(bool teardown);
-
-  void memory_cleanup(DialogId dialog_id, Dialog *d);
 
   static FullMessageId get_full_message_id(const tl_object_ptr<telegram_api::Message> &message_ptr, bool is_scheduled);
 
@@ -2910,9 +2889,6 @@ class MessagesManager final : public Actor {
 
   void on_channel_get_difference_timeout(DialogId dialog_id);
 
-  void get_channel_difference_delayed(DialogId dialog_id, int32 pts, bool force, bool enable_reactive_channel_difference,
-                                      const char *source);
-
   void get_channel_difference(DialogId dialog_id, int32 pts, bool force, const char *source);
 
   void do_get_channel_difference(DialogId dialog_id, int32 pts, bool force,
@@ -3243,14 +3219,6 @@ class MessagesManager final : public Actor {
     Promise<Unit> promise;
   };
   std::unordered_map<int64, unique_ptr<PendingMessageImport>> pending_message_imports_;
-
-  struct PendingChannelDifference {
-    DialogId dialog_id;
-    int32 pts;
-    bool force;
-  };
-  std::unordered_map<int64, PendingChannelDifference> pending_channel_difference_;
-  int64 last_pending_channel_difference_ = 0;
 
   struct PendingMessageGroupSend {
     DialogId dialog_id;

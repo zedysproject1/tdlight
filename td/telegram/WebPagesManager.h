@@ -37,8 +37,6 @@ class WebPagesManager final : public Actor {
  public:
   WebPagesManager(Td *td, ActorShared<> parent);
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   WebPagesManager(const WebPagesManager &) = delete;

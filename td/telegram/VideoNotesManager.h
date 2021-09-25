@@ -26,8 +26,6 @@ class VideoNotesManager {
  public:
   explicit VideoNotesManager(Td *td);
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   int32 get_video_note_duration(FileId file_id) const;

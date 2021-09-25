@@ -39,8 +39,6 @@ class GroupCallManager final : public Actor {
   GroupCallManager &operator=(GroupCallManager &&) = delete;
   ~GroupCallManager() final;
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   DialogId get_group_call_participant_id(const td_api::object_ptr<td_api::MessageSender> &message_sender);
@@ -156,8 +154,6 @@ class GroupCallManager final : public Actor {
   static constexpr size_t MAX_TITLE_LENGTH = 64;  // server side limit for group call/call record title length
 
   void tear_down() final;
-
-  void memory_cleanup(bool full);
 
   static void on_update_group_call_participant_order_timeout_callback(void *group_call_manager_ptr,
                                                                       int64 group_call_id_int);

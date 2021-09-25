@@ -20,9 +20,7 @@ namespace td {
 template <class StorerT>
 void VideosManager::store_video(FileId file_id, StorerT &storer) const {
   auto it = videos_.find(file_id);
-  if (it == videos_.end() || it->second == nullptr) {
-      return;
-  }
+  CHECK(it != videos_.end());
   const Video *video = it->second.get();
   bool has_animated_thumbnail = video->animated_thumbnail.file_id.is_valid();
   BEGIN_STORE_FLAGS();

@@ -13,9 +13,10 @@
 #include "td/telegram/Td.h"
 #include "td/telegram/VideoNotesManager.h"
 #include "td/telegram/VideosManager.h"
+#include "td/telegram/Global.h"
+#include "td/telegram/ConfigShared.h"
 
 #include "td/utils/algorithm.h"
-#include "Document.hpp"
 
 namespace td {
 

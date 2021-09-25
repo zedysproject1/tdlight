@@ -75,40 +75,13 @@ MemoryManager::MemoryManager(Td *td, ActorShared<> parent) : td_(td), parent_(st
 }
 
 void MemoryManager::start_up() {
-  LOG(INFO) << "Start MemoryManager";
 }
 
 void MemoryManager::tear_down() {
-  LOG(INFO) << "Stopping MemoryManager";
   parent_.reset();
-  LOG(INFO) << "Stopped MemoryManager";
-}
-
-bool MemoryManager::can_manage_memory() const {
-  if (!(td_->auth_manager_->is_authorized() && !G()->close_flag())) {
-    return false;
-  }
-  if (!do_session_settings_allow_for_memory_management()) {
-    return false;
-  }
-  return true;
-}
-
-bool MemoryManager::do_session_settings_allow_for_memory_management() {
-  if (G()->parameters().use_message_db || G()->parameters().use_chat_info_db || G()->parameters().use_file_db) {
-    return false;
-  }
-  return true;
 }
 
 void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) const {
-  if (!can_manage_memory()) {
-    auto value = MemoryStats(R"({"warning": "OptimizeMemory is not enabled, please read the recommended options on README.md"})");
-
-    promise.set_value(std::move(value));
-    return;
-  }
-
   vector<string> output = {"{"};
 
   output.push_back("\"memory_stats\":{");
@@ -211,43 +184,6 @@ void MemoryManager::get_memory_stats(bool full, Promise<MemoryStats> promise) co
   auto value = MemoryStats(s);
 
   promise.set_value(std::move(value));
-}
-
-void MemoryManager::clean_memory(bool full, Promise<Unit> promise) const {
-  if (!can_manage_memory()) {
-    if (!do_session_settings_allow_for_memory_management()) {
-      promise.set_error(Status::Error(405, "MEMORY_STATS_DISALLOWED"
-        " Session settings don't allow memory optimization."
-        " If you want to optimize memory, you should completely disable all databases."));
-    } else {
-      promise.set_error(Status::Error(405, "Can't manage memory now"));
-    }
-    return;
-  }
-
-  td_->messages_manager_->memory_cleanup();
-  td_->contacts_manager_->memory_cleanup();
-  td_->web_pages_manager_->memory_cleanup();
-  td_->stickers_manager_->memory_cleanup();
-  td_->documents_manager_->memory_cleanup();
-  td_->video_notes_manager_->memory_cleanup();
-  td_->videos_manager_->memory_cleanup();
-  td_->audios_manager_->memory_cleanup();
-  td_->animations_manager_->memory_cleanup();
-  td_->file_manager_->memory_cleanup();
-  td_->file_reference_manager_->memory_cleanup();
-  td_->group_call_manager_->memory_cleanup();
-  td_->background_manager_->memory_cleanup();
-  td_->inline_queries_manager_->memory_cleanup();
-  td_->poll_manager_->memory_cleanup();
-
-  #ifdef __linux__
-    #if defined(__GLIBC__) && !defined(__UCLIBC__) && !defined(__MUSL__)
-      malloc_trim(0);
-    #endif
-  #endif
-
-  promise.set_value(Unit());
 }
 
 void MemoryManager::get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const {

@@ -34,8 +34,6 @@ class BackgroundManager final : public Actor {
  public:
   BackgroundManager(Td *td, ActorShared<> parent);
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   void get_backgrounds(bool for_dark_theme, Promise<td_api::object_ptr<td_api::backgrounds>> &&promise);
@@ -105,8 +103,6 @@ class BackgroundManager final : public Actor {
 
   void tear_down() final;
 
-  void memory_cleanup(bool full);
-
   static string get_background_database_key(bool for_dark_theme);
 
   static string get_local_backgrounds_database_key(bool for_dark_theme);
@@ -156,8 +152,6 @@ class BackgroundManager final : public Actor {
   void on_removed_background(BackgroundId background_id, Result<Unit> &&result, Promise<Unit> &&promise);
 
   void on_reset_background(Result<Unit> &&result, Promise<Unit> &&promise);
-
-  void reset_backgrounds_data();
 
   void upload_background_file(FileId file_id, const BackgroundType &type, bool for_dark_theme, Promise<Unit> &&promise);
 

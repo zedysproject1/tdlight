@@ -21,15 +21,10 @@ namespace td {
 
 template <class StorerT>
 void DocumentsManager::store_document(FileId file_id, StorerT &storer) const {
-  //LOG(DEBUG) << "Store document " << file_id;
+  LOG(DEBUG) << "Store document " << file_id;
   auto it = documents_.find(file_id);
-  if (it == documents_.end() || it->second == nullptr) {
-    return;
-  }
+  CHECK(it != documents_.end());
   const GeneralDocument *document = it->second.get();
-  if (document == nullptr) {
-      return;
-  }
   store(document->file_name, storer);
   store(document->mime_type, storer);
   store(document->minithumbnail, storer);
@@ -65,7 +60,6 @@ FileId DocumentsManager::parse_document(ParserT &parser) {
 
   parse(document->thumbnail, parser);
   parse(document->file_id, parser);
-
   LOG(DEBUG) << "Parsed document " << document->file_id;
   if (parser.get_error() != nullptr || !document->file_id.is_valid()) {
     return FileId();

@@ -5408,10 +5408,6 @@ getDatabaseStatistics = DatabaseStatistics;
 //@full Full memory statistics calculation
 getMemoryStatistics full:Bool = MemoryStatistics;
 
-//@description Optimize memory
-//@full Full memory optimization
-optimizeMemory full:Bool = Ok;
-
 //@description Optimizes storage usage, i.e. deletes some files and returns new storage usage statistics. Secret thumbnails can't be deleted
 //@size Limit on the total size of files after deletion, in bytes. Pass -1 to use the default limit
 //@ttl Limit on the time that has passed since the last time a file was accessed (or creation time for some filesystems). Pass -1 to use the default limit

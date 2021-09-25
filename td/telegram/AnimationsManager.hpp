@@ -22,9 +22,7 @@ namespace td {
 template <class StorerT>
 void AnimationsManager::store_animation(FileId file_id, StorerT &storer) const {
   auto it = animations_.find(file_id);
-  if (it == animations_.end() || it->second == nullptr) {
-      return;
-  }
+  CHECK(it != animations_.end());
   const Animation *animation = it->second.get();
   bool has_animated_thumbnail = animation->animated_thumbnail.file_id.is_valid();
   BEGIN_STORE_FLAGS();

@@ -68,12 +68,10 @@ struct NewRemoteFileLocation {
 
 class FileNode {
  public:
-  FileNode() {empty = true;}
   FileNode(LocalFileLocation local, NewRemoteFileLocation remote, unique_ptr<FullGenerateFileLocation> generate,
            int64 size, int64 expected_size, string remote_name, string url, DialogId owner_dialog_id,
            FileEncryptionKey key, FileId main_file_id, int8 main_file_id_priority)
-      : empty(false)
-      , local_(std::move(local))
+      : local_(std::move(local))
       , remote_(std::move(remote))
       , generate_(std::move(generate))
       , size_(size)
@@ -121,7 +119,6 @@ class FileNode {
   void on_info_flushed();
 
   string suggested_path() const;
-  bool empty = false;
 
  private:
   friend class FileView;
@@ -154,7 +151,7 @@ class FileNode {
   FileDbId pmc_id_;
   std::vector<FileId> file_ids_;
 
-  FileId main_file_id_ = {};
+  FileId main_file_id_;
 
   double last_successful_force_reupload_time_ = -1e10;
 
@@ -199,8 +196,6 @@ class FileManager;
 class FileNodePtr {
  public:
   FileNodePtr() = default;
-  FileNodePtr(FileManager *file_manager) : file_manager_(file_manager) {
-  }
   FileNodePtr(FileId file_id, FileManager *file_manager) : file_id_(file_id), file_manager_(file_manager) {
   }
 
@@ -348,8 +343,6 @@ class FileView {
 
 class FileManager final : public FileLoadManager::Callback {
  public:
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   class DownloadCallback {
@@ -389,8 +382,6 @@ class FileManager final : public FileLoadManager::Callback {
     virtual void on_new_file(int64 size, int64 real_size, int32 cnt) = 0;
 
     virtual void on_file_updated(FileId size) = 0;
-
-    virtual void destroy_file_source(FileId file_id) = 0;
 
     virtual bool add_file_source(FileId file_id, FileSourceId file_source_id) = 0;
 
@@ -511,10 +502,6 @@ class FileManager final : public FileLoadManager::Callback {
   FileId parse_file(ParserT &parser);
 
  private:
-  void destroy_query(int32 file_id);
-
-  void memory_cleanup(bool full);
-
   Result<FileId> check_input_file_id(FileType type, Result<FileId> result, bool is_encrypted, bool allow_zero,
                                      bool is_secure) TD_WARN_UNUSED_RESULT;
 
@@ -565,7 +552,6 @@ class FileManager final : public FileLoadManager::Callback {
   ActorShared<> parent_;
   unique_ptr<Context> context_;
   std::shared_ptr<FileDbInterface> file_db_;
-  bool use_standard_algorithm_;
 
   FileIdInfo *get_file_id_info(FileId file_id);
 
@@ -583,17 +569,15 @@ class FileManager final : public FileLoadManager::Callback {
   };
   Enumerator<RemoteInfo> remote_location_info_;
 
-  FileNodeId file_node_seqno = 1;
-  int32 file_id_seqno = 1;
-
   std::unordered_map<string, FileId> file_hash_to_file_id_;
 
   std::map<FullLocalFileLocation, FileId> local_location_to_file_id_;
   std::map<FullGenerateFileLocation, FileId> generate_location_to_file_id_;
   std::map<FileDbId, int32> pmc_id_to_file_node_id_;
 
-  std::unordered_map<int32, FileIdInfo> file_id_info_;
-  std::unordered_map<FileNodeId, unique_ptr<FileNode>> file_nodes_;
+  vector<FileIdInfo> file_id_info_;
+  vector<int32> empty_file_ids_;
+  vector<unique_ptr<FileNode>> file_nodes_;
   ActorOwn<FileLoadManager> file_load_manager_;
   ActorOwn<FileGenerateManager> file_generate_manager_;
 

@@ -408,17 +408,13 @@ WebPagesManager::WebPagesManager(Td *td, ActorShared<> parent) : td_(td), parent
 
 void WebPagesManager::tear_down() {
   parent_.reset();
-  // Completely clear memory when closing, to avoid memory leaks
-  memory_cleanup();
 }
 
 WebPagesManager::~WebPagesManager() = default;
 
 WebPageId WebPagesManager::on_get_web_page(tl_object_ptr<telegram_api::WebPage> &&web_page_ptr,
                                            DialogId owner_dialog_id) {
-  if (web_page_ptr == nullptr) {
-      return WebPageId();
-  }
+  CHECK(web_page_ptr != nullptr);
   LOG(DEBUG) << "Got " << to_string(web_page_ptr);
   switch (web_page_ptr->get_id()) {
     case telegram_api::webPageEmpty::ID: {
@@ -546,15 +542,9 @@ WebPageId WebPagesManager::on_get_web_page(tl_object_ptr<telegram_api::WebPage> 
 void WebPagesManager::update_web_page(unique_ptr<WebPage> web_page, WebPageId web_page_id, bool from_binlog,
                                       bool from_database) {
   LOG(INFO) << "Update " << web_page_id << (from_database ? " from database" : (from_binlog ? " from binlog" : ""));
-  if (web_page == nullptr) {
-      return;
-  }
+  CHECK(web_page != nullptr);
 
-  // Start custom-patches
-  auto find_page = web_pages_.find(web_page_id);
-  if (find_page == web_pages_.end()) { return; }
-  auto &page = find_page->second;
-  // End custom-patches
+  auto &page = web_pages_[web_page_id];
   auto old_file_ids = get_web_page_file_ids(page.get());
   WebPageInstantView old_instant_view;
   bool is_changed = true;
@@ -674,13 +664,8 @@ void WebPagesManager::on_get_web_page_instant_view_view_count(WebPageId web_page
     return;
   }
 
-  // Start custom-patches
-  auto find_web_page_val = web_pages_.find(web_page_id);
-  if (find_web_page_val == web_pages_.end()) { return; }
-  auto &web_page_val = find_web_page_val->second;
-  // End custom-patches
-  auto *instant_view = &web_page_val->instant_view;
-  if (instant_view->is_empty) { return; }
+  auto *instant_view = &web_pages_[web_page_id]->instant_view;
+  CHECK(!instant_view->is_empty);
   if (instant_view->view_count >= view_count) {
     return;
   }
@@ -693,11 +678,7 @@ void WebPagesManager::on_get_web_page_instant_view_view_count(WebPageId web_page
 }
 
 void WebPagesManager::on_get_web_page_by_url(const string &url, WebPageId web_page_id, bool from_database) {
-  // Start custom-patches
-  auto find_cached_web_page_id = url_to_web_page_id_.find(url);
-  if (find_cached_web_page_id == url_to_web_page_id_.end()) { return; }
-  auto &cached_web_page_id = find_cached_web_page_id->second;
-  // End custom-patches
+  auto &cached_web_page_id = url_to_web_page_id_[url];
   if (!from_database && G()->parameters().use_message_db) {
     if (web_page_id.is_valid()) {
       if (cached_web_page_id != web_page_id) {  // not already saved
@@ -721,13 +702,8 @@ void WebPagesManager::register_web_page(WebPageId web_page_id, FullMessageId ful
   }
 
   LOG(INFO) << "Register " << web_page_id << " from " << full_message_id << " from " << source;
-  // Start custom-patches
-  auto find_web_page_message_ids = web_page_messages_.find(web_page_id);
-  if (find_web_page_message_ids == web_page_messages_.end()) { return; }
-  auto &web_page_message_ids = find_web_page_message_ids->second;
-  // End custom-patches
-  bool is_inserted = web_page_message_ids.insert(full_message_id).second;
-  if (!is_inserted) { return; }
+  bool is_inserted = web_page_messages_[web_page_id].insert(full_message_id).second;
+  LOG_CHECK(is_inserted) << source << " " << web_page_id << " " << full_message_id;
 
   if (!td_->auth_manager_->is_bot() && !have_web_page_force(web_page_id)) {
     LOG(INFO) << "Waiting for " << web_page_id << " needed in " << full_message_id;
@@ -741,13 +717,8 @@ void WebPagesManager::unregister_web_page(WebPageId web_page_id, FullMessageId f
   }
 
   LOG(INFO) << "Unregister " << web_page_id << " from " << full_message_id << " from " << source;
-  // Start custom-patches
-  auto find_message_ids = web_page_messages_.find(web_page_id);
-  if (find_message_ids == web_page_messages_.end()) { return; }
-  auto &message_ids = find_message_ids->second;
-  // End custom-patches
+  auto &message_ids = web_page_messages_[web_page_id];
   auto is_deleted = message_ids.erase(full_message_id) > 0;
-  if (!is_deleted) { return; }
   LOG_CHECK(is_deleted) << source << " " << web_page_id << " " << full_message_id;
 
   if (message_ids.empty()) {
@@ -761,9 +732,7 @@ void WebPagesManager::unregister_web_page(WebPageId web_page_id, FullMessageId f
 void WebPagesManager::on_get_web_page_preview_success(int64 request_id, const string &url,
                                                       tl_object_ptr<telegram_api::MessageMedia> &&message_media_ptr,
                                                       Promise<Unit> &&promise) {
-  if (message_media_ptr == nullptr) {
-      return;
-  }
+  CHECK(message_media_ptr != nullptr);
   int32 constructor_id = message_media_ptr->get_id();
   if (constructor_id != telegram_api::messageMediaWebPage::ID) {
     if (constructor_id == telegram_api::messageMediaEmpty::ID) {
@@ -778,9 +747,7 @@ void WebPagesManager::on_get_web_page_preview_success(int64 request_id, const st
   }
 
   auto message_media_web_page = move_tl_object_as<telegram_api::messageMediaWebPage>(message_media_ptr);
-  if (message_media_web_page->webpage_ == nullptr) {
-      return;
-  }
+  CHECK(message_media_web_page->webpage_ != nullptr);
 
   auto web_page_id = on_get_web_page(std::move(message_media_web_page->webpage_), DialogId());
   if (web_page_id.is_valid() && !have_web_page(web_page_id)) {
@@ -794,9 +761,9 @@ void WebPagesManager::on_get_web_page_preview_success(int64 request_id, const st
 
 void WebPagesManager::on_get_web_page_preview_success(int64 request_id, const string &url, WebPageId web_page_id,
                                                       Promise<Unit> &&promise) {
-  if (!(web_page_id == WebPageId() || have_web_page(web_page_id))) { return; }
+  CHECK(web_page_id == WebPageId() || have_web_page(web_page_id));
 
-  if (!(got_web_page_previews_.find(request_id) == got_web_page_previews_.end())) { return; }
+  CHECK(got_web_page_previews_.find(request_id) == got_web_page_previews_.end());
   got_web_page_previews_[request_id] = web_page_id;
 
   if (web_page_id.is_valid() && !url.empty()) {
@@ -809,7 +776,7 @@ void WebPagesManager::on_get_web_page_preview_success(int64 request_id, const st
 void WebPagesManager::on_get_web_page_preview_fail(int64 request_id, const string &url, Status error,
                                                    Promise<Unit> &&promise) {
   LOG(INFO) << "Clean up getting of web page preview with url \"" << url << '"';
-  if (!error.is_error()) { return; }
+  CHECK(error.is_error());
   promise.set_error(std::move(error));
 }
 
@@ -859,9 +826,7 @@ tl_object_ptr<td_api::webPage> WebPagesManager::get_web_page_preview_result(int6
   }
 
   auto it = got_web_page_previews_.find(request_id);
-  if (it == got_web_page_previews_.end()) {
-      return nullptr;
-  }
+  CHECK(it != got_web_page_previews_.end());
   auto web_page_id = it->second;
   got_web_page_previews_.erase(it);
   return get_web_page_object(web_page_id);
@@ -922,9 +887,7 @@ void WebPagesManager::load_web_page_instant_view(WebPageId web_page_id, bool for
   LOG(INFO) << "Load " << web_page_id << " instant view, have " << previous_queries << " previous queries";
   if (previous_queries == 0) {
     const WebPageInstantView *web_page_instant_view = get_web_page_instant_view(web_page_id);
-    if (web_page_instant_view == nullptr) {
-        return;
-    }
+    CHECK(web_page_instant_view != nullptr);
 
     if (G()->parameters().use_message_db && !web_page_instant_view->was_loaded_from_database) {
       LOG(INFO) << "Trying to load " << web_page_id << " instant view from database";
@@ -942,7 +905,7 @@ void WebPagesManager::load_web_page_instant_view(WebPageId web_page_id, bool for
 void WebPagesManager::reload_web_page_instant_view(WebPageId web_page_id) {
   LOG(INFO) << "Reload " << web_page_id << " instant view";
   const WebPage *web_page = get_web_page(web_page_id);
-  if (!(web_page != nullptr && !web_page->instant_view.is_empty)) { return; }
+  CHECK(web_page != nullptr && !web_page->instant_view.is_empty);
 
   auto promise = PromiseCreator::lambda([web_page_id](Result<> result) {
     send_closure(G()->web_pages_manager(), &WebPagesManager::update_web_page_instant_view_load_requests, web_page_id,
@@ -961,7 +924,7 @@ void WebPagesManager::on_load_web_page_instant_view_from_database(WebPageId web_
   if (G()->close_flag()) {
     return;
   }
-  if (!(G()->parameters().use_message_db)) { return; }
+  CHECK(G()->parameters().use_message_db);
   LOG(INFO) << "Successfully loaded " << web_page_id << " instant view of size " << value.size() << " from database";
   //  G()->td_db()->get_sqlite_pmc()->erase(get_web_page_instant_view_database_key(web_page_id), Auto());
   //  return;
@@ -1211,9 +1174,6 @@ tl_object_ptr<td_api::webPage> WebPagesManager::get_web_page_object(WebPageId we
   if (web_page == nullptr) {
     return nullptr;
   }
-  if (&web_page->url == nullptr) {
-    return nullptr;
-  }
   int32 instant_view_version = [web_page] {
     if (web_page->instant_view.is_empty) {
       return 0;
@@ -1355,7 +1315,7 @@ void WebPagesManager::on_web_page_changed(WebPageId web_page_id, bool have_web_p
     for (auto full_message_id : it->second) {
       full_message_ids.push_back(full_message_id);
     }
-    if (full_message_ids.empty()) { return; }
+    CHECK(!full_message_ids.empty());
     for (auto full_message_id : full_message_ids) {
       if (!have_web_page) {
         td_->messages_manager_->delete_pending_message_web_page(full_message_id);
@@ -1364,14 +1324,9 @@ void WebPagesManager::on_web_page_changed(WebPageId web_page_id, bool have_web_p
       }
     }
     if (have_web_page) {
-      // Start custom-patches
-      auto find_web_page_message_ids = web_page_messages_.find(web_page_id);
-      if (find_web_page_message_ids == web_page_messages_.end()) { return; }
-      auto &web_page_message_ids = find_web_page_message_ids->second;
-      // End custom-patches
-      if (!(web_page_message_ids.size() == full_message_ids.size())) { return; }
+      CHECK(web_page_messages_[web_page_id].size() == full_message_ids.size());
     } else {
-      if (!(web_page_messages_.count(web_page_id) == 0)) { return; }
+      CHECK(web_page_messages_.count(web_page_id) == 0);
     }
   }
   auto get_it = pending_get_web_pages_.find(web_page_id);
@@ -1388,13 +1343,11 @@ void WebPagesManager::on_web_page_changed(WebPageId web_page_id, bool have_web_p
 
 const WebPagesManager::WebPage *WebPagesManager::get_web_page(WebPageId web_page_id) const {
   auto p = web_pages_.find(web_page_id);
-
-  if (p == web_pages_.end() ||
-      p->second == nullptr) {
+  if (p == web_pages_.end()) {
     return nullptr;
-  }
-
+  } else {
   return p->second.get();
+}
 }
 
 const WebPagesManager::WebPageInstantView *WebPagesManager::get_web_page_instant_view(WebPageId web_page_id) const {
@@ -1446,9 +1399,7 @@ void WebPagesManager::on_pending_web_page_timeout(WebPageId web_page_id) {
 
 void WebPagesManager::on_get_web_page_instant_view(WebPage *web_page, tl_object_ptr<telegram_api::page> &&page,
                                                    int32 hash, DialogId owner_dialog_id) {
-  if (page == nullptr) {
-      return;
-  }
+  CHECK(page != nullptr);
   std::unordered_map<int64, Photo> photos;
   for (auto &photo_ptr : page->photos_) {
     Photo photo = get_photo(td_->file_manager_.get(), std::move(photo_ptr), owner_dialog_id);
@@ -1563,9 +1514,7 @@ void WebPagesManager::save_web_page(const WebPage *web_page, WebPageId web_page_
     return;
   }
 
-  if (web_page == nullptr) {
-      return;
-  }
+  CHECK(web_page != nullptr);
   if (!from_binlog) {
     WebPageLogEvent log_event(web_page_id, web_page);
     auto storer = get_log_event_storer(log_event);
@@ -1601,9 +1550,7 @@ void WebPagesManager::on_binlog_web_page_event(BinlogEvent &&event) {
   auto web_page_id = log_event.web_page_id;
   LOG(INFO) << "Add " << web_page_id << " from binlog";
   auto web_page = std::move(log_event.web_page_out);
-  if (web_page == nullptr) {
-      return;
-  }
+  CHECK(web_page != nullptr);
 
   web_page->log_event_id = event.id_;
 
@@ -1667,7 +1614,7 @@ void WebPagesManager::on_load_web_page_from_database(WebPageId web_page_id, stri
   vector<Promise<Unit>> promises;
   if (it != load_web_page_from_database_queries_.end()) {
     promises = std::move(it->second);
-    if (promises.empty()) { return; }
+    CHECK(!promises.empty());
     load_web_page_from_database_queries_.erase(it);
   }
 
@@ -1730,16 +1677,8 @@ FileSourceId WebPagesManager::get_url_file_source_id(const string &url) {
     const WebPage *web_page = get_web_page(web_page_id);
     if (web_page != nullptr) {
       if (!web_page->file_source_id.is_valid()) {
-        // Start custom-patches
-        auto find_web_page_val = web_pages_.find(web_page_id);
-        if (find_web_page_val != web_pages_.end()) {
-          auto &web_page_val = find_web_page_val->second;
-        // End custom-patches
-        web_page_val->file_source_id =
+        web_pages_[web_page_id]->file_source_id =
             td_->file_reference_manager_->create_web_page_file_source(web_page->url);
-        // Start custom-patches
-        }
-        // End custom-patches
       }
       return web_page->file_source_id;
     }
@@ -1793,20 +1732,6 @@ vector<FileId> WebPagesManager::get_web_page_file_ids(const WebPage *web_page) c
   return result;
 }
 
-void WebPagesManager::memory_cleanup() {
-    web_pages_.clear();
-    web_pages_.rehash(0);
-    loaded_from_database_web_pages_.clear();
-    loaded_from_database_web_pages_.rehash(0);
-    web_page_messages_.clear();
-    web_page_messages_.rehash(0);
-    got_web_page_previews_.clear();
-    got_web_page_previews_.rehash(0);
-    url_to_web_page_id_.clear();
-    url_to_web_page_id_.rehash(0);
-    url_to_file_source_id_.clear();
-    url_to_file_source_id_.rehash(0);
-}
 void WebPagesManager::memory_stats(vector<string> &output) {
   output.push_back("\"web_pages_\":"); output.push_back(std::to_string(web_pages_.size()));
   output.push_back(",");
@@ -1821,4 +1746,5 @@ void WebPagesManager::memory_stats(vector<string> &output) {
   output.push_back("\"url_to_file_source_id_\":"); output.push_back(std::to_string(url_to_file_source_id_.size()));
 
 }
+
 }  // namespace td

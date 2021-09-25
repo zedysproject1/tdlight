@@ -461,9 +461,6 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
 AnimationSize get_animation_size(FileManager *file_manager, PhotoSizeSource source, int64 id, int64 access_hash,
                                  std::string file_reference, DcId dc_id, DialogId owner_dialog_id,
                                  tl_object_ptr<telegram_api::videoSize> &&size) {
-  if (size == nullptr) {
-    return {};
-  }
   CHECK(size != nullptr);
   AnimationSize res;
   if (size->type_ != "v" && size->type_ != "u") {

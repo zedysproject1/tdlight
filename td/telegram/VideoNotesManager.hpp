@@ -20,9 +20,7 @@ namespace td {
 template <class StorerT>
 void VideoNotesManager::store_video_note(FileId file_id, StorerT &storer) const {
   auto it = video_notes_.find(file_id);
-  if (it == video_notes_.end() || it->second == nullptr) {
-      return;
-  }
+  CHECK(it != video_notes_.end());
   const VideoNote *video_note = it->second.get();
   store(video_note->duration, storer);
   store(video_note->dimensions, storer);
@@ -50,4 +48,5 @@ FileId VideoNotesManager::parse_video_note(ParserT &parser) {
   }
   return on_get_video_note(std::move(video_note), false);
 }
+
 }  // namespace td

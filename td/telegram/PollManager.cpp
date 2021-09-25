@@ -268,10 +268,6 @@ void PollManager::start_up() {
 
 void PollManager::tear_down() {
   parent_.reset();
-  if (td_->memory_manager_->can_manage_memory()) {
-    // Completely clear memory when closing, to avoid memory leaks
-    memory_cleanup(true);
-  }
 }
 
 PollManager::~PollManager() = default;
@@ -344,7 +340,7 @@ void PollManager::save_poll(const Poll *poll, PollId poll_id) {
   }
 
   LOG(INFO) << "Save " << poll_id << " to database";
-  if (!(poll != nullptr)) return;
+  CHECK(poll != nullptr);
   G()->td_db()->get_sqlite_pmc()->set(get_poll_database_key(poll_id), log_event_store(*poll).as_slice().str(), Auto());
 }
 
@@ -502,19 +498,7 @@ vector<int32> PollManager::get_vote_percentage(const vector<int32> &voter_counts
 
 td_api::object_ptr<td_api::poll> PollManager::get_poll_object(PollId poll_id) const {
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) {
-    //todo: find better alternative, rather than just creating a fake poll to avoid crashes...
-    vector<td_api::object_ptr<td_api::pollOption>> poll_options;
-    poll_options.push_back(td_api::make_object<td_api::pollOption>(
-        "empty", 0, 0, false,
-        false));
-    vector<int32> votes;
-    return td_api::make_object<td_api::poll>(
-        poll_id.get(), "empty question", std::move(poll_options), 0,
-        std::move(votes), true,
-        td_api::make_object<td_api::pollTypeRegular>(false),
-        1, G()->unix_time() - 1, true);
-  }
+  CHECK(poll != nullptr);
   return get_poll_object(poll_id, poll);
 }
 
@@ -638,9 +622,7 @@ PollId PollManager::create_poll(string &&question, vector<string> &&options, boo
 }
 
 void PollManager::register_poll(PollId poll_id, FullMessageId full_message_id, const char *source) {
-  if(!(have_poll(poll_id))) {
-    return;
-  }
+  CHECK(have_poll(poll_id));
   if (full_message_id.get_message_id().is_scheduled()) {
     return;
   }
@@ -651,7 +633,7 @@ void PollManager::register_poll(PollId poll_id, FullMessageId full_message_id, c
   bool is_inserted = poll_messages_[poll_id].insert(full_message_id).second;
   LOG_CHECK(is_inserted) << source << " " << poll_id << " " << full_message_id;
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) return;
+  CHECK(poll != nullptr);
   if (!td_->auth_manager_->is_bot() && !is_local_poll_id(poll_id) &&
       !(poll->is_closed && poll->is_updated_after_close)) {
     update_poll_timeout_.add_timeout_in(poll_id.get(), 0);
@@ -659,9 +641,7 @@ void PollManager::register_poll(PollId poll_id, FullMessageId full_message_id, c
 }
 
 void PollManager::unregister_poll(PollId poll_id, FullMessageId full_message_id, const char *source) {
-  if (!(have_poll(poll_id))) {
-    return;
-  }
+  CHECK(have_poll(poll_id));
   if (full_message_id.get_message_id().is_scheduled()) {
     return;
   }
@@ -671,10 +651,7 @@ void PollManager::unregister_poll(PollId poll_id, FullMessageId full_message_id,
   LOG(INFO) << "Unregister " << poll_id << " from " << full_message_id << " from " << source;
   auto &message_ids = poll_messages_[poll_id];
   auto is_deleted = message_ids.erase(full_message_id) > 0;
-  if (!is_deleted) {
-    LOG(DEBUG) << "tried to unregister already deleted poll. " << source << " " << poll_id << " " << full_message_id;
-    return;
-  }
+  LOG_CHECK(is_deleted) << source << " " << poll_id << " " << full_message_id;
   if (message_ids.empty()) {
     poll_messages_.erase(poll_id);
     update_poll_timeout_.cancel_timeout(poll_id.get());
@@ -714,7 +691,7 @@ void PollManager::set_poll_answer(PollId poll_id, FullMessageId full_message_id,
   }
 
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) return promise.set_error(Status::Error(400, "Poll can't be answered"));
+  CHECK(poll != nullptr);
   if (poll->is_closed) {
     return promise.set_error(Status::Error(400, "Can't answer closed poll"));
   }
@@ -963,7 +940,7 @@ void PollManager::get_poll_voters(PollId poll_id, FullMessageId full_message_id,
   }
 
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) return promise.set_error(Status::Error(400, "Poll results can't be received"));
+  CHECK(poll != nullptr);
   if (option_id < 0 || static_cast<size_t>(option_id) >= poll->options.size()) {
     return promise.set_error(Status::Error(400, "Invalid option ID specified"));
   }
@@ -1013,7 +990,7 @@ void PollManager::get_poll_voters(PollId poll_id, FullMessageId full_message_id,
 void PollManager::on_get_poll_voters(PollId poll_id, int32 option_id, string offset, int32 limit,
                                      Result<tl_object_ptr<telegram_api::messages_votesList>> &&result) {
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) return;
+  CHECK(poll != nullptr);
   if (option_id < 0 || static_cast<size_t>(option_id) >= poll->options.size()) {
     LOG(ERROR) << "Can't process voters for option " << option_id << " in " << poll_id << ", because it has only "
                << poll->options.size() << " options";
@@ -1107,10 +1084,7 @@ void PollManager::stop_poll(PollId poll_id, FullMessageId full_message_id, uniqu
     return;
   }
   auto poll = get_poll_editable(poll_id);
-  if (!(poll != nullptr)) {
-    promise.set_value(Unit());
-    return;
-  }
+  CHECK(poll != nullptr);
   if (poll->is_closed) {
     promise.set_value(Unit());
     return;
@@ -1163,7 +1137,7 @@ void PollManager::do_stop_poll(PollId poll_id, FullMessageId full_message_id, un
 void PollManager::stop_local_poll(PollId poll_id) {
   CHECK(is_local_poll_id(poll_id));
   auto poll = get_poll_editable(poll_id);
-  if (!(poll != nullptr)) return;
+  CHECK(poll != nullptr);
   if (poll->is_closed) {
     return;
   }
@@ -1184,12 +1158,8 @@ void PollManager::on_update_poll_timeout(PollId poll_id) {
   if (G()->close_flag()) {
     return;
   }
-
   auto poll = get_poll(poll_id);
-  if (poll == nullptr) {
-    return;
-  }
-
+  CHECK(poll != nullptr);
   if (poll->is_closed && poll->is_updated_after_close) {
     return;
   }
@@ -1203,13 +1173,7 @@ void PollManager::on_update_poll_timeout(PollId poll_id) {
     return;
   }
 
-  auto full_message_id_set = std::move(it->second);
-  if (full_message_id_set.empty()) {
-    return;
-  }
-
-  auto full_message_id = *full_message_id_set.begin();
-
+  auto full_message_id = *it->second.begin();
   LOG(INFO) << "Fetching results of " << poll_id << " from " << full_message_id;
   auto query_promise = PromiseCreator::lambda([poll_id, generation = current_generation_, actor_id = actor_id(this)](
                                                   Result<tl_object_ptr<telegram_api::Updates>> &&result) {
@@ -1226,7 +1190,7 @@ void PollManager::on_close_poll_timeout(PollId poll_id) {
   }
 
   auto poll = get_poll_editable(poll_id);
-  if (!(poll != nullptr)) return;
+  CHECK(poll != nullptr);
   if (poll->is_closed || poll->close_date == 0) {
     return;
   }
@@ -1250,7 +1214,7 @@ void PollManager::on_close_poll_timeout(PollId poll_id) {
 void PollManager::on_get_poll_results(PollId poll_id, uint64 generation,
                                       Result<tl_object_ptr<telegram_api::Updates>> result) {
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) return;
+  CHECK(poll != nullptr);
   if (result.is_error()) {
     if (!(poll->is_closed && poll->is_updated_after_close) && !G()->close_flag() && !td_->auth_manager_->is_bot()) {
       auto timeout = get_polling_timeout();
@@ -1302,7 +1266,7 @@ PollId PollManager::dup_poll(PollId poll_id) {
 
 bool PollManager::has_input_media(PollId poll_id) const {
   auto poll = get_poll(poll_id);
-  if (!(poll != nullptr)) return false;
+  CHECK(poll != nullptr);
   return !poll->is_quiz || poll->correct_option_id >= 0;
 }
 
@@ -1412,7 +1376,7 @@ PollId PollManager::on_get_poll(PollId poll_id, tl_object_ptr<telegram_api::poll
     bool is_inserted = polls_.emplace(poll_id, std::move(p)).second;
     CHECK(is_inserted);
   }
-  if (!(poll != nullptr)) return PollId();
+  CHECK(poll != nullptr);
 
   bool poll_server_is_closed = false;
   if (poll_server != nullptr) {
@@ -1751,23 +1715,6 @@ void PollManager::on_binlog_events(vector<BinlogEvent> &&events) {
         LOG(FATAL) << "Unsupported log event type " << event.type_;
     }
   }
-}
-
-void PollManager::memory_cleanup() {
-  memory_cleanup(false);
-}
-
-void PollManager::memory_cleanup(bool full) {
-  polls_.clear();
-  polls_.rehash(0);
-  poll_messages_.clear();
-  poll_messages_.rehash(0);
-  poll_voters_.clear();
-  poll_voters_.rehash(0);
-  loaded_from_database_polls_.clear();
-  loaded_from_database_polls_.rehash(0);
-  being_closed_polls_.clear();
-  being_closed_polls_.rehash(0);
 }
 
 void PollManager::memory_stats(vector<string> &output) {

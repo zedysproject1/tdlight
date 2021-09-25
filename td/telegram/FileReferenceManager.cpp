@@ -61,15 +61,14 @@ fileSourceSupergroupFull supergroup_id:int32 = FileSource;               // repa
 */
 
 FileSourceId FileReferenceManager::get_current_file_source_id() const {
-  return FileSourceId(narrow_cast<int32>((int32) unique_file_source_id));
+  return FileSourceId(narrow_cast<int32>(file_sources_.size()));
 }
 
 template <class T>
 FileSourceId FileReferenceManager::add_file_source_id(T source, Slice source_str) {
-  auto source_id = ++unique_file_source_id; 
-  file_sources_[source_id] = (std::move(source));
-  VLOG(file_references) << "Create file source " << source_id << " for " << source_str;
-  return FileSourceId(narrow_cast<int32>((int32) source_id));
+  file_sources_.emplace_back(std::move(source));
+  VLOG(file_references) << "Create file source " << file_sources_.size() << " for " << source_str;
+  return get_current_file_source_id();
 }
 
 FileSourceId FileReferenceManager::create_message_file_source(FullMessageId full_message_id) {
@@ -142,20 +141,14 @@ vector<FileSourceId> FileReferenceManager::get_some_file_sources(NodeId node_id)
   return it->second.file_source_ids.get_some_elements();
 }
 
-vector<FileSourceId> FileReferenceManager::get_all_file_sources(NodeId node_id) {
-  auto it = nodes_.find(node_id);
-  if (it == nodes_.end()) {
-    return {};
-  }
-  return it->second.file_source_ids.get_all_elements();
-}
-
 vector<FullMessageId> FileReferenceManager::get_some_message_file_sources(NodeId node_id) {
   auto file_source_ids = get_some_file_sources(node_id);
 
   vector<FullMessageId> result;
   for (auto file_source_id : file_source_ids) {
-    const auto &file_source = file_sources_[file_source_id.get()];
+    auto index = static_cast<size_t>(file_source_id.get()) - 1;
+    CHECK(index < file_sources_.size());
+    const auto &file_source = file_sources_[index];
     if (file_source.get_offset() == 0) {
       result.push_back(file_source.get<FileSourceMessage>().full_message_id);
     }
@@ -258,7 +251,9 @@ void FileReferenceManager::send_query(Destination dest, FileSourceId file_source
     send_closure(file_manager, &FileManager::on_file_reference_repaired, dest.node_id, file_source_id,
                  std::move(result), std::move(new_promise));
   });
-  file_sources_[file_source_id.get()].visit(overloaded(
+  auto index = static_cast<size_t>(file_source_id.get()) - 1;
+  CHECK(index < file_sources_.size());
+  file_sources_[index].visit(overloaded(
       [&](const FileSourceMessage &source) {
         send_closure_later(G()->messages_manager(), &MessagesManager::get_message_from_server, source.full_message_id,
                            std::move(promise), "FileSourceMessage", nullptr);
@@ -379,72 +374,6 @@ void FileReferenceManager::reload_photo(PhotoSizeSource source, Promise<Unit> pr
       break;
     default:
       UNREACHABLE();
-  }
-}
-
-void FileReferenceManager::memory_cleanup() {
-  if (!G()->shared_config().get_option_boolean("experiment_enable_file_reference_cleanup", true)) {
-    return;
-  }
-  auto print_debug_messages = G()->shared_config().get_option_boolean("experiment_debug_file_reference_cleanup", false);
-
-  if (print_debug_messages) LOG(ERROR) << "memory_cleanup begin";
-
-  // Iterate all file sources and delete the unused ones
-  auto file_source_it = file_sources_.begin();
-  while (file_source_it != file_sources_.end()) {
-    if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop begin";
-    auto source_id = file_source_it->first;
-
-    // Mark immediately the file source as unused
-    auto file_source_unused = true;
-
-    // Iterate all the file nodes while the source is unused
-    auto file_nodes_it = nodes_.begin();
-    while (file_nodes_it != nodes_.end() && file_source_unused) {
-      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop begin";
-      // Get all the file sources related to the current file node
-      auto elements = get_all_file_sources(file_nodes_it->first);
-
-      // Iterate all the file sources related to the current file node
-      auto elements_it = elements.begin();
-      while (elements_it != elements.end() && file_source_unused) {
-        if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop begin";
-        if (source_id == (u_long) elements_it->get()) {
-          if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop break";
-          file_source_unused = false;
-        } else {
-          elements_it++;
-          if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop next";
-        }
-      }
-      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop >> elements loop end";
-
-      file_nodes_it++;
-      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop next";
-    }
-    if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> file_nodes loop end";
-
-    if (file_source_unused) {
-      if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop >> remove element from file_source";
-      file_source_it = file_sources_.erase(file_source_it);
-    } else {
-      file_source_it++;
-    }
-    if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop next";
-  }
-  if (print_debug_messages) LOG(ERROR) << "memory_cleanup >> file_source loop end";
-
-  if (print_debug_messages) LOG(ERROR) << "memory_cleanup end";
-}
-
-void FileReferenceManager::memory_cleanup(NodeId node_id) {
-  auto find_node = nodes_.find(node_id);
-  if (find_node != nodes_.end()) {
-    auto &node = find_node->second;
-    node.query.reset();
-    node.file_source_ids.reset_position();
-    nodes_.erase(node_id);
   }
 }
 

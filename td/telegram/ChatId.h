@@ -11,7 +11,6 @@
 #include "td/utils/common.h"
 #include "td/utils/StringBuilder.h"
 
-#include <ctime>
 #include <functional>
 #include <type_traits>
 
@@ -19,17 +18,13 @@ namespace td {
 
 class ChatId {
   int64 id = 0;
-  int64 time_ = INT64_MAX;
 
  public:
   static constexpr int64 MAX_CHAT_ID = 999999999999ll;
 
-  explicit ChatId() {
-    set_time();
-  };
+  ChatId() = default;
 
   explicit ChatId(int64 chat_id) : id(chat_id) {
-    set_time();
   }
   template <class T, typename = std::enable_if_t<std::is_convertible<T, int64>::value>>
   ChatId(T chat_id) = delete;
@@ -40,18 +35,6 @@ class ChatId {
 
   int64 get() const {
     return id;
-  }
-
-  void set_time() {
-    time_ = std::time(nullptr);
-  }
-
-  int64 get_time() const {
-    return time_;
-  }
-
-  void reset_time() {
-    time_ = INT64_MAX;
   }
 
   bool operator==(const ChatId &other) const {

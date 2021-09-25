@@ -11,7 +11,6 @@
 #include "td/utils/common.h"
 #include "td/utils/StringBuilder.h"
 
-#include <ctime>
 #include <functional>
 #include <type_traits>
 
@@ -19,7 +18,6 @@ namespace td {
 
 class ChannelId {
   int64 id = 0;
-  int64 time_ = INT64_MAX;
 
  public:
   // the last (1 << 31) - 1 identifiers will be used for secret chat dialog identifiers
@@ -38,18 +36,6 @@ class ChannelId {
 
   int64 get() const {
     return id;
-  }
-
-  void set_time() {
-    time_ = std::time(nullptr);
-  }
-
-  int64 get_time() const {
-    return time_;
-  }
-
-  void reset_time() {
-    time_ = INT64_MAX;
   }
 
   bool operator==(const ChannelId &other) const {

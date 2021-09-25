@@ -26,8 +26,6 @@ class VideosManager {
  public:
   explicit VideosManager(Td *td);
 
-  void memory_cleanup();
-
   void memory_stats(vector<string> &output);
 
   int32 get_video_duration(FileId file_id) const;
