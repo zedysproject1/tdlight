@@ -290,10 +290,10 @@ class ContactsManager final : public Actor {
   void disconnect_website(int64 authorizations_id, Promise<Unit> &&promise) const;
   void disconnect_all_websites(Promise<Unit> &&promise) const;
 
-  void add_contact(td_api::object_ptr<td_api::contact> &&contact, bool share_phone_number, Promise<Unit> &&promise);
+  void add_contact(Contact contact, bool share_phone_number, Promise<Unit> &&promise);
 
-  std::pair<vector<UserId>, vector<int32>> import_contacts(const vector<tl_object_ptr<td_api::contact>> &contacts,
-                                                           int64 &random_id, Promise<Unit> &&promise);
+  std::pair<vector<UserId>, vector<int32>> import_contacts(const vector<Contact> &contacts, int64 &random_id,
+                                                           Promise<Unit> &&promise);
 
   std::pair<int32, vector<UserId>> search_contacts(const string &query, int32 limit, Promise<Unit> &&promise);
 
@@ -304,8 +304,8 @@ class ContactsManager final : public Actor {
 
   int32 get_imported_contact_count(Promise<Unit> &&promise);
 
-  std::pair<vector<UserId>, vector<int32>> change_imported_contacts(vector<tl_object_ptr<td_api::contact>> &&contacts,
-                                                                    int64 &random_id, Promise<Unit> &&promise);
+  std::pair<vector<UserId>, vector<int32>> change_imported_contacts(vector<Contact> &contacts, int64 &random_id,
+                                                                    Promise<Unit> &&promise);
 
   void clear_imported_contacts(Promise<Unit> &&promise);
 

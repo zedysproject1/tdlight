@@ -1926,7 +1926,7 @@ class GetBlockedMessageSendersRequest final : public RequestActor<> {
 };
 
 class ImportContactsRequest final : public RequestActor<> {
-  vector<tl_object_ptr<td_api::contact>> contacts_;
+  vector<Contact> contacts_;
   int64 random_id_;
 
   std::pair<vector<UserId>, vector<int32>> imported_contacts_;
@@ -1947,7 +1947,7 @@ class ImportContactsRequest final : public RequestActor<> {
   }
 
  public:
-  ImportContactsRequest(ActorShared<Td> td, uint64 request_id, vector<tl_object_ptr<td_api::contact>> &&contacts)
+  ImportContactsRequest(ActorShared<Td> td, uint64 request_id, vector<Contact> &&contacts)
       : RequestActor(std::move(td), request_id), contacts_(std::move(contacts)), random_id_(0) {
     set_tries(3);  // load_contacts + import_contacts
   }
@@ -2004,15 +2004,14 @@ class GetImportedContactCountRequest final : public RequestActor<> {
 };
 
 class ChangeImportedContactsRequest final : public RequestActor<> {
-  vector<tl_object_ptr<td_api::contact>> contacts_;
+  vector<Contact> contacts_;
   size_t contacts_size_;
   int64 random_id_;
 
   std::pair<vector<UserId>, vector<int32>> imported_contacts_;
 
   void do_run(Promise<Unit> &&promise) final {
-    imported_contacts_ =
-        td->contacts_manager_->change_imported_contacts(std::move(contacts_), random_id_, std::move(promise));
+    imported_contacts_ = td->contacts_manager_->change_imported_contacts(contacts_, random_id_, std::move(promise));
   }
 
   void do_send_result() final {
@@ -2027,8 +2026,7 @@ class ChangeImportedContactsRequest final : public RequestActor<> {
   }
 
  public:
-  ChangeImportedContactsRequest(ActorShared<Td> td, uint64 request_id,
-                                vector<tl_object_ptr<td_api::contact>> &&contacts)
+  ChangeImportedContactsRequest(ActorShared<Td> td, uint64 request_id, vector<Contact> &&contacts)
       : RequestActor(std::move(td), request_id)
       , contacts_(std::move(contacts))
       , contacts_size_(contacts_.size())
@@ -6686,27 +6684,26 @@ void Td::on_request(uint64 id, const td_api::getBlockedMessageSenders &request) 
 
 void Td::on_request(uint64 id, td_api::addContact &request) {
   CHECK_IS_USER();
-  if (request.contact_ == nullptr) {
-    return send_error_raw(id, 400, "Contact must be non-empty");
+  auto r_contact = get_contact(std::move(request.contact_));
+  if (r_contact.is_error()) {
+    return send_closure(actor_id(this), &Td::send_error, id, r_contact.move_as_error());
   }
-  CLEAN_INPUT_STRING(request.contact_->phone_number_);
-  CLEAN_INPUT_STRING(request.contact_->first_name_);
-  CLEAN_INPUT_STRING(request.contact_->last_name_);
   CREATE_OK_REQUEST_PROMISE();
-  contacts_manager_->add_contact(std::move(request.contact_), request.share_phone_number_, std::move(promise));
+  contacts_manager_->add_contact(r_contact.move_as_ok(), request.share_phone_number_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::importContacts &request) {
   CHECK_IS_USER();
+  vector<Contact> contacts;
+  contacts.reserve(request.contacts_.size());
   for (auto &contact : request.contacts_) {
-    if (contact == nullptr) {
-      return send_error_raw(id, 400, "Contact must be non-empty");
+    auto r_contact = get_contact(std::move(contact));
+    if (r_contact.is_error()) {
+      return send_closure(actor_id(this), &Td::send_error, id, r_contact.move_as_error());
     }
-    CLEAN_INPUT_STRING(contact->phone_number_);
-    CLEAN_INPUT_STRING(contact->first_name_);
-    CLEAN_INPUT_STRING(contact->last_name_);
+    contacts.push_back(r_contact.move_as_ok());
   }
-  CREATE_REQUEST(ImportContactsRequest, std::move(request.contacts_));
+  CREATE_REQUEST(ImportContactsRequest, std::move(contacts));
 }
 
 void Td::on_request(uint64 id, const td_api::getContacts &request) {
@@ -6732,15 +6729,16 @@ void Td::on_request(uint64 id, const td_api::getImportedContactCount &request) {
 
 void Td::on_request(uint64 id, td_api::changeImportedContacts &request) {
   CHECK_IS_USER();
+  vector<Contact> contacts;
+  contacts.reserve(request.contacts_.size());
   for (auto &contact : request.contacts_) {
-    if (contact == nullptr) {
-      return send_error_raw(id, 400, "Contact must be non-empty");
+    auto r_contact = get_contact(std::move(contact));
+    if (r_contact.is_error()) {
+      return send_closure(actor_id(this), &Td::send_error, id, r_contact.move_as_error());
     }
-    CLEAN_INPUT_STRING(contact->phone_number_);
-    CLEAN_INPUT_STRING(contact->first_name_);
-    CLEAN_INPUT_STRING(contact->last_name_);
+    contacts.push_back(r_contact.move_as_ok());
   }
-  CREATE_REQUEST(ChangeImportedContactsRequest, std::move(request.contacts_));
+  CREATE_REQUEST(ChangeImportedContactsRequest, std::move(contacts));
 }
 
 void Td::on_request(uint64 id, const td_api::clearImportedContacts &request) {
