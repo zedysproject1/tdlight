@@ -214,6 +214,9 @@ class MessagesManager final : public Actor {
                                             vector<tl_object_ptr<telegram_api::Message>> &&messages);
   void on_failed_dialog_messages_search(DialogId dialog_id, int64 random_id);
 
+  void on_get_dialog_message_count(DialogId dialog_id, MessageSearchFilter filter, int32 total_count,
+                                   Promise<int32> &&promise);
+
   void on_get_messages_search_result(const string &query, int32 offset_date, DialogId offset_dialog_id,
                                      MessageId offset_message_id, int32 limit, MessageSearchFilter filter,
                                      int32 min_date, int32 max_date, int64 random_id, int32 total_count,
@@ -702,7 +705,8 @@ class MessagesManager final : public Actor {
     int32 total_count = 0;
   };
 
-  td_api::object_ptr<td_api::foundMessages> get_found_messages_object(const FoundMessages &found_messages);
+  td_api::object_ptr<td_api::foundMessages> get_found_messages_object(const FoundMessages &found_messages,
+                                                                      const char *source);
 
   FoundMessages offline_search_messages(DialogId dialog_id, const string &query, const string &offset, int32 limit,
                                         MessageSearchFilter filter, int64 &random_id, Promise<> &&promise);
@@ -728,8 +732,8 @@ class MessagesManager final : public Actor {
 
   void on_get_dialog_message_by_date_fail(int64 random_id);
 
-  int32 get_dialog_message_count(DialogId dialog_id, MessageSearchFilter filter, bool return_local, int64 &random_id,
-                                 Promise<Unit> &&promise);
+  void get_dialog_message_count(DialogId dialog_id, MessageSearchFilter filter, bool return_local,
+                                Promise<int32> &&promise);
 
   vector<MessageId> get_dialog_scheduled_messages(DialogId dialog_id, bool force, bool ignore_result,
                                                   Promise<Unit> &&promise);
@@ -739,13 +743,14 @@ class MessagesManager final : public Actor {
 
   tl_object_ptr<td_api::message> get_dialog_message_by_date_object(int64 random_id);
 
-  tl_object_ptr<td_api::message> get_message_object(FullMessageId full_message_id);
+  tl_object_ptr<td_api::message> get_message_object(FullMessageId full_message_id, const char *source);
 
   tl_object_ptr<td_api::messages> get_messages_object(int32 total_count, DialogId dialog_id,
-                                                      const vector<MessageId> &message_ids, bool skip_not_found);
+                                                      const vector<MessageId> &message_ids, bool skip_not_found,
+                                                      const char *source);
 
   tl_object_ptr<td_api::messages> get_messages_object(int32 total_count, const vector<FullMessageId> &full_message_ids,
-                                                      bool skip_not_found);
+                                                      bool skip_not_found, const char *source);
 
   void process_pts_update(tl_object_ptr<telegram_api::Update> &&update);
 
@@ -2350,7 +2355,7 @@ class MessagesManager final : public Actor {
 
   static tl_object_ptr<td_api::MessageSchedulingState> get_message_scheduling_state_object(int32 send_date);
 
-  tl_object_ptr<td_api::message> get_message_object(DialogId dialog_id, const Message *m,
+  tl_object_ptr<td_api::message> get_message_object(DialogId dialog_id, const Message *m, const char *source,
                                                     bool for_event_log = false) const;
 
   static tl_object_ptr<td_api::messages> get_messages_object(int32 total_count,
