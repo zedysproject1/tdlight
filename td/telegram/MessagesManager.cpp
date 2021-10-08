@@ -6264,8 +6264,6 @@ void MessagesManager::memory_stats(vector<string> &output) {
   output.push_back(",");
   output.push_back("\"found_dialog_messages_dialog_id_\":"); output.push_back(std::to_string(this->found_dialog_messages_dialog_id_.size()));
   output.push_back(",");
-  output.push_back("\"found_dialog_recent_location_messages_\":"); output.push_back(std::to_string(this->found_dialog_recent_location_messages_.size()));
-  output.push_back(",");
   output.push_back("\"found_fts_messages_\":"); output.push_back(std::to_string(this->found_fts_messages_.size()));
   output.push_back(",");
   output.push_back("\"postponed_channel_updates_\":"); output.push_back(std::to_string(this->postponed_channel_updates_.size()));
