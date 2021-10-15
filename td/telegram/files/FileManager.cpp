@@ -1746,6 +1746,8 @@ void FileManager::change_files_source(FileSourceId file_source_id, const vector<
 
 void FileManager::on_file_reference_repaired(FileId file_id, FileSourceId file_source_id, Result<Unit> &&result,
                                              Promise<Unit> &&promise) {
+  TRY_STATUS_PROMISE(promise, G()->close_status());
+
   auto file_view = get_file_view(file_id);
   CHECK(!file_view.empty());
   if (result.is_ok() &&
@@ -2030,9 +2032,7 @@ void FileManager::get_content(FileId file_id, Promise<BufferSlice> promise) {
 
 void FileManager::read_file_part(FileId file_id, int32 offset, int32 count, int left_tries,
                                  Promise<td_api::object_ptr<td_api::filePart>> promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
+  TRY_STATUS_PROMISE(promise, G()->close_status());
 
   if (!file_id.is_valid()) {
     return promise.set_error(Status::Error(400, "File identifier is invalid"));
@@ -2224,8 +2224,8 @@ void FileManager::run_download(FileNodePtr node, bool force_update_priority) {
 
   if (priority == 0) {
     node->set_download_priority(priority);
-    LOG(INFO) << "Cancel downloading of file " << node->main_file_id_;
     if (old_priority != 0) {
+      LOG(INFO) << "Cancel downloading of file " << node->main_file_id_;
       do_cancel_download(node);
     }
     return;
@@ -2640,7 +2640,7 @@ void FileManager::run_generate(FileNodePtr node) {
   }
   FileView file_view(node);
   if (!file_view.can_generate()) {
-    LOG(INFO) << "Skip run_generate, because file " << node->main_file_id_ << " can't be generated";
+    // LOG(INFO) << "Skip run_generate, because file " << node->main_file_id_ << " can't be generated";
     return;
   }
   if (file_view.has_local_location()) {
@@ -2732,8 +2732,6 @@ void FileManager::run_upload(FileNodePtr node, std::vector<int> bad_parts) {
     if (old_priority != 0) {
       LOG(INFO) << "Cancel file " << file_id << " uploading";
       do_cancel_upload(node);
-    } else {
-      LOG(INFO) << "File " << file_id << " upload priority is still 0";
     }
     return;
   }
@@ -3872,7 +3870,7 @@ void FileManager::hangup() {
   while (!queries_container_.empty()) {
     auto ids = queries_container_.ids();
     for (auto id : ids) {
-      on_error(id, Status::Error(500, "Request aborted"));
+      on_error(id, Global::request_aborted_error());
     }
   }
   is_closed_ = true;

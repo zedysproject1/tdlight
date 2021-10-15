@@ -227,28 +227,17 @@ void FileReferenceManager::send_query(Destination dest, FileSourceId file_source
   auto &node = nodes_[dest.node_id];
   node.query->active_queries++;
 
-  auto promise = PromiseCreator::lambda([dest, file_source_id, file_reference_manager = G()->file_reference_manager(),
-                                         file_manager = G()->file_manager()](Result<Unit> result) {
-    if (G()->close_flag()) {
-      VLOG(file_references) << "Ignore file reference repair from " << file_source_id << " during closing";
-      return;
-    }
-
-    auto new_promise = PromiseCreator::lambda([dest, file_source_id, file_reference_manager](Result<Unit> result) {
-      if (G()->close_flag()) {
-        VLOG(file_references) << "Ignore file reference repair from " << file_source_id << " during closing";
-        return;
-      }
-
+  auto promise = PromiseCreator::lambda([dest, file_source_id, actor_id = actor_id(this),
+                                         file_manager_actor_id = G()->file_manager()](Result<Unit> result) {
+    auto new_promise = PromiseCreator::lambda([dest, file_source_id, actor_id](Result<Unit> result) {
       Status status;
       if (result.is_error()) {
         status = result.move_as_error();
       }
-      send_closure(file_reference_manager, &FileReferenceManager::on_query_result, dest, file_source_id,
-                   std::move(status), 0);
+      send_closure(actor_id, &FileReferenceManager::on_query_result, dest, file_source_id, std::move(status), 0);
     });
 
-    send_closure(file_manager, &FileManager::on_file_reference_repaired, dest.node_id, file_source_id,
+    send_closure(file_manager_actor_id, &FileManager::on_file_reference_repaired, dest.node_id, file_source_id,
                  std::move(result), std::move(new_promise));
   });
   auto index = static_cast<size_t>(file_source_id.get()) - 1;
@@ -272,7 +261,13 @@ void FileReferenceManager::send_query(Destination dest, FileSourceId file_source
       [&](const FileSourceWallpapers &source) { promise.set_error(Status::Error("Can't repair old wallpapers")); },
       [&](const FileSourceWebPage &source) {
         send_closure_later(G()->web_pages_manager(), &WebPagesManager::reload_web_page_by_url, source.url,
-                           std::move(promise));
+                           PromiseCreator::lambda([promise = std::move(promise)](Result<WebPageId> &&result) mutable {
+                             if (result.is_error()) {
+                               promise.set_error(result.move_as_error());
+                             } else {
+                               promise.set_value(Unit());
+                             }
+                           }));
       },
       [&](const FileSourceSavedAnimations &source) {
         send_closure_later(G()->animations_manager(), &AnimationsManager::repair_saved_animations, std::move(promise));
@@ -300,6 +295,11 @@ void FileReferenceManager::send_query(Destination dest, FileSourceId file_source
 
 FileReferenceManager::Destination FileReferenceManager::on_query_result(Destination dest, FileSourceId file_source_id,
                                                                         Status status, int32 sub) {
+  if (G()->close_flag()) {
+    VLOG(file_references) << "Ignore file reference repair from " << file_source_id << " during closing";
+    return dest;
+  }
+
   VLOG(file_references) << "Receive result of file reference repair query for file " << dest.node_id
                         << " with generation " << dest.generation << " from " << file_source_id << ": " << status << " "
                         << sub;

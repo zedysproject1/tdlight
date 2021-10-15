@@ -1325,9 +1325,7 @@ void GroupCallManager::create_voice_chat(DialogId dialog_id, string title, int32
 
 void GroupCallManager::on_voice_chat_created(DialogId dialog_id, InputGroupCallId input_group_call_id,
                                              Promise<GroupCallId> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   if (!input_group_call_id.is_valid()) {
     return promise.set_error(Status::Error(500, "Receive invalid group call identifier"));
   }
@@ -1404,7 +1402,7 @@ void GroupCallManager::finish_get_group_call(InputGroupCallId input_group_call_i
   load_group_call_queries_.erase(it);
 
   if (G()->close_flag()) {
-    result = Status::Error(500, "Request aborted");
+    result = Global::request_aborted_error();
   }
 
   if (result.is_ok()) {
@@ -2351,10 +2349,7 @@ void GroupCallManager::get_group_call_stream_segment(GroupCallId group_call_id, 
                                                      int32 channel_id,
                                                      td_api::object_ptr<td_api::GroupCallVideoQuality> quality,
                                                      Promise<string> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -2441,10 +2436,7 @@ void GroupCallManager::finish_get_group_call_stream_segment(InputGroupCallId inp
 }
 
 void GroupCallManager::start_scheduled_group_call(GroupCallId group_call_id, Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -2852,10 +2844,7 @@ void GroupCallManager::process_group_call_after_join_requests(InputGroupCallId i
 }
 
 void GroupCallManager::set_group_call_title(GroupCallId group_call_id, string title, Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -2929,10 +2918,7 @@ void GroupCallManager::on_edit_group_call_title(InputGroupCallId input_group_cal
 
 void GroupCallManager::toggle_group_call_is_my_video_paused(GroupCallId group_call_id, bool is_my_video_paused,
                                                             Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3017,10 +3003,7 @@ void GroupCallManager::on_toggle_group_call_is_my_video_paused(InputGroupCallId 
 
 void GroupCallManager::toggle_group_call_is_my_video_enabled(GroupCallId group_call_id, bool is_my_video_enabled,
                                                              Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3108,10 +3091,7 @@ void GroupCallManager::on_toggle_group_call_is_my_video_enabled(InputGroupCallId
 void GroupCallManager::toggle_group_call_is_my_presentation_paused(GroupCallId group_call_id,
                                                                    bool is_my_presentation_paused,
                                                                    Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3199,10 +3179,7 @@ void GroupCallManager::on_toggle_group_call_is_my_presentation_paused(InputGroup
 
 void GroupCallManager::toggle_group_call_start_subscribed(GroupCallId group_call_id, bool start_subscribed,
                                                           Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3286,10 +3263,7 @@ void GroupCallManager::on_toggle_group_call_start_subscription(InputGroupCallId 
 
 void GroupCallManager::toggle_group_call_mute_new_participants(GroupCallId group_call_id, bool mute_new_participants,
                                                                Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3376,10 +3350,7 @@ void GroupCallManager::on_toggle_group_call_mute_new_participants(InputGroupCall
 }
 
 void GroupCallManager::revoke_group_call_invite_link(GroupCallId group_call_id, Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3432,10 +3403,7 @@ void GroupCallManager::invite_group_call_participants(GroupCallId group_call_id,
 
 void GroupCallManager::get_group_call_invite_link(GroupCallId group_call_id, bool can_self_unmute,
                                                   Promise<string> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3467,10 +3435,7 @@ void GroupCallManager::get_group_call_invite_link(GroupCallId group_call_id, boo
 void GroupCallManager::toggle_group_call_recording(GroupCallId group_call_id, bool is_enabled, string title,
                                                    bool record_video, bool use_portrait_orientation,
                                                    Promise<Unit> &&promise) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3560,10 +3525,7 @@ void GroupCallManager::on_toggle_group_call_recording(InputGroupCallId input_gro
 
 void GroupCallManager::set_group_call_participant_is_speaking(GroupCallId group_call_id, int32 audio_source,
                                                               bool is_speaking, Promise<Unit> &&promise, int32 date) {
-  if (G()->close_flag()) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
-  }
-
+  TRY_STATUS_PROMISE(promise, G()->close_status());
   TRY_RESULT_PROMISE(promise, input_group_call_id, get_input_group_call_id(group_call_id));
 
   auto *group_call = get_group_call(input_group_call_id);
@@ -3609,9 +3571,6 @@ void GroupCallManager::set_group_call_participant_is_speaking(GroupCallId group_
     if (!is_recursive) {
       auto query_promise = PromiseCreator::lambda([actor_id = actor_id(this), group_call_id, audio_source, is_speaking,
                                                    promise = std::move(promise), date](Result<Unit> &&result) mutable {
-        if (G()->close_flag()) {
-          return promise.set_error(Status::Error(500, "Request aborted"));
-        }
         if (result.is_error()) {
           promise.set_value(Unit());
         } else {

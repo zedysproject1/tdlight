@@ -803,8 +803,8 @@ foundMessages total_count:int32 messages:vector<message> next_offset:string = Fo
 
 
 //@description Describes a sponsored message @id Unique sponsored message identifier @sponsor_chat_id Chat identifier
-//@start_parameter Parameter for the bot start message if the sponsored chat is a chat with a bot @content Content of the message
-sponsoredMessage id:int32 sponsor_chat_id:int53 start_parameter:string content:MessageContent = SponsoredMessage;
+//@link An internal link to be opened when the sponsored message is clicked; may be null. If null, the sponsor chat needs to be opened instead @content Content of the message
+sponsoredMessage id:int32 sponsor_chat_id:int53 link:InternalLinkType content:MessageContent = SponsoredMessage;
 
 //@description Contains a list of sponsored messages @messages List of sponsored messages
 sponsoredMessages messages:vector<sponsoredMessage> = SponsoredMessages;
@@ -1479,11 +1479,11 @@ date day:int32 month:int32 year:int32 = Date;
 //@birthdate Birthdate of the user @gender Gender of the user, "male" or "female" @country_code A two-letter ISO 3166-1 alpha-2 country code of the user's country @residence_country_code A two-letter ISO 3166-1 alpha-2 country code of the user's residence country
 personalDetails first_name:string middle_name:string last_name:string native_first_name:string native_middle_name:string native_last_name:string birthdate:date gender:string country_code:string residence_country_code:string = PersonalDetails;
 
-//@description An identity document @number Document number; 1-24 characters @expiry_date Document expiry date; may be null @front_side Front side of the document
+//@description An identity document @number Document number; 1-24 characters @expiry_date Document expiry date; may be null if not applicable @front_side Front side of the document
 //@reverse_side Reverse side of the document; only for driver license and identity card; may be null @selfie Selfie with the document; may be null @translation List of files containing a certified English translation of the document
 identityDocument number:string expiry_date:date front_side:datedFile reverse_side:datedFile selfie:datedFile translation:vector<datedFile> = IdentityDocument;
 
-//@description An identity document to be saved to Telegram Passport @number Document number; 1-24 characters @expiry_date Document expiry date, if available @front_side Front side of the document
+//@description An identity document to be saved to Telegram Passport @number Document number; 1-24 characters @expiry_date Document expiry date; pass null if not applicable @front_side Front side of the document
 //@reverse_side Reverse side of the document; only for driver license and identity card; pass null otherwise @selfie Selfie with the document; pass null if unavailable @translation List of files containing a certified English translation of the document
 inputIdentityDocument number:string expiry_date:date front_side:InputFile reverse_side:InputFile selfie:InputFile translation:vector<InputFile> = InputIdentityDocument;
 
