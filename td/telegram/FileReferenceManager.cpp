@@ -16,6 +16,7 @@
 #include "td/telegram/StickersManager.h"
 #include "td/telegram/ConfigShared.h"
 #include "td/telegram/Td.h"
+#include "td/telegram/WebPageId.h"
 #include "td/telegram/WebPagesManager.h"
 
 #include "td/utils/algorithm.h"
