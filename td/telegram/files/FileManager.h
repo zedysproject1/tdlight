@@ -323,7 +323,8 @@ class FileView {
       return false;
     }
     auto type = remote_location().get_source().get_type();
-    return type != PhotoSizeSource::Type::Legacy && type != PhotoSizeSource::Type::FullLegacy;
+    return type != PhotoSizeSource::Type::Legacy && type != PhotoSizeSource::Type::FullLegacy &&
+           type != PhotoSizeSource::Type::Thumbnail;
   }
 
   string get_persistent_file_id() const;
@@ -560,10 +561,10 @@ class FileManager final : public FileLoadManager::Callback {
     mutable FileLocationSource file_location_source_;
     FileId file_id_;
     bool operator==(const RemoteInfo &other) const {
-      return this->remote_ == other.remote_;
+      return remote_ == other.remote_;
     }
     bool operator<(const RemoteInfo &other) const {
-      return this->remote_ < other.remote_;
+      return remote_ < other.remote_;
     }
   };
   Enumerator<RemoteInfo> remote_location_info_;
