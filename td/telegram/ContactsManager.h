@@ -204,6 +204,8 @@ class ContactsManager final : public Actor {
   void on_update_channel_participant(ChannelId channel_id, UserId user_id, int32 date, DialogInviteLink invite_link,
                                      tl_object_ptr<telegram_api::ChannelParticipant> old_participant,
                                      tl_object_ptr<telegram_api::ChannelParticipant> new_participant);
+  void on_update_chat_invite_requester(DialogId dialog_id, UserId user_id, string about, int32 date,
+                                       DialogInviteLink invite_link);
 
   int32 on_update_peer_located(vector<tl_object_ptr<telegram_api::PeerLocated>> &&peers, bool from_update);
 
@@ -319,6 +321,8 @@ class ContactsManager final : public Actor {
 
   void set_location_visibility();
 
+  void get_is_location_visible(Promise<Unit> &&promise);
+
   FileId get_profile_photo_file_id(int64 photo_id) const;
 
   void set_profile_photo(const td_api::object_ptr<td_api::InputChatPhoto> &input_photo, Promise<Unit> &&promise);
@@ -384,10 +388,12 @@ class ContactsManager final : public Actor {
 
   void transfer_dialog_ownership(DialogId dialog_id, UserId user_id, const string &password, Promise<Unit> &&promise);
 
-  void export_dialog_invite_link(DialogId dialog_id, int32 expire_date, int32 usage_limit, bool is_permanent,
+  void export_dialog_invite_link(DialogId dialog_id, string title, int32 expire_date, int32 usage_limit,
+                                 bool creates_join_request, bool is_permanent,
                                  Promise<td_api::object_ptr<td_api::chatInviteLink>> &&promise);
 
-  void edit_dialog_invite_link(DialogId dialog_id, const string &link, int32 expire_date, int32 usage_limit,
+  void edit_dialog_invite_link(DialogId dialog_id, const string &link, string title, int32 expire_date,
+                               int32 usage_limit, bool creates_join_request,
                                Promise<td_api::object_ptr<td_api::chatInviteLink>> &&promise);
 
   void get_dialog_invite_link(DialogId dialog_id, const string &invite_link,
@@ -403,6 +409,12 @@ class ContactsManager final : public Actor {
   void get_dialog_invite_link_users(DialogId dialog_id, const string &invite_link,
                                     td_api::object_ptr<td_api::chatInviteLinkMember> offset_member, int32 limit,
                                     Promise<td_api::object_ptr<td_api::chatInviteLinkMembers>> &&promise);
+
+  void get_dialog_join_requests(DialogId dialog_id, const string &invite_link, const string &query,
+                                td_api::object_ptr<td_api::chatJoinRequest> offset_request, int32 limit,
+                                Promise<td_api::object_ptr<td_api::chatJoinRequests>> &&promise);
+
+  void process_dialog_join_requests(DialogId dialog_id, UserId user_id, bool is_approved, Promise<Unit> &&promise);
 
   void revoke_dialog_invite_link(DialogId dialog_id, const string &link,
                                  Promise<td_api::object_ptr<td_api::chatInviteLinks>> &&promise);
@@ -568,7 +580,7 @@ class ContactsManager final : public Actor {
 
   tl_object_ptr<td_api::chatMember> get_chat_member_object(const DialogParticipant &dialog_participant) const;
 
-  tl_object_ptr<td_api::chatInviteLinkInfo> get_chat_invite_link_info_object(const string &invite_link) const;
+  tl_object_ptr<td_api::chatInviteLinkInfo> get_chat_invite_link_info_object(const string &invite_link);
 
   UserId get_support_user(Promise<Unit> &&promise);
 
@@ -728,6 +740,7 @@ class ContactsManager final : public Actor {
     bool is_title_changed = true;
     bool is_photo_changed = true;
     bool is_default_permissions_changed = true;
+    bool is_status_changed = true;
     bool is_is_active_changed = true;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
@@ -929,8 +942,10 @@ class ContactsManager final : public Actor {
     // unknown dialog
     string title;
     Photo photo;
+    string description;
     int32 participant_count = 0;
     vector<UserId> participant_user_ids;
+    bool creates_join_request = false;
     bool is_chat = false;
     bool is_channel = false;
     bool is_public = false;
@@ -973,6 +988,7 @@ class ContactsManager final : public Actor {
   static constexpr size_t MAX_NAME_LENGTH = 64;               // server side limit for first/last name
   static constexpr size_t MAX_DESCRIPTION_LENGTH = 255;       // server side limit for chat/channel description
   static constexpr size_t MAX_BIO_LENGTH = 70;                // server side limit
+  static constexpr size_t MAX_INVITE_LINK_TITLE_LENGTH = 32;  // server side limit
   static constexpr int32 MAX_GET_CHANNEL_PARTICIPANTS = 200;  // server side limit
 
   static constexpr int32 CHANNEL_PARTICIPANT_CACHE_TIME = 1800;  // some reasonable limit
@@ -1028,6 +1044,7 @@ class ContactsManager final : public Actor {
   static constexpr int32 CHAT_FULL_FLAG_HAS_FOLDER_ID = 1 << 11;
   static constexpr int32 CHAT_FULL_FLAG_HAS_ACTIVE_GROUP_CALL = 1 << 12;
   static constexpr int32 CHAT_FULL_FLAG_HAS_MESSAGE_TTL = 1 << 14;
+  static constexpr int32 CHAT_FULL_FLAG_HAS_PENDING_REQUEST_COUNT = 1 << 17;
 
   static constexpr int32 CHANNEL_FLAG_USER_IS_CREATOR = 1 << 0;
   static constexpr int32 CHANNEL_FLAG_USER_HAS_LEFT = 1 << 2;
@@ -1078,6 +1095,7 @@ class ContactsManager final : public Actor {
   static constexpr int32 CHANNEL_FULL_FLAG_IS_BLOCKED = 1 << 22;
   static constexpr int32 CHANNEL_FULL_FLAG_HAS_EXPORTED_INVITE = 1 << 23;
   static constexpr int32 CHANNEL_FULL_FLAG_HAS_MESSAGE_TTL = 1 << 24;
+  static constexpr int32 CHANNEL_FULL_FLAG_HAS_PENDING_REQUEST_COUNT = 1 << 28;
 
   static constexpr int32 CHAT_INVITE_FLAG_IS_CHANNEL = 1 << 0;
   static constexpr int32 CHAT_INVITE_FLAG_IS_BROADCAST = 1 << 1;
@@ -1383,11 +1401,14 @@ class ContactsManager final : public Actor {
 
   void set_location_visibility_expire_date(int32 expire_date);
 
+  void on_get_is_location_visible(Result<tl_object_ptr<telegram_api::Updates>> &&result, Promise<Unit> &&promise);
+
   void update_is_location_visible();
 
   static bool is_channel_public(const Channel *c);
 
-  void export_dialog_invite_link_impl(DialogId dialog_id, int32 expire_date, int32 usage_limit, bool is_permanent,
+  void export_dialog_invite_link_impl(DialogId dialog_id, string title, int32 expire_date, int32 usage_limit,
+                                      bool creates_join_request, bool is_permanent,
                                       Promise<td_api::object_ptr<td_api::chatInviteLink>> &&promise);
 
   void remove_dialog_access_by_invite_link(DialogId dialog_id);

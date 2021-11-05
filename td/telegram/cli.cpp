@@ -2098,6 +2098,13 @@ class CliClient final : public Actor {
       string limit;
       get_args(args, chat_id, limit);
       send_request(td_api::make_object<td_api::searchChatRecentLocationMessages>(as_chat_id(chat_id), as_limit(limit)));
+    } else if (op == "gcmca") {
+      string chat_id;
+      string filter;
+      string from_message_id;
+      get_args(args, chat_id, filter, from_message_id);
+      send_request(td_api::make_object<td_api::getChatMessageCalendar>(
+          as_chat_id(chat_id), as_search_messages_filter(filter), as_message_id(from_message_id)));
     } else if (op == "SearchAudio" || op == "SearchDocument" || op == "SearchPhoto" || op == "SearchChatPhoto") {
       string chat_id;
       string offset_message_id;
@@ -2106,6 +2113,19 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::searchChatMessages>(as_chat_id(chat_id), query.query, nullptr,
                                                                    as_message_id(offset_message_id), 0, query.limit,
                                                                    as_search_messages_filter(op), 0));
+    } else if (op == "gcmbd") {
+      string chat_id;
+      int32 date;
+      get_args(args, chat_id, date);
+      send_request(td_api::make_object<td_api::getChatMessageByDate>(as_chat_id(chat_id), date));
+    } else if (op == "gcsmp") {
+      string chat_id;
+      string filter;
+      string from_message_id;
+      string limit;
+      get_args(args, chat_id, filter, from_message_id, limit);
+      send_request(td_api::make_object<td_api::getChatSparseMessagePositions>(
+          as_chat_id(chat_id), as_search_messages_filter(filter), as_message_id(from_message_id), as_limit(limit)));
     } else if (op == "gcmc") {
       string chat_id;
       string filter;
@@ -2517,6 +2537,8 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::searchEmojis>(args, true, vector<string>()));
     } else if (op == "seru") {
       send_request(td_api::make_object<td_api::searchEmojis>(args, false, vector<string>{"ru_RU"}));
+    } else if (op == "gae") {
+      send_request(td_api::make_object<td_api::getAnimatedEmoji>(args));
     } else if (op == "gesu") {
       send_request(td_api::make_object<td_api::getEmojiSuggestionsUrl>(args));
     } else {
@@ -2643,11 +2665,6 @@ class CliClient final : public Actor {
                                                                         for_album));
     } else if (op == "gmli") {
       send_request(td_api::make_object<td_api::getMessageLinkInfo>(args));
-    } else if (op == "gcmbd") {
-      string chat_id;
-      int32 date;
-      get_args(args, chat_id, date);
-      send_request(td_api::make_object<td_api::getChatMessageByDate>(as_chat_id(chat_id), date));
     } else if (op == "gf" || op == "GetFile") {
       send_request(td_api::make_object<td_api::getFile>(as_file_id(args)));
     } else if (op == "gfdps") {
@@ -2783,19 +2800,19 @@ class CliClient final : public Actor {
     } else if (op == "scdi" || op == "SendCallDebugInformation") {
       send_request(td_api::make_object<td_api::sendCallDebugInformation>(as_call_id(args), "{}"));
     } else if (op == "gvcap") {
-      send_request(td_api::make_object<td_api::getVoiceChatAvailableParticipants>(as_chat_id(args)));
+      send_request(td_api::make_object<td_api::getVideoChatAvailableParticipants>(as_chat_id(args)));
     } else if (op == "svcdp") {
       string chat_id;
       string participant_id;
       get_args(args, chat_id, participant_id);
-      send_request(td_api::make_object<td_api::setVoiceChatDefaultParticipant>(as_chat_id(chat_id),
+      send_request(td_api::make_object<td_api::setVideoChatDefaultParticipant>(as_chat_id(chat_id),
                                                                                as_message_sender(participant_id)));
     } else if (op == "cvc") {
       string chat_id;
       string title;
       int32 start_date;
       get_args(args, chat_id, title, start_date);
-      send_request(td_api::make_object<td_api::createVoiceChat>(as_chat_id(chat_id), title, start_date));
+      send_request(td_api::make_object<td_api::createVideoChat>(as_chat_id(chat_id), title, start_date));
     } else if (op == "ggc") {
       send_request(td_api::make_object<td_api::getGroupCall>(as_group_call_id(args)));
     } else if (op == "ggcss") {
@@ -2940,18 +2957,23 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::replacePrimaryChatInviteLink>(as_chat_id(chat_id)));
     } else if (op == "ccilt") {
       string chat_id;
+      string name;
       int32 expire_date;
       int32 member_limit;
-      get_args(args, chat_id, expire_date, member_limit);
-      send_request(td_api::make_object<td_api::createChatInviteLink>(as_chat_id(chat_id), expire_date, member_limit));
+      bool creates_join_request;
+      get_args(args, chat_id, name, expire_date, member_limit, creates_join_request);
+      send_request(td_api::make_object<td_api::createChatInviteLink>(as_chat_id(chat_id), name, expire_date,
+                                                                     member_limit, creates_join_request));
     } else if (op == "ecil") {
       string chat_id;
       string invite_link;
+      string name;
       int32 expire_date;
       int32 member_limit;
-      get_args(args, chat_id, invite_link, expire_date, member_limit);
-      send_request(
-          td_api::make_object<td_api::editChatInviteLink>(as_chat_id(chat_id), invite_link, expire_date, member_limit));
+      bool creates_join_request;
+      get_args(args, chat_id, invite_link, name, expire_date, member_limit, creates_join_request);
+      send_request(td_api::make_object<td_api::editChatInviteLink>(as_chat_id(chat_id), invite_link, name, expire_date,
+                                                                   member_limit, creates_join_request));
     } else if (op == "rcil") {
       string chat_id;
       string invite_link;
@@ -2984,7 +3006,30 @@ class CliClient final : public Actor {
       get_args(args, chat_id, invite_link, offset_user_id, offset_date, limit);
       send_request(td_api::make_object<td_api::getChatInviteLinkMembers>(
           as_chat_id(chat_id), invite_link,
-          td_api::make_object<td_api::chatInviteLinkMember>(as_user_id(offset_user_id), offset_date), as_limit(limit)));
+          td_api::make_object<td_api::chatInviteLinkMember>(as_user_id(offset_user_id), offset_date, 0),
+          as_limit(limit)));
+    } else if (op == "gcjr") {
+      string chat_id;
+      string invite_link;
+      string query;
+      string offset_user_id;
+      int32 offset_date;
+      string limit;
+      get_args(args, chat_id, invite_link, query, offset_user_id, offset_date, limit);
+      send_request(td_api::make_object<td_api::getChatJoinRequests>(
+          as_chat_id(chat_id), invite_link, query,
+          td_api::make_object<td_api::chatJoinRequest>(as_user_id(offset_user_id), offset_date, string()),
+          as_limit(limit)));
+    } else if (op == "acjr") {
+      string chat_id;
+      string user_id;
+      get_args(args, chat_id, user_id);
+      send_request(td_api::make_object<td_api::approveChatJoinRequest>(as_chat_id(chat_id), as_user_id(user_id)));
+    } else if (op == "dcjr") {
+      string chat_id;
+      string user_id;
+      get_args(args, chat_id, user_id);
+      send_request(td_api::make_object<td_api::declineChatJoinRequest>(as_chat_id(chat_id), as_user_id(user_id)));
     } else if (op == "drcil") {
       string chat_id;
       string invite_link;
@@ -3329,7 +3374,8 @@ class CliClient final : public Actor {
       string bot_id;
       string query;
       get_args(args, bot_id, query);
-      send_request(td_api::make_object<td_api::getInlineQueryResults>(as_user_id(bot_id), 0, nullptr, query, ""));
+      send_request(td_api::make_object<td_api::getInlineQueryResults>(as_user_id(bot_id), as_chat_id(bot_id), nullptr,
+                                                                      query, ""));
     } else if (op == "giqro") {
       string bot_id;
       string offset;
@@ -3680,6 +3726,14 @@ class CliClient final : public Actor {
       get_args(args, chat_id, remove_from_the_chat_list, revoke);
       send_request(
           td_api::make_object<td_api::deleteChatHistory>(as_chat_id(chat_id), remove_from_the_chat_list, revoke));
+    } else if (op == "dcmbd") {
+      string chat_id;
+      int32 min_date;
+      int32 max_date;
+      bool revoke;
+      get_args(args, chat_id, min_date, max_date, revoke);
+      send_request(
+          td_api::make_object<td_api::deleteChatMessagesByDate>(as_chat_id(chat_id), min_date, max_date, revoke));
     } else if (op == "dmfu") {
       string chat_id;
       string user_id;

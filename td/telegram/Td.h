@@ -253,7 +253,7 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> static_request(td_api::object_ptr<td_api::Function> function);
 
  private:
-  static constexpr const char *TDLIB_VERSION = "1.7.8";
+  static constexpr const char *TDLIB_VERSION = "1.7.9";
   static constexpr int64 ONLINE_ALARM_ID = 0;
   static constexpr int64 PING_SERVER_ALARM_ID = -1;
   static constexpr int32 PING_SERVER_TIMEOUT = 300;
@@ -623,6 +623,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getMessageThreadHistory &request);
 
+  void on_request(uint64 id, td_api::getChatMessageCalendar &request);
+
   void on_request(uint64 id, td_api::searchChatMessages &request);
 
   void on_request(uint64 id, td_api::searchSecretMessages &request);
@@ -639,7 +641,9 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getChatMessageByDate &request);
 
-  void on_request(uint64 id, td_api::getChatMessageCount &request);
+  void on_request(uint64 id, const td_api::getChatSparseMessagePositions &request);
+
+  void on_request(uint64 id, const td_api::getChatMessageCount &request);
 
   void on_request(uint64 id, const td_api::getChatScheduledMessages &request);
 
@@ -652,6 +656,8 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::deleteMessages &request);
 
   void on_request(uint64 id, const td_api::deleteChatMessagesFromUser &request);
+
+  void on_request(uint64 id, const td_api::deleteChatMessagesByDate &request);
 
   void on_request(uint64 id, const td_api::readAllChatMentions &request);
 
@@ -735,11 +741,11 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::sendCallDebugInformation &request);
 
-  void on_request(uint64 id, const td_api::getVoiceChatAvailableParticipants &request);
+  void on_request(uint64 id, const td_api::getVideoChatAvailableParticipants &request);
 
-  void on_request(uint64 id, const td_api::setVoiceChatDefaultParticipant &request);
+  void on_request(uint64 id, const td_api::setVideoChatDefaultParticipant &request);
 
-  void on_request(uint64 id, td_api::createVoiceChat &request);
+  void on_request(uint64 id, td_api::createVideoChat &request);
 
   void on_request(uint64 id, const td_api::getGroupCall &request);
 
@@ -869,7 +875,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::replacePrimaryChatInviteLink &request);
 
-  void on_request(uint64 id, const td_api::createChatInviteLink &request);
+  void on_request(uint64 id, td_api::createChatInviteLink &request);
 
   void on_request(uint64 id, td_api::editChatInviteLink &request);
 
@@ -880,6 +886,12 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::getChatInviteLinks &request);
 
   void on_request(uint64 id, td_api::getChatInviteLinkMembers &request);
+
+  void on_request(uint64 id, td_api::getChatJoinRequests &request);
+
+  void on_request(uint64 id, const td_api::approveChatJoinRequest &request);
+
+  void on_request(uint64 id, const td_api::declineChatJoinRequest &request);
 
   void on_request(uint64 id, td_api::revokeChatInviteLink &request);
 
@@ -1042,6 +1054,8 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::getStickerEmojis &request);
 
   void on_request(uint64 id, td_api::searchEmojis &request);
+
+  void on_request(uint64 id, td_api::getAnimatedEmoji &request);
 
   void on_request(uint64 id, td_api::getEmojiSuggestionsUrl &request);
 

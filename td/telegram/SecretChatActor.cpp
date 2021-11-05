@@ -8,12 +8,10 @@
 
 #include "td/telegram/net/DcId.h"
 #include "td/telegram/net/NetQueryCreator.h"
-#include "td/telegram/SecretChatId.h"
-#include "td/telegram/ServerMessageId.h"
-#include "td/telegram/UniqueId.h"
-
 #include "td/telegram/secret_api.hpp"
+#include "td/telegram/ServerMessageId.h"
 #include "td/telegram/telegram_api.hpp"
+#include "td/telegram/UniqueId.h"
 
 #include "td/mtproto/PacketInfo.h"
 #include "td/mtproto/PacketStorer.h"
@@ -693,7 +691,7 @@ void SecretChatActor::do_close_chat_impl(bool delete_history, bool is_already_di
   context_->secret_chat_db()->erase_value(pfs_state_);
   context_->secret_chat_db()->erase_value(seq_no_state_);
 
-  MultiPromiseActorSafe mpas{"DeleteMessagesFromServerMultiPromiseActor"};
+  MultiPromiseActorSafe mpas{"CloseSecretChatMultiPromiseActor"};
   mpas.add_promise(
       PromiseCreator::lambda([actor_id = actor_id(this), log_event_id, promise = std::move(promise)](Unit) mutable {
         send_closure(actor_id, &SecretChatActor::on_closed, log_event_id, std::move(promise));

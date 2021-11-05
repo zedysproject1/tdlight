@@ -6,9 +6,6 @@
 //
 #include "td/telegram/UpdatesManager.h"
 
-#include "td/telegram/td_api.h"
-#include "td/telegram/telegram_api.hpp"
-
 #include "td/telegram/AnimationsManager.h"
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/CallbackQueriesManager.h"
@@ -46,7 +43,9 @@
 #include "td/telegram/StickerSetId.h"
 #include "td/telegram/StickersManager.h"
 #include "td/telegram/Td.h"
+#include "td/telegram/td_api.h"
 #include "td/telegram/TdDb.h"
+#include "td/telegram/telegram_api.hpp"
 #include "td/telegram/ThemeManager.h"
 #include "td/telegram/WebPagesManager.h"
 
@@ -175,6 +174,28 @@ UpdatesManager::UpdatesManager(Td *td, ActorShared<> parent) : td_(td), parent_(
 
 void UpdatesManager::tear_down() {
   parent_.reset();
+}
+
+void UpdatesManager::hangup_shared() {
+  ref_cnt_--;
+  if (ref_cnt_ == 0) {
+    stop();
+  }
+}
+
+void UpdatesManager::hangup() {
+  pending_pts_updates_.clear();
+  postponed_pts_updates_.clear();
+  postponed_updates_.clear();
+  pending_seq_updates_.clear();
+  pending_qts_updates_.clear();
+
+  hangup_shared();
+}
+
+ActorShared<UpdatesManager> UpdatesManager::create_reference() {
+  ref_cnt_++;
+  return actor_shared(this, 1);
 }
 
 void UpdatesManager::fill_pts_gap(void *td) {
@@ -676,6 +697,7 @@ bool UpdatesManager::is_acceptable_message(const telegram_api::Message *message_
         case telegram_api::messageActionGroupCallScheduled::ID:
         case telegram_api::messageActionSetMessagesTTL::ID:
         case telegram_api::messageActionSetChatTheme::ID:
+        case telegram_api::messageActionChatJoinedByRequest::ID:
           break;
         case telegram_api::messageActionChatCreate::ID: {
           auto chat_create = static_cast<const telegram_api::messageActionChatCreate *>(action);
@@ -695,13 +717,9 @@ bool UpdatesManager::is_acceptable_message(const telegram_api::Message *message_
           }
           break;
         }
-        case telegram_api::messageActionChatJoinedByLink::ID: {
-          auto chat_joined_by_link = static_cast<const telegram_api::messageActionChatJoinedByLink *>(action);
-          if (!is_acceptable_user(UserId(chat_joined_by_link->inviter_id_))) {
-            return false;
-          }
+        case telegram_api::messageActionChatJoinedByLink::ID:
+          // inviter_id_ isn't used
           break;
-        }
         case telegram_api::messageActionChatDeleteUser::ID: {
           auto chat_delete_user = static_cast<const telegram_api::messageActionChatDeleteUser *>(action);
           if (!is_acceptable_user(UserId(chat_delete_user->user_id_))) {
@@ -1656,7 +1674,7 @@ void UpdatesManager::on_pending_updates(vector<tl_object_ptr<telegram_api::Updat
   }
 
   MultiPromiseActorSafe mpas{"OnPendingUpdatesMultiPromiseActor"};
-  mpas.add_promise([actor_id = actor_id(this), promise = std::move(promise)](Result<Unit> &&result) mutable {
+  mpas.add_promise([actor_id = create_reference(), promise = std::move(promise)](Result<Unit> &&result) mutable {
     send_closure(actor_id, &UpdatesManager::on_pending_updates_processed, std::move(result), std::move(promise));
   });
   auto lock = mpas.get_promise();
@@ -1777,7 +1795,7 @@ void UpdatesManager::on_pending_updates(vector<tl_object_ptr<telegram_api::Updat
   lock.set_value(Unit());
 }
 
-void UpdatesManager::on_pending_updates_processed(Result<Unit> &&result, Promise<Unit> &&promise) {
+void UpdatesManager::on_pending_updates_processed(Result<Unit> result, Promise<Unit> promise) {
   promise.set_result(std::move(result));
 }
 
@@ -2120,6 +2138,14 @@ void UpdatesManager::process_qts_update(tl_object_ptr<telegram_api::Update> &&up
                                                             update->date_, DialogInviteLink(std::move(update->invite_)),
                                                             std::move(update->prev_participant_),
                                                             std::move(update->new_participant_));
+      add_qts(qts).set_value(Unit());
+      break;
+    }
+    case telegram_api::updateBotChatInviteRequester::ID: {
+      auto update = move_tl_object_as<telegram_api::updateBotChatInviteRequester>(update_ptr);
+      td_->contacts_manager_->on_update_chat_invite_requester(DialogId(update->peer_), UserId(update->user_id_),
+                                                              std::move(update->about_), update->date_,
+                                                              DialogInviteLink(std::move(update->invite_)));
       add_qts(qts).set_value(Unit());
       break;
     }
@@ -2778,6 +2804,7 @@ bool UpdatesManager::is_qts_update(const telegram_api::Update *update) {
     case telegram_api::updateBotStopped::ID:
     case telegram_api::updateChatParticipant::ID:
     case telegram_api::updateChannelParticipant::ID:
+    case telegram_api::updateBotChatInviteRequester::ID:
       return true;
     default:
       return false;
@@ -2796,6 +2823,8 @@ int32 UpdatesManager::get_update_qts(const telegram_api::Update *update) {
       return static_cast<const telegram_api::updateChatParticipant *>(update)->qts_;
     case telegram_api::updateChannelParticipant::ID:
       return static_cast<const telegram_api::updateChannelParticipant *>(update)->qts_;
+    case telegram_api::updateBotChatInviteRequester::ID:
+      return static_cast<const telegram_api::updateBotChatInviteRequester *>(update)->qts_;
     default:
       return 0;
   }
@@ -2921,9 +2950,8 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateDraftMessage> u
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateDialogPinned> update, Promise<Unit> &&promise) {
-  FolderId folder_id(update->flags_ & telegram_api::updateDialogPinned::FOLDER_ID_MASK ? update->folder_id_ : 0);
-  td_->messages_manager_->on_update_dialog_is_pinned(
-      folder_id, DialogId(update->peer_), (update->flags_ & telegram_api::updateDialogPinned::PINNED_MASK) != 0);
+  td_->messages_manager_->on_update_dialog_is_pinned(FolderId(update->folder_id_), DialogId(update->peer_),
+                                                     update->pinned_);
   promise.set_value(Unit());
 }
 
@@ -2934,8 +2962,7 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updatePinnedDialogs> 
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateDialogUnreadMark> update, Promise<Unit> &&promise) {
-  td_->messages_manager_->on_update_dialog_is_marked_as_unread(
-      DialogId(update->peer_), (update->flags_ & telegram_api::updateDialogUnreadMark::UNREAD_MASK) != 0);
+  td_->messages_manager_->on_update_dialog_is_marked_as_unread(DialogId(update->peer_), update->unread_);
   promise.set_value(Unit());
 }
 
@@ -3040,8 +3067,7 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateStickerSets> up
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateStickerSetsOrder> update, Promise<Unit> &&promise) {
-  bool is_masks = (update->flags_ & telegram_api::updateStickerSetsOrder::MASKS_MASK) != 0;
-  td_->stickers_manager_->on_update_sticker_sets_order(is_masks,
+  td_->stickers_manager_->on_update_sticker_sets_order(update->masks_,
                                                        StickersManager::convert_sticker_set_ids(update->order_));
   promise.set_value(Unit());
 }
@@ -3211,8 +3237,20 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateChannelParticip
   add_pending_qts_update(std::move(update), qts, std::move(promise));
 }
 
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateBotChatInviteRequester> update,
+                               Promise<Unit> &&promise) {
+  auto qts = update->qts_;
+  add_pending_qts_update(std::move(update), qts, std::move(promise));
+}
+
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateTheme> update, Promise<Unit> &&promise) {
   td_->theme_manager_->on_update_theme(std::move(update->theme_), std::move(promise));
+}
+
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updatePendingJoinRequests> update, Promise<Unit> &&promise) {
+  td_->messages_manager_->on_update_dialog_pending_join_requests(DialogId(update->peer_), update->requests_pending_,
+                                                                 std::move(update->recent_requesters_));
+  promise.set_value(Unit());
 }
 
 // unsupported updates

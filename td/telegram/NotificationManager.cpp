@@ -2915,6 +2915,9 @@ string NotificationManager::convert_loc_key(const string &loc_key) {
       if (loc_key == "CHAT_ADD_YOU") {
         return "MESSAGE_CHAT_ADD_MEMBERS_YOU";
       }
+      if (loc_key == "CHAT_REQ_JOINED") {
+        return "MESSAGE_CHAT_JOIN_BY_REQUEST";
+      }
       break;
   }
   return string();
@@ -3276,13 +3279,10 @@ Status NotificationManager::process_push_notification_payload(string payload, bo
       }
     }
 
-    int32 flags = telegram_api::user::FIRST_NAME_MASK | telegram_api::user::MIN_MASK;
+    int32 flags = USER_FLAG_IS_INACCESSIBLE;
     if (sender_access_hash != -1) {
       // set phone number flag to show that this is a full access hash
-      flags |= telegram_api::user::ACCESS_HASH_MASK | telegram_api::user::PHONE_MASK;
-    }
-    if (sender_photo != nullptr) {
-      flags |= telegram_api::user::PHOTO_MASK;
+      flags |= USER_FLAG_HAS_ACCESS_HASH | USER_FLAG_HAS_PHONE_NUMBER;
     }
     auto user_name = sender_user_id.get() == 136817688 ? "Channel" : sender_name;
     auto user = telegram_api::make_object<telegram_api::user>(
@@ -3620,7 +3620,7 @@ void NotificationManager::add_message_push_notification(DialogId dialog_id, Mess
   }
 
   if (sender_user_id.is_valid() && !td_->contacts_manager_->have_user_force(sender_user_id)) {
-    int32 flags = telegram_api::user::FIRST_NAME_MASK | telegram_api::user::MIN_MASK;
+    int32 flags = USER_FLAG_IS_INACCESSIBLE;
     auto user_name = sender_user_id.get() == 136817688 ? "Channel" : sender_name;
     auto user = telegram_api::make_object<telegram_api::user>(
         flags, false /*ignored*/, false /*ignored*/, false /*ignored*/, false /*ignored*/, false /*ignored*/,

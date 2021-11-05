@@ -15,9 +15,6 @@
 #include "td/telegram/misc.h"
 #include "td/telegram/net/DcId.h"
 #include "td/telegram/Payments.h"
-
-#include "td/telegram/td_api.h"
-#include "td/telegram/telegram_api.h"
 #include "td/telegram/telegram_api.hpp"
 
 #include "td/utils/algorithm.h"
@@ -245,10 +242,9 @@ SuitableSecureValue get_suitable_secure_value(
     const tl_object_ptr<telegram_api::secureRequiredType> &secure_required_type) {
   SuitableSecureValue result;
   result.type = get_secure_value_type(secure_required_type->type_);
-  auto flags = secure_required_type->flags_;
-  result.is_selfie_required = (flags & telegram_api::secureRequiredType::SELFIE_REQUIRED_MASK) != 0;
-  result.is_translation_required = (flags & telegram_api::secureRequiredType::TRANSLATION_REQUIRED_MASK) != 0;
-  result.is_native_name_required = (flags & telegram_api::secureRequiredType::NATIVE_NAMES_MASK) != 0;
+  result.is_selfie_required = secure_required_type->selfie_required_;
+  result.is_translation_required = secure_required_type->translation_required_;
+  result.is_native_name_required = secure_required_type->native_names_;
   return result;
 }
 

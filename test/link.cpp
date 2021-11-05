@@ -171,8 +171,11 @@ TEST(Link, parse_internal_link) {
   auto unknown_deep_link = [](const td::string &link) {
     return td::td_api::make_object<td::td_api::internalLinkTypeUnknownDeepLink>(link);
   };
-  auto voice_chat = [](const td::string &chat_username, const td::string &invite_hash, bool is_live_stream) {
-    return td::td_api::make_object<td::td_api::internalLinkTypeVoiceChat>(chat_username, invite_hash, is_live_stream);
+  auto unsupported_proxy = [] {
+    return td::td_api::make_object<td::td_api::internalLinkTypeUnsupportedProxy>();
+  };
+  auto video_chat = [](const td::string &chat_username, const td::string &invite_hash, bool is_live_stream) {
+    return td::td_api::make_object<td::td_api::internalLinkTypeVideoChat>(chat_username, invite_hash, is_live_stream);
   };
 
   parse_internal_link("t.me/levlam/1", message("tg:resolve?domain=levlam&post=1"));
@@ -468,17 +471,22 @@ TEST(Link, parse_internal_link) {
                       proxy_mtproto("1.2.3.4", 80, "1234567890abcdef1234567890ABCDEF"));
   parse_internal_link("t.me/proxy?server=1.2.3.4&port=80adasdas&secret=1234567890abcdef1234567890ABCDEF",
                       proxy_mtproto("1.2.3.4", 80, "1234567890abcdef1234567890ABCDEF"));
-  parse_internal_link("t.me/proxy?server=1.2.3.4&port=adasdas&secret=1234567890abcdef1234567890ABCDEF", nullptr);
-  parse_internal_link("t.me/proxy?server=1.2.3.4&port=65536&secret=1234567890abcdef1234567890ABCDEF", nullptr);
-  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=", nullptr);
-  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=12", nullptr);
+  parse_internal_link("t.me/proxy?server=1.2.3.4&port=adasdas&secret=1234567890abcdef1234567890ABCDEF",
+                      unsupported_proxy());
+  parse_internal_link("t.me/proxy?server=1.2.3.4&port=65536&secret=1234567890abcdef1234567890ABCDEF",
+                      unsupported_proxy());
+  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=", unsupported_proxy());
+  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=12", unsupported_proxy());
   parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=1234567890abcdef1234567890ABCDEF",
                       proxy_mtproto("google.com", 80, "1234567890abcdef1234567890ABCDEF"));
   parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=dd1234567890abcdef1234567890ABCDEF",
                       proxy_mtproto("google.com", 80, "dd1234567890abcdef1234567890ABCDEF"));
-  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=de1234567890abcdef1234567890ABCDEF", nullptr);
-  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=ee1234567890abcdef1234567890ABCDEF", nullptr);
-  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=ee1234567890abcdef1234567890ABCDEF0", nullptr);
+  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=de1234567890abcdef1234567890ABCDEF",
+                      unsupported_proxy());
+  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=ee1234567890abcdef1234567890ABCDEF",
+                      unsupported_proxy());
+  parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=ee1234567890abcdef1234567890ABCDEF0",
+                      unsupported_proxy());
   parse_internal_link("t.me/proxy?server=google.com&port=8%30&secret=ee1234567890abcdef1234567890ABCDEF%30%30",
                       proxy_mtproto("google.com", 80, "ee1234567890abcdef1234567890ABCDEF00"));
   parse_internal_link(
@@ -491,24 +499,21 @@ TEST(Link, parse_internal_link) {
                       proxy_mtproto("1.2.3.4", 80, "1234567890abcdef1234567890ABCDEF"));
   parse_internal_link("tg:proxy?server=1.2.3.4&port=80adasdas&secret=1234567890abcdef1234567890ABCDEF",
                       proxy_mtproto("1.2.3.4", 80, "1234567890abcdef1234567890ABCDEF"));
-  parse_internal_link(
-      "tg:proxy?server=1.2.3.4&port=adasdas&secret=1234567890abcdef1234567890ABCDEF",
-      unknown_deep_link("tg://proxy?server=1.2.3.4&port=adasdas&secret=1234567890abcdef1234567890ABCDEF"));
-  parse_internal_link(
-      "tg:proxy?server=1.2.3.4&port=65536&secret=1234567890abcdef1234567890ABCDEF",
-      unknown_deep_link("tg://proxy?server=1.2.3.4&port=65536&secret=1234567890abcdef1234567890ABCDEF"));
+  parse_internal_link("tg:proxy?server=1.2.3.4&port=adasdas&secret=1234567890abcdef1234567890ABCDEF",
+                      unsupported_proxy());
+  parse_internal_link("tg:proxy?server=1.2.3.4&port=65536&secret=1234567890abcdef1234567890ABCDEF",
+                      unsupported_proxy());
   parse_internal_link("tg:proxy?server=google.com&port=8%30&secret=1234567890abcdef1234567890ABCDEF",
                       proxy_mtproto("google.com", 80, "1234567890abcdef1234567890ABCDEF"));
   parse_internal_link("tg:proxy?server=google.com&port=8%30&secret=dd1234567890abcdef1234567890ABCDEF",
                       proxy_mtproto("google.com", 80, "dd1234567890abcdef1234567890ABCDEF"));
-  parse_internal_link(
-      "tg:proxy?server=google.com&port=8%30&secret=de1234567890abcdef1234567890ABCDEF",
-      unknown_deep_link("tg://proxy?server=google.com&port=8%30&secret=de1234567890abcdef1234567890ABCDEF"));
+  parse_internal_link("tg:proxy?server=google.com&port=8%30&secret=de1234567890abcdef1234567890ABCDEF",
+                      unsupported_proxy());
 
   parse_internal_link("t.me/socks?server=1.2.3.4&port=80", proxy_socks("1.2.3.4", 80, "", ""));
   parse_internal_link("t.me/socks?server=1.2.3.4&port=80adasdas", proxy_socks("1.2.3.4", 80, "", ""));
-  parse_internal_link("t.me/socks?server=1.2.3.4&port=adasdas", nullptr);
-  parse_internal_link("t.me/socks?server=1.2.3.4&port=65536", nullptr);
+  parse_internal_link("t.me/socks?server=1.2.3.4&port=adasdas", unsupported_proxy());
+  parse_internal_link("t.me/socks?server=1.2.3.4&port=65536", unsupported_proxy());
   parse_internal_link("t.me/socks?server=google.com&port=8%30", proxy_socks("google.com", 80, "", ""));
   parse_internal_link("t.me/socks?server=google.com&port=8%30&user=1&pass=", proxy_socks("google.com", 80, "1", ""));
   parse_internal_link("t.me/socks?server=google.com&port=8%30&user=&pass=2", proxy_socks("google.com", 80, "", "2"));
@@ -516,35 +521,34 @@ TEST(Link, parse_internal_link) {
 
   parse_internal_link("tg:socks?server=1.2.3.4&port=80", proxy_socks("1.2.3.4", 80, "", ""));
   parse_internal_link("tg:socks?server=1.2.3.4&port=80adasdas", proxy_socks("1.2.3.4", 80, "", ""));
-  parse_internal_link("tg:socks?server=1.2.3.4&port=adasdas",
-                      unknown_deep_link("tg://socks?server=1.2.3.4&port=adasdas"));
-  parse_internal_link("tg:socks?server=1.2.3.4&port=65536", unknown_deep_link("tg://socks?server=1.2.3.4&port=65536"));
+  parse_internal_link("tg:socks?server=1.2.3.4&port=adasdas", unsupported_proxy());
+  parse_internal_link("tg:socks?server=1.2.3.4&port=65536", unsupported_proxy());
   parse_internal_link("tg:socks?server=google.com&port=8%30", proxy_socks("google.com", 80, "", ""));
   parse_internal_link("tg:socks?server=google.com&port=8%30&user=1&pass=", proxy_socks("google.com", 80, "1", ""));
   parse_internal_link("tg:socks?server=google.com&port=8%30&user=&pass=2", proxy_socks("google.com", 80, "", "2"));
   parse_internal_link("tg:socks?server=google.com&port=80&user=1&pass=2", proxy_socks("google.com", 80, "1", "2"));
 
-  parse_internal_link("tg:resolve?domain=username&voice%63hat=aasdasd", voice_chat("username", "aasdasd", false));
-  parse_internal_link("tg:resolve?domain=username&video%63hat=aasdasd", voice_chat("username", "aasdasd", false));
-  parse_internal_link("tg:resolve?domain=username&livestream=aasdasd", voice_chat("username", "aasdasd", true));
-  parse_internal_link("TG://resolve?domain=username&voicechat=", voice_chat("username", "", false));
+  parse_internal_link("tg:resolve?domain=username&voice%63hat=aasdasd", video_chat("username", "aasdasd", false));
+  parse_internal_link("tg:resolve?domain=username&video%63hat=aasdasd", video_chat("username", "aasdasd", false));
+  parse_internal_link("tg:resolve?domain=username&livestream=aasdasd", video_chat("username", "aasdasd", true));
+  parse_internal_link("TG://resolve?domain=username&voicechat=", video_chat("username", "", false));
   parse_internal_link("TG://test@resolve?domain=username&voicechat=", nullptr);
   parse_internal_link("tg:resolve:80?domain=username&voicechat=", nullptr);
   parse_internal_link("tg:http://resolve?domain=username&voicechat=", nullptr);
   parse_internal_link("tg:https://resolve?domain=username&voicechat=", nullptr);
   parse_internal_link("tg:resolve?domain=&voicechat=", unknown_deep_link("tg://resolve?domain=&voicechat="));
-  parse_internal_link("tg:resolve?domain=telegram&&&&&&&voicechat=%30", voice_chat("telegram", "0", false));
+  parse_internal_link("tg:resolve?domain=telegram&&&&&&&voicechat=%30", video_chat("telegram", "0", false));
 
-  parse_internal_link("t.me/username/0/a//s/as?voicechat=", voice_chat("username", "", false));
-  parse_internal_link("t.me/username/0/a//s/as?videochat=2", voice_chat("username", "2", false));
-  parse_internal_link("t.me/username/0/a//s/as?livestream=3", voice_chat("username", "3", true));
-  parse_internal_link("t.me/username/aasdas?test=1&voicechat=#12312", voice_chat("username", "", false));
-  parse_internal_link("t.me/username/0?voicechat=", voice_chat("username", "", false));
-  parse_internal_link("t.me/username/-1?voicechat=asdasd", voice_chat("username", "asdasd", false));
-  parse_internal_link("t.me/username?voicechat=", voice_chat("username", "", false));
+  parse_internal_link("t.me/username/0/a//s/as?voicechat=", video_chat("username", "", false));
+  parse_internal_link("t.me/username/0/a//s/as?videochat=2", video_chat("username", "2", false));
+  parse_internal_link("t.me/username/0/a//s/as?livestream=3", video_chat("username", "3", true));
+  parse_internal_link("t.me/username/aasdas?test=1&voicechat=#12312", video_chat("username", "", false));
+  parse_internal_link("t.me/username/0?voicechat=", video_chat("username", "", false));
+  parse_internal_link("t.me/username/-1?voicechat=asdasd", video_chat("username", "asdasd", false));
+  parse_internal_link("t.me/username?voicechat=", video_chat("username", "", false));
   parse_internal_link("t.me/username#voicechat=asdas", public_chat("username"));
   parse_internal_link("t.me//username?voicechat=", nullptr);
-  parse_internal_link("https://telegram.dog/tele%63ram?voi%63e%63hat=t%63st", voice_chat("telecram", "tcst", false));
+  parse_internal_link("https://telegram.dog/tele%63ram?voi%63e%63hat=t%63st", video_chat("telecram", "tcst", false));
 
   parse_internal_link("tg:resolve?domain=username&start=aasdasd", bot_start("username", "aasdasd"));
   parse_internal_link("TG://resolve?domain=username&start=", bot_start("username", ""));
