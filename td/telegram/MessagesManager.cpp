@@ -12668,6 +12668,11 @@ void MessagesManager::tear_down() {
   parent_.reset();
 }
 
+void MessagesManager::hangup() {
+  postponed_channel_updates_.clear();
+  stop();
+}
+
 void MessagesManager::start_up() {
   init();
 }
