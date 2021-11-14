@@ -7,6 +7,7 @@
 #pragma once
 
 #include "td/telegram/AccessRights.h"
+#include "td/telegram/AffectedHistory.h"
 #include "td/telegram/ChannelId.h"
 #include "td/telegram/DialogAction.h"
 #include "td/telegram/DialogDate.h"
@@ -512,15 +513,6 @@ class MessagesManager final : public Actor {
 
   void get_dialog_info_full(DialogId dialog_id, Promise<Unit> &&promise, const char *source);
 
-  int64 get_dialog_event_log(DialogId dialog_id, const string &query, int64 from_event_id, int32 limit,
-                             const tl_object_ptr<td_api::chatEventLogFilters> &filters, const vector<UserId> &user_ids,
-                             Promise<Unit> &&promise);
-
-  void on_get_event_log(ChannelId channel_id, int64 random_id,
-                        tl_object_ptr<telegram_api::channels_adminLogResults> &&events);
-
-  tl_object_ptr<td_api::chatEvents> get_chat_events_object(int64 random_id);
-
   string get_dialog_title(DialogId dialog_id) const;
 
   bool have_dialog(DialogId dialog_id) const;
@@ -768,6 +760,9 @@ class MessagesManager final : public Actor {
                                    Promise<td_api::object_ptr<td_api::foundMessages>> &&promise);
 
   tl_object_ptr<td_api::message> get_dialog_message_by_date_object(int64 random_id);
+
+  td_api::object_ptr<td_api::message> get_dialog_event_log_message_object(
+      DialogId dialog_id, tl_object_ptr<telegram_api::Message> &&message);
 
   tl_object_ptr<td_api::message> get_message_object(FullMessageId full_message_id, const char *source);
 
@@ -1043,7 +1038,7 @@ class MessagesManager final : public Actor {
 
   // Do not forget to update MessagesManager::update_message and all make_unique<Message> when this class is changed
   struct Message {
-    int32 random_y;
+    int32 random_y = 0;
 
     MessageId message_id;
     UserId sender_user_id;
@@ -2006,6 +2001,8 @@ class MessagesManager final : public Actor {
   void do_delete_all_dialog_messages(Dialog *d, unique_ptr<Message> &message, bool is_permanently_deleted,
                                      vector<int64> &deleted_message_ids);
 
+  void erase_delete_messages_log_event(uint64 log_event_id);
+
   void delete_sent_message_on_server(DialogId dialog_id, MessageId message_id);
 
   void delete_messages_on_server(DialogId dialog_id, vector<MessageId> message_ids, bool revoke, uint64 log_event_id,
@@ -2032,6 +2029,14 @@ class MessagesManager final : public Actor {
   void read_all_dialog_mentions_on_server(DialogId dialog_id, uint64 log_event_id, Promise<Unit> &&promise);
 
   void unpin_all_dialog_messages_on_server(DialogId dialog_id, uint64 log_event_id, Promise<Unit> &&promise);
+
+  using AffectedHistoryQuery = std::function<void(DialogId, Promise<AffectedHistory>)>;
+
+  void run_affected_history_query_until_complete(DialogId dialog_id, AffectedHistoryQuery query,
+                                                 bool get_affected_messages, Promise<Unit> &&promise);
+
+  void on_get_affected_history(DialogId dialog_id, AffectedHistoryQuery query, bool get_affected_messages,
+                               AffectedHistory affected_history, Promise<Unit> &&promise);
 
   static MessageId find_message_by_date(const Message *m, int32 date);
 
@@ -2999,12 +3004,6 @@ class MessagesManager final : public Actor {
 
   void load_secret_thumbnail(FileId thumbnail_file_id);
 
-  static tl_object_ptr<telegram_api::channelAdminLogEventsFilter> get_channel_admin_log_events_filter(
-      const tl_object_ptr<td_api::chatEventLogFilters> &filters);
-
-  tl_object_ptr<td_api::ChatEventAction> get_chat_event_action_object(
-      ChannelId channel_id, tl_object_ptr<telegram_api::ChannelAdminLogEventAction> &&action_ptr);
-
   void on_upload_media(FileId file_id, tl_object_ptr<telegram_api::InputFile> input_file,
                        tl_object_ptr<telegram_api::InputEncryptedFile> input_encrypted_file);
   void on_upload_media_error(FileId file_id, Status status);
@@ -3361,8 +3360,6 @@ class MessagesManager final : public Actor {
     std::unordered_map<MessageId, string, MessageIdHash> embedding_codes_;
   };
   std::unordered_map<DialogId, MessageEmbeddingCodes, DialogIdHash> message_embedding_codes_[2];
-
-  std::unordered_map<int64, tl_object_ptr<td_api::chatEvents>> chat_events_;  // random_id -> chat events
 
   std::unordered_map<DialogId, vector<Promise<Unit>>, DialogIdHash> get_dialog_notification_settings_queries_;
 

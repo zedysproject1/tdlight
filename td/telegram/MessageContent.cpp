@@ -1727,7 +1727,7 @@ static Result<InputMessageContent> create_input_message_content(
       int32 type = 'i';
       if (file_view.has_remote_location() && !file_view.remote_location().is_web()) {
         auto photo_size_source = file_view.remote_location().get_source();
-        if (photo_size_source.get_type() == PhotoSizeSource::Type::Thumbnail) {
+        if (photo_size_source.get_type("create_input_message_content") == PhotoSizeSource::Type::Thumbnail) {
           auto old_type = photo_size_source.thumbnail().thumbnail_type;
           if (old_type != 't') {
             type = old_type;
@@ -5630,10 +5630,6 @@ void on_sent_message_content(Td *td, const MessageContent *content) {
       // nothing to do
       return;
   }
-}
-
-StickerSetId add_sticker_set(Td *td, tl_object_ptr<telegram_api::InputStickerSet> &&input_sticker_set) {
-  return td->stickers_manager_->add_sticker_set(std::move(input_sticker_set));
 }
 
 bool is_unsent_animated_emoji_click(Td *td, DialogId dialog_id, const DialogAction &action) {

@@ -306,6 +306,7 @@ set(TDLIB_SOURCE
   td/telegram/DialogAction.cpp
   td/telegram/DialogAdministrator.cpp
   td/telegram/DialogDb.cpp
+  td/telegram/DialogEventLog.cpp
   td/telegram/DialogFilter.cpp
   td/telegram/DialogId.cpp
   td/telegram/DialogInviteLink.cpp
@@ -456,6 +457,7 @@ set(TDLIB_SOURCE
   td/mtproto/utils.h
 
   td/telegram/AccessRights.h
+  td/telegram/AffectedHistory.h
   td/telegram/AnimationsManager.h
   td/telegram/AudiosManager.h
   td/telegram/AuthManager.h
@@ -488,6 +490,7 @@ set(TDLIB_SOURCE
   td/telegram/DialogAdministrator.h
   td/telegram/DialogDate.h
   td/telegram/DialogDb.h
+  td/telegram/DialogEventLog.h
   td/telegram/DialogFilter.h
   td/telegram/DialogFilterId.h
   td/telegram/DialogId.h

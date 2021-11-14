@@ -127,8 +127,7 @@ class ContactsManager final : public Actor {
   int32 get_secret_chat_layer(SecretChatId secret_chat_id) const;
   FolderId get_secret_chat_initial_folder_id(SecretChatId secret_chat_id) const;
 
-  void on_imported_contacts(int64 random_id, vector<UserId> imported_contact_user_ids,
-                            vector<int32> unimported_contact_invites);
+  void on_imported_contacts(int64 random_id, Result<tl_object_ptr<telegram_api::contacts_importedContacts>> result);
 
   void on_deleted_contacts(const vector<UserId> &deleted_contact_user_ids);
 
@@ -909,7 +908,7 @@ class ContactsManager final : public Actor {
   struct SecretChat {
     int64 access_hash = 0;
     UserId user_id;
-    SecretChatState state;
+    SecretChatState state = SecretChatState::Unknown;
     string key_hash;
     int32 ttl = 0;
     int32 date = 0;
@@ -1374,6 +1373,11 @@ class ContactsManager final : public Actor {
 
   void on_get_contacts_finished(size_t expected_contact_count);
 
+  void do_import_contacts(vector<Contact> contacts, int64 random_id, Promise<Unit> &&promise);
+
+  void on_import_contacts_finished(int64 random_id, vector<UserId> imported_contact_user_ids,
+                                   vector<int32> unimported_contact_invites);
+
   void load_imported_contacts(Promise<Unit> &&promise);
 
   void on_load_imported_contacts_from_database(string value);
@@ -1689,6 +1693,14 @@ class ContactsManager final : public Actor {
     }
   };
   std::unordered_map<FileId, UploadedProfilePhoto, FileIdHash> uploaded_profile_photos_;  // file_id -> promise
+
+  struct ImportContactsTask {
+    Promise<Unit> promise_;
+    vector<Contact> input_contacts_;
+    vector<UserId> imported_user_ids_;
+    vector<int32> unimported_contact_invites_;
+  };
+  std::unordered_map<int64, unique_ptr<ImportContactsTask>> import_contact_tasks_;
 
   std::unordered_map<int64, std::pair<vector<UserId>, vector<int32>>> imported_contacts_;
 
