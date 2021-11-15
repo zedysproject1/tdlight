@@ -60,6 +60,7 @@
 #include "td/telegram/MessageId.h"
 #include "td/telegram/MessageLinkInfo.h"
 #include "td/telegram/MessageSearchFilter.h"
+#include "td/telegram/MessageSender.h"
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/MessageThreadInfo.h"
 #include "td/telegram/misc.h"
@@ -5840,9 +5841,10 @@ void Td::on_request(uint64 id, const td_api::getVideoChatAvailableParticipants &
 void Td::on_request(uint64 id, const td_api::setVideoChatDefaultParticipant &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  group_call_manager_->set_group_call_default_join_as(
-      DialogId(request.chat_id_), group_call_manager_->get_group_call_participant_id(request.default_participant_id_),
-      std::move(promise));
+  TRY_RESULT_PROMISE(promise, default_join_as_dialog_id,
+                     get_message_sender_dialog_id(this, request.default_participant_id_, true, false));
+  group_call_manager_->set_group_call_default_join_as(DialogId(request.chat_id_), default_join_as_dialog_id,
+                                                      std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::createVideoChat &request) {
@@ -5884,6 +5886,8 @@ void Td::on_request(uint64 id, td_api::joinGroupCall &request) {
   CLEAN_INPUT_STRING(request.invite_hash_);
   CLEAN_INPUT_STRING(request.payload_);
   CREATE_REQUEST_PROMISE();
+  TRY_RESULT_PROMISE(promise, join_as_dialog_id,
+                     get_message_sender_dialog_id(this, request.participant_id_, true, true));
   auto query_promise = PromiseCreator::lambda([promise = std::move(promise)](Result<string> result) mutable {
     if (result.is_error()) {
       promise.set_error(result.move_as_error());
@@ -5891,10 +5895,9 @@ void Td::on_request(uint64 id, td_api::joinGroupCall &request) {
       promise.set_value(make_tl_object<td_api::text>(result.move_as_ok()));
     }
   });
-  group_call_manager_->join_group_call(GroupCallId(request.group_call_id_),
-                                       group_call_manager_->get_group_call_participant_id(request.participant_id_),
-                                       request.audio_source_id_, std::move(request.payload_), request.is_muted_,
-                                       request.is_my_video_enabled_, request.invite_hash_, std::move(query_promise));
+  group_call_manager_->join_group_call(GroupCallId(request.group_call_id_), join_as_dialog_id, request.audio_source_id_,
+                                       std::move(request.payload_), request.is_muted_, request.is_my_video_enabled_,
+                                       request.invite_hash_, std::move(query_promise));
 }
 
 void Td::on_request(uint64 id, td_api::startGroupCallScreenSharing &request) {
@@ -6007,25 +6010,28 @@ void Td::on_request(uint64 id, const td_api::setGroupCallParticipantIsSpeaking &
 void Td::on_request(uint64 id, const td_api::toggleGroupCallParticipantIsMuted &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
+  TRY_RESULT_PROMISE(promise, participant_dialog_id,
+                     get_message_sender_dialog_id(this, request.participant_id_, true, false));
   group_call_manager_->toggle_group_call_participant_is_muted(
-      GroupCallId(request.group_call_id_), group_call_manager_->get_group_call_participant_id(request.participant_id_),
-      request.is_muted_, std::move(promise));
+      GroupCallId(request.group_call_id_), participant_dialog_id, request.is_muted_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::setGroupCallParticipantVolumeLevel &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
+  TRY_RESULT_PROMISE(promise, participant_dialog_id,
+                     get_message_sender_dialog_id(this, request.participant_id_, true, false));
   group_call_manager_->set_group_call_participant_volume_level(
-      GroupCallId(request.group_call_id_), group_call_manager_->get_group_call_participant_id(request.participant_id_),
-      request.volume_level_, std::move(promise));
+      GroupCallId(request.group_call_id_), participant_dialog_id, request.volume_level_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::toggleGroupCallParticipantIsHandRaised &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
+  TRY_RESULT_PROMISE(promise, participant_dialog_id,
+                     get_message_sender_dialog_id(this, request.participant_id_, true, false));
   group_call_manager_->toggle_group_call_participant_is_hand_raised(
-      GroupCallId(request.group_call_id_), group_call_manager_->get_group_call_participant_id(request.participant_id_),
-      request.is_hand_raised_, std::move(promise));
+      GroupCallId(request.group_call_id_), participant_dialog_id, request.is_hand_raised_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::loadGroupCallParticipants &request) {
@@ -6256,7 +6262,7 @@ void Td::on_request(uint64 id, const td_api::joinChat &request) {
 void Td::on_request(uint64 id, const td_api::leaveChat &request) {
   CREATE_OK_REQUEST_PROMISE();
   DialogId dialog_id(request.chat_id_);
-  td_api::object_ptr<td_api::ChatMemberStatus> new_status = td_api::make_object<td_api::chatMemberStatusLeft>();
+  auto new_status = DialogParticipantStatus::Left();
   if (dialog_id.get_type() == DialogType::Channel && messages_manager_->have_dialog_force(dialog_id, "leaveChat")) {
     auto status = contacts_manager_->get_channel_status(dialog_id.get_channel_id());
     if (status.is_creator()) {
@@ -6264,13 +6270,11 @@ void Td::on_request(uint64 id, const td_api::leaveChat &request) {
         return promise.set_value(Unit());
       }
 
-      new_status =
-          td_api::make_object<td_api::chatMemberStatusCreator>(status.get_rank(), status.is_anonymous(), false);
+      new_status = DialogParticipantStatus::Creator(false, status.is_anonymous(), status.get_rank());
     }
   }
-  contacts_manager_->set_dialog_participant_status(
-      dialog_id, td_api::make_object<td_api::messageSenderUser>(contacts_manager_->get_my_id().get()), new_status,
-      std::move(promise));
+  contacts_manager_->set_dialog_participant_status(dialog_id, DialogId(contacts_manager_->get_my_id()),
+                                                   std::move(new_status), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::addChatMember &request) {
@@ -6287,16 +6291,20 @@ void Td::on_request(uint64 id, const td_api::addChatMembers &request) {
                                              std::move(promise));
 }
 
-void Td::on_request(uint64 id, td_api::setChatMemberStatus &request) {
+void Td::on_request(uint64 id, const td_api::setChatMemberStatus &request) {
   CREATE_OK_REQUEST_PROMISE();
-  contacts_manager_->set_dialog_participant_status(DialogId(request.chat_id_), request.member_id_, request.status_,
-                                                   std::move(promise));
+  TRY_RESULT_PROMISE(promise, participant_dialog_id,
+                     get_message_sender_dialog_id(this, request.member_id_, false, false));
+  contacts_manager_->set_dialog_participant_status(DialogId(request.chat_id_), participant_dialog_id,
+                                                   get_dialog_participant_status(request.status_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::banChatMember &request) {
   CREATE_OK_REQUEST_PROMISE();
-  contacts_manager_->ban_dialog_participant(DialogId(request.chat_id_), request.member_id_, request.banned_until_date_,
-                                            request.revoke_messages_, std::move(promise));
+  TRY_RESULT_PROMISE(promise, participant_dialog_id,
+                     get_message_sender_dialog_id(this, request.member_id_, false, false));
+  contacts_manager_->ban_dialog_participant(DialogId(request.chat_id_), participant_dialog_id,
+                                            request.banned_until_date_, request.revoke_messages_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::canTransferOwnership &request) {
@@ -6321,9 +6329,11 @@ void Td::on_request(uint64 id, td_api::transferChatOwnership &request) {
                                                std::move(promise));
 }
 
-void Td::on_request(uint64 id, td_api::getChatMember &request) {
+void Td::on_request(uint64 id, const td_api::getChatMember &request) {
   CREATE_REQUEST_PROMISE();
-  contacts_manager_->get_dialog_participant(DialogId(request.chat_id_), request.member_id_, std::move(promise));
+  TRY_RESULT_PROMISE(promise, participant_dialog_id,
+                     get_message_sender_dialog_id(this, request.member_id_, false, false));
+  contacts_manager_->get_dialog_participant(DialogId(request.chat_id_), participant_dialog_id, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::searchChatMembers &request) {
@@ -6341,7 +6351,7 @@ void Td::on_request(uint64 id, td_api::searchChatMembers &request) {
                                                 DialogParticipantsFilter(request.filter_), std::move(query_promise));
 }
 
-void Td::on_request(uint64 id, td_api::getChatAdministrators &request) {
+void Td::on_request(uint64 id, const td_api::getChatAdministrators &request) {
   CREATE_REQUEST(GetChatAdministratorsRequest, request.chat_id_);
 }
 

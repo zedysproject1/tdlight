@@ -15,6 +15,7 @@
 #include "td/telegram/Global.h"
 #include "td/telegram/MessageId.h"
 #include "td/telegram/MemoryManager.h"
+#include "td/telegram/MessageSender.h"
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/misc.h"
 #include "td/telegram/net/DcId.h"
@@ -105,23 +106,7 @@ class GetGroupCallJoinAsQuery final : public Td::ResultHandler {
     td_->contacts_manager_->on_get_users(std::move(ptr->users_), "GetGroupCallJoinAsQuery");
     td_->contacts_manager_->on_get_chats(std::move(ptr->chats_), "GetGroupCallJoinAsQuery");
 
-    vector<td_api::object_ptr<td_api::MessageSender>> participant_aliaces;
-    for (auto &peer : ptr->peers_) {
-      DialogId dialog_id(peer);
-      if (!dialog_id.is_valid()) {
-        LOG(ERROR) << "Receive invalid " << dialog_id << " as join as peer for " << dialog_id_;
-        continue;
-      }
-      if (dialog_id.get_type() != DialogType::User) {
-        td_->messages_manager_->force_create_dialog(dialog_id, "GetGroupCallJoinAsQuery");
-      }
-
-      participant_aliaces.push_back(
-          td_->messages_manager_->get_message_sender_object(dialog_id, "GetGroupCallJoinAsQuery"));
-    }
-
-    promise_.set_value(td_api::make_object<td_api::messageSenders>(static_cast<int32>(participant_aliaces.size()),
-                                                                   std::move(participant_aliaces)));
+    promise_.set_value(convert_message_senders_object(td_, ptr->peers_));
   }
 
   void on_error(Status status) final {
@@ -1097,32 +1082,6 @@ void GroupCallManager::on_sync_participants_timeout(GroupCallId group_call_id) {
   auto input_group_call_id = get_input_group_call_id(group_call_id).move_as_ok();
 
   sync_group_call_participants(input_group_call_id);
-}
-
-DialogId GroupCallManager::get_group_call_participant_id(
-    const td_api::object_ptr<td_api::MessageSender> &message_sender) {
-  if (message_sender == nullptr) {
-    return DialogId();
-  }
-  switch (message_sender->get_id()) {
-    case td_api::messageSenderUser::ID: {
-      UserId user_id(static_cast<const td_api::messageSenderUser *>(message_sender.get())->user_id_);
-      if (td_->contacts_manager_->have_user_force(user_id)) {
-        return DialogId(user_id);
-      }
-      break;
-    }
-    case td_api::messageSenderChat::ID: {
-      DialogId dialog_id(static_cast<const td_api::messageSenderChat *>(message_sender.get())->chat_id_);
-      if (td_->messages_manager_->have_dialog_force(dialog_id, "get_group_call_participant_id")) {
-        return dialog_id;
-      }
-      break;
-    }
-    default:
-      UNREACHABLE();
-  }
-  return DialogId();
 }
 
 bool GroupCallManager::is_group_call_being_joined(InputGroupCallId input_group_call_id) const {
@@ -4662,11 +4621,10 @@ vector<td_api::object_ptr<td_api::groupCallRecentSpeaker>> GroupCallManager::get
     recent_speaker_update_timeout_.add_timeout_in(group_call->group_call_id.get(), next_timeout);
   }
 
-  auto get_result = [recent_speaker_users, messages_manager = td_->messages_manager_.get()] {
-    return transform(recent_speaker_users, [messages_manager](const std::pair<DialogId, bool> &recent_speaker_user) {
+  auto get_result = [recent_speaker_users, td = td_] {
+    return transform(recent_speaker_users, [td](const std::pair<DialogId, bool> &recent_speaker_user) {
       return td_api::make_object<td_api::groupCallRecentSpeaker>(
-          messages_manager->get_message_sender_object(recent_speaker_user.first, "get_recent_speakers"),
-          recent_speaker_user.second);
+          get_message_sender_object(td, recent_speaker_user.first, "get_recent_speakers"), recent_speaker_user.second);
     });
   };
   if (recent_speakers->last_sent_users != recent_speaker_users) {
