@@ -7054,7 +7054,7 @@ void MessagesManager::on_update_delete_scheduled_messages(DialogId dialog_id,
 void MessagesManager::on_user_dialog_action(DialogId dialog_id, MessageId top_thread_message_id,
                                             DialogId typing_dialog_id, DialogAction action, int32 date,
                                             MessageContentType message_content_type) {
-  if (td_->auth_manager_->is_bot() || !typing_dialog_id.is_valid() || is_broadcast_channel(dialog_id)) {
+  if (td_->auth_manager_->is_bot() || !typing_dialog_id.is_valid()) {
     return;
   }
   if (top_thread_message_id != MessageId() && !top_thread_message_id.is_valid()) {
@@ -7073,6 +7073,10 @@ void MessagesManager::on_user_dialog_action(DialogId dialog_id, MessageId top_th
       auto group_call_id = td_->group_call_manager_->get_group_call_id(d->active_group_call_id, dialog_id);
       td_->group_call_manager_->on_user_speaking_in_group_call(group_call_id, typing_dialog_id, date);
     }
+    return;
+  }
+
+  if (is_broadcast_channel(dialog_id)) {
     return;
   }
 
@@ -17371,6 +17375,7 @@ Status MessagesManager::can_get_message_viewers(DialogId dialog_id, const Messag
   if (td_->auth_manager_->is_bot()) {
     return Status::Error(400, "User is bot");
   }
+  CHECK(m != nullptr);
   if (!m->is_outgoing) {
     return Status::Error(400, "Can't get viewers of incoming messages");
   }
@@ -17407,7 +17412,7 @@ Status MessagesManager::can_get_message_viewers(DialogId dialog_id, const Messag
   if (participant_count == 0) {
     return Status::Error(400, "Chat is empty or have unknown number of members");
   }
-  if (participant_count > G()->shared_config().get_option_integer("chat_read_mark_size_threshold", 50)) {
+  if (participant_count > G()->shared_config().get_option_integer("chat_read_mark_size_threshold", 100)) {
     return Status::Error(400, "Chat is too big");
   }
 
@@ -17421,6 +17426,10 @@ Status MessagesManager::can_get_message_viewers(DialogId dialog_id, const Messag
     return Status::Error(400, "Local messages can't have viewers");
   }
   CHECK(m->message_id.is_server());
+
+  if (m->content->get_type() == MessageContentType::Poll &&
+      get_message_content_poll_is_anonymous(td_, m->content.get())) {
+  }
 
   return Status::OK();
 }

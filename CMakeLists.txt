@@ -280,6 +280,7 @@ set(TDLIB_SOURCE
   td/mtproto/Transport.cpp
   td/mtproto/utils.cpp
 
+  td/telegram/Account.cpp
   td/telegram/AnimationsManager.cpp
   td/telegram/AudiosManager.cpp
   td/telegram/AuthManager.cpp
@@ -458,6 +459,7 @@ set(TDLIB_SOURCE
   td/mtproto/utils.h
 
   td/telegram/AccessRights.h
+  td/telegram/Account.h
   td/telegram/AffectedHistory.h
   td/telegram/AnimationsManager.h
   td/telegram/AudiosManager.h
