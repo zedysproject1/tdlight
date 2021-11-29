@@ -1600,6 +1600,7 @@ class GetChatInviteImportersQuery final : public Td::ResultHandler {
 class GetChatJoinRequestsQuery final : public Td::ResultHandler {
   Promise<td_api::object_ptr<td_api::chatJoinRequests>> promise_;
   DialogId dialog_id_;
+  bool is_full_list_ = false;
 
  public:
   explicit GetChatJoinRequestsQuery(Promise<td_api::object_ptr<td_api::chatJoinRequests>> &&promise)
@@ -1609,6 +1610,8 @@ class GetChatJoinRequestsQuery final : public Td::ResultHandler {
   void send(DialogId dialog_id, const string &invite_link, const string &query, int32 offset_date,
             UserId offset_user_id, int32 limit) {
     dialog_id_ = dialog_id;
+    is_full_list_ = invite_link.empty() && query.empty() && offset_date == 0 && !offset_user_id.is_valid() && limit >= 3;
+
     auto input_peer = td_->messages_manager_->get_input_peer(dialog_id, AccessRights::Write);
     if (input_peer == nullptr) {
       return on_error(Status::Error(400, "Can't access the chat"));
@@ -1663,8 +1666,10 @@ class GetChatJoinRequestsQuery final : public Td::ResultHandler {
       join_requests.push_back(td_api::make_object<td_api::chatJoinRequest>(
           td_->contacts_manager_->get_user_id_object(user_id, "chatJoinRequest"), request->date_, request->about_));
     }
-    td_->messages_manager_->on_update_dialog_pending_join_requests(dialog_id_, total_count,
-                                                                   std::move(recent_requesters));
+    if (is_full_list_) {
+      td_->messages_manager_->on_update_dialog_pending_join_requests(dialog_id_, total_count,
+                                                                     std::move(recent_requesters));
+    }
     promise_.set_value(td_api::make_object<td_api::chatJoinRequests>(total_count, std::move(join_requests)));
   }
 
@@ -7595,17 +7600,8 @@ void ContactsManager::remove_dialog_suggested_action(SuggestedAction action) {
   }
 }
 
-void ContactsManager::dismiss_suggested_action(SuggestedAction action, Promise<Unit> &&promise) {
-  if (action.is_empty()) {
-    return promise.set_error(Status::Error(400, "Action must be non-empty"));
-  }
+void ContactsManager::dismiss_dialog_suggested_action(SuggestedAction action, Promise<Unit> &&promise) {
   auto dialog_id = action.dialog_id_;
-  if (dialog_id == DialogId()) {
-    send_closure_later(G()->config_manager(), &ConfigManager::dismiss_suggested_action, std::move(action),
-                       std::move(promise));
-    return;
-  }
-
   if (!td_->messages_manager_->have_dialog(dialog_id)) {
     return promise.set_error(Status::Error(400, "Chat not found"));
   }
@@ -9547,6 +9543,7 @@ void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, boo
   CHECK(u != nullptr);
   if (u->is_name_changed || u->is_username_changed || u->is_is_contact_changed) {
     update_contacts_hints(u, user_id, from_database);
+    u->is_username_changed = false;
   }
   if (u->is_is_contact_changed) {
     td_->messages_manager_->on_dialog_user_is_contact_updated(DialogId(user_id), u->is_contact);
@@ -9557,6 +9554,7 @@ void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, boo
         update_user_full(user_full, user_id, "update_user");
       }
     }
+    u->is_is_contact_changed = false;
   }
   if (u->is_is_deleted_changed) {
     td_->messages_manager_->on_dialog_user_is_deleted_updated(DialogId(user_id), u->is_deleted);
@@ -9566,6 +9564,7 @@ void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, boo
         drop_user_full(user_id);
       }
     }
+    u->is_is_deleted_changed = false;
   }
   if (u->is_name_changed) {
     auto messages_manager = td_->messages_manager_.get();
@@ -9573,6 +9572,7 @@ void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, boo
     for_each_secret_chat_with_user(user_id, [messages_manager](SecretChatId secret_chat_id) {
       messages_manager->on_dialog_title_updated(DialogId(secret_chat_id));
     });
+    u->is_name_changed = false;
   }
   if (u->is_photo_changed) {
     auto messages_manager = td_->messages_manager_.get();
@@ -9580,6 +9580,7 @@ void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, boo
     for_each_secret_chat_with_user(user_id, [messages_manager](SecretChatId secret_chat_id) {
       messages_manager->on_dialog_photo_updated(DialogId(secret_chat_id));
     });
+    u->is_photo_changed = false;
   }
   if (u->is_status_changed && user_id != get_my_id()) {
     auto left_time = get_user_was_online(u, user_id) - G()->server_time_cached();
@@ -9592,9 +9593,6 @@ void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, boo
       user_online_timeout_.cancel_timeout(user_id.get());
     }
   }
-  if (u->is_default_permissions_changed) {
-    td_->messages_manager_->on_dialog_permissions_updated(DialogId(user_id));
-  }
   if (!td_->auth_manager_->is_bot()) {
     if (u->restriction_reasons.empty()) {
       restricted_user_ids_.erase(user_id);
@@ -9602,13 +9600,6 @@ void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, boo
       restricted_user_ids_.insert(user_id);
     }
   }
-
-  u->is_name_changed = false;
-  u->is_username_changed = false;
-  u->is_photo_changed = false;
-  u->is_is_contact_changed = false;
-  u->is_is_deleted_changed = false;
-  u->is_default_permissions_changed = false;
 
   if (u->is_deleted) {
     td_->inline_queries_manager_->remove_recent_inline_bot(user_id, Promise<>());

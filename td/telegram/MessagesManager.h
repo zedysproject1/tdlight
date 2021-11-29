@@ -86,6 +86,7 @@ namespace td {
 
 struct BinlogEvent;
 struct Dependencies;
+class DialogActionBar;
 class DialogFilter;
 class DraftMessage;
 struct InputMessageContent;
@@ -806,7 +807,7 @@ class MessagesManager final : public Actor {
 
   void remove_dialog_action_bar(DialogId dialog_id, Promise<Unit> &&promise);
 
-  void reget_dialog_action_bar(DialogId dialog_id, const char *source);
+  void reget_dialog_action_bar(DialogId dialog_id, const char *source, bool is_repair = true);
 
   void report_dialog(DialogId dialog_id, const vector<MessageId> &message_ids, ReportReason &&reason,
                      Promise<Unit> &&promise);
@@ -1183,6 +1184,7 @@ class MessagesManager final : public Actor {
     DialogNotificationSettings notification_settings;
     MessageTtlSetting message_ttl_setting;
     unique_ptr<DraftMessage> draft_message;
+    unique_ptr<DialogActionBar> action_bar;
     LogEventIdWithGeneration save_draft_message_log_event_id;
     LogEventIdWithGeneration save_notification_settings_log_event_id;
     std::unordered_map<int64, LogEventIdWithGeneration> read_history_log_event_ids;
@@ -1202,8 +1204,6 @@ class MessagesManager final : public Actor {
         last_read_all_mentions_message_id;  // all mentions with a message identifier not greater than it are implicitly read
     MessageId
         max_unavailable_message_id;  // maximum unavailable message identifier for dialogs with cleared/unavailable history
-
-    int32 distance = -1;  // distance to the peer
 
     int32 last_clear_history_date = 0;
     MessageId last_clear_history_message_id;
@@ -1232,16 +1232,9 @@ class MessagesManager final : public Actor {
 
     bool is_last_message_deleted_locally = false;
 
-    bool know_can_report_spam = false;
-    bool can_report_spam = false;
+    bool need_repair_action_bar = false;
     bool know_action_bar = false;
-    bool can_add_contact = false;
-    bool can_block_user = false;
-    bool can_share_phone_number = false;
-    bool can_report_location = false;
-    bool can_unarchive = false;
-    bool hide_distance = false;
-    bool can_invite_members = false;
+    bool has_outgoing_messages = false;
 
     bool is_opened = false;
     bool was_opened = false;
@@ -2363,7 +2356,7 @@ class MessagesManager final : public Actor {
 
   void send_update_secret_chats_with_user_action_bar(const Dialog *d) const;
 
-  void send_update_chat_action_bar(const Dialog *d);
+  void send_update_chat_action_bar(Dialog *d);
 
   void send_update_secret_chats_with_user_theme(const Dialog *d) const;
 
@@ -2559,12 +2552,11 @@ class MessagesManager final : public Actor {
 
   void add_dialog_last_database_message(Dialog *d, unique_ptr<Message> &&last_database_message);
 
-  void fix_dialog_action_bar(Dialog *d);
+  void fix_dialog_action_bar(const Dialog *d, DialogActionBar *action_bar);
 
   td_api::object_ptr<td_api::ChatType> get_chat_type_object(DialogId dialog_id) const;
 
-  td_api::object_ptr<td_api::ChatActionBar> get_chat_action_bar_object(const Dialog *d,
-                                                                       bool hide_unarchive = false) const;
+  td_api::object_ptr<td_api::ChatActionBar> get_chat_action_bar_object(const Dialog *d) const;
 
   string get_dialog_theme_name(const Dialog *d) const;
 
@@ -3062,7 +3054,7 @@ class MessagesManager final : public Actor {
 
   void update_forward_count(DialogId dialog_id, MessageId message_id, int32 update_date);
 
-  void try_hide_distance(DialogId dialog_id, const Message *m);
+  void update_has_outgoing_messages(DialogId dialog_id, const Message *m);
 
   string get_message_search_text(const Message *m) const;
 
