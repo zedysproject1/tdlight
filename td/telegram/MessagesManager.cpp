@@ -27911,7 +27911,7 @@ vector<Notification> MessagesManager::get_message_notifications_from_database_fo
 
       bool is_correct = true;
       if (notification_id.get() >= from_notification_id.get()) {
-        // possible if two messages has the same notification_id
+        // possible if two messages have the same notification_id
         LOG(ERROR) << "Have nonmonotonic notification identifiers: " << d->dialog_id << " " << m->message_id << " "
                    << notification_id << " " << from_message_id << " " << from_notification_id;
         is_correct = false;
@@ -35045,7 +35045,9 @@ bool MessagesManager::set_dialog_order(Dialog *d, int64 new_order, bool need_sen
   }
 
   auto folder_ptr = get_dialog_folder(d->folder_id);
-  CHECK(folder_ptr != nullptr);
+  LOG_CHECK(folder_ptr != nullptr) << is_inited_ << ' ' << G()->close_flag() << ' ' << dialog_id << ' ' << d->folder_id
+                                   << ' ' << is_loaded_from_database << ' ' << td_->auth_manager_->is_authorized()
+                                   << ' ' << td_->auth_manager_->was_authorized() << ' ' << source;
   auto &folder = *folder_ptr;
   if (old_date == new_date) {
     if (new_order == DEFAULT_ORDER) {
