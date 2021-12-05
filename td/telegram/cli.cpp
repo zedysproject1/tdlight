@@ -1637,7 +1637,7 @@ class CliClient final : public Actor {
     string args;
     std::tie(op, args) = split(cmd);
 
-    const int32 OP_BLOCK_COUNT = 5;
+    const int32 OP_BLOCK_COUNT = 10;
     int32 op_not_found_count = 0;
 
     if (op == "gas") {
@@ -2212,6 +2212,9 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::setCustomLanguagePackString>(language_code, std::move(str)));
     } else if (op == "dlp") {
       send_request(td_api::make_object<td_api::deleteLanguagePack>(args));
+    } else if (op == "on" || op == "off") {
+      send_request(td_api::make_object<td_api::setOption>("online",
+                                                          td_api::make_object<td_api::optionValueBoolean>(op == "on")));
     } else if (op == "go") {
       send_request(td_api::make_object<td_api::getOption>(args));
     } else if (op == "sob") {
@@ -2285,7 +2288,11 @@ class CliClient final : public Actor {
       send_get_background_url(get_freeform_gradient_background({0xFEDCBA, 0x222222}));
       send_get_background_url(get_freeform_gradient_background({0xFEDCBA, 0x111111, 0x222222}));
       send_get_background_url(get_freeform_gradient_background({0xABCDEF, 0xFEDCBA, 0x111111, 0x222222}));
-    } else if (op == "sbg") {
+    } else {
+      op_not_found_count++;
+    }
+
+    if (op == "sbg") {
       send_request(td_api::make_object<td_api::searchBackground>(args));
     } else if (op == "sbgd") {
       send_request(td_api::make_object<td_api::setBackground>(nullptr, nullptr, as_bool(args)));
@@ -2545,17 +2552,17 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::getAnimatedEmoji>(args));
     } else if (op == "gesu") {
       send_request(td_api::make_object<td_api::getEmojiSuggestionsUrl>(args));
-    } else {
-      op_not_found_count++;
-    }
-
-    if (op == "gsan") {
+    } else if (op == "gsan") {
       send_request(td_api::make_object<td_api::getSavedAnimations>());
     } else if (op == "asan") {
       send_request(td_api::make_object<td_api::addSavedAnimation>(as_input_file_id(args)));
     } else if (op == "rsan") {
       send_request(td_api::make_object<td_api::removeSavedAnimation>(as_input_file_id(args)));
-    } else if (op == "guf") {
+    } else {
+      op_not_found_count++;
+    }
+
+    if (op == "guf") {
       send_request(td_api::make_object<td_api::getUserFullInfo>(as_user_id(args)));
     } else if (op == "gbg") {
       send_request(td_api::make_object<td_api::getBasicGroup>(as_basic_group_id(args)));
@@ -2773,7 +2780,11 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::sendChatScreenshotTakenNotification>(as_chat_id(args)));
     } else if (op == "closeSC" || op == "cancelSC") {
       send_request(td_api::make_object<td_api::closeSecretChat>(as_secret_chat_id(args)));
-    } else if (op == "cc" || op == "CreateCall") {
+    } else {
+      op_not_found_count++;
+    }
+
+    if (op == "cc" || op == "CreateCall") {
       send_request(td_api::make_object<td_api::createCall>(
           as_user_id(args), td_api::make_object<td_api::callProtocol>(true, true, 65, 65, vector<string>{"2.6", "3.0"}),
           rand_bool()));
@@ -3425,7 +3436,11 @@ class CliClient final : public Actor {
       get_args(args, chat_id, message_id);
       send_request(td_api::make_object<td_api::getCallbackQueryAnswer>(
           as_chat_id(chat_id), as_message_id(message_id), td_api::make_object<td_api::callbackQueryPayloadGame>("")));
-    } else if (op == "san") {
+    } else {
+      op_not_found_count++;
+    }
+
+    if (op == "san") {
       string chat_id;
       string animation_path;
       int32 width;
@@ -3721,7 +3736,11 @@ class CliClient final : public Actor {
       send_message(chat_id,
                    td_api::make_object<td_api::inputMessageVenue>(td_api::make_object<td_api::venue>(
                        as_location(latitude, longitude, accuracy), title, address, provider, venue_id, venue_type)));
-    } else if (op == "test") {
+    } else {
+      op_not_found_count++;
+    }
+
+    if (op == "test") {
       send_request(td_api::make_object<td_api::testNetwork>());
     } else if (op == "alarm") {
       send_request(td_api::make_object<td_api::setAlarm>(to_double(args)));
@@ -4261,7 +4280,11 @@ class CliClient final : public Actor {
       bool is_dark;
       get_args(args, chat_id, is_dark);
       send_request(td_api::make_object<td_api::getChatStatistics>(as_chat_id(chat_id), is_dark));
-    } else if (op == "sgs") {
+    } else {
+      op_not_found_count++;
+    }
+
+    if (op == "sgs") {
       string chat_id;
       string message_id;
       string user_id;
