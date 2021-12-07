@@ -7378,10 +7378,11 @@ void MessagesManager::on_dialog_action(DialogId dialog_id, MessageId top_thread_
   }
 
   if (!G()->shared_config().get_option_boolean("ignore_update_user_chat_action")) {
-  if (top_thread_message_id.is_valid()) {
-    send_update_chat_action(dialog_id, MessageId(), typing_dialog_id, action);
+    if (top_thread_message_id.is_valid()) {
+      send_update_chat_action(dialog_id, MessageId(), typing_dialog_id, action);
+    }
+    send_update_chat_action(dialog_id, top_thread_message_id, typing_dialog_id, action);
   }
-  send_update_chat_action(dialog_id, top_thread_message_id, typing_dialog_id, action);
 }
 
 void MessagesManager::cancel_dialog_action(DialogId dialog_id, const Message *m) {
