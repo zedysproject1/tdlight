@@ -13636,6 +13636,7 @@ std::pair<DialogId, unique_ptr<MessagesManager::Message>> MessagesManager::creat
         td_->contacts_manager_->add_anonymous_bot_user();
       } else {
         td_->contacts_manager_->add_service_notifications_user();
+        td_->contacts_manager_->add_channel_bot_user();
       }
     }
   }
@@ -13848,10 +13849,12 @@ std::pair<DialogId, unique_ptr<MessagesManager::Message>> MessagesManager::creat
 
   if (message_info.media_album_id != 0) {
     if (!is_allowed_media_group_content(content_type)) {
-      LOG(ERROR) << "Receive media group identifier " << message_info.media_album_id << " in " << message_id << " from "
-                 << dialog_id << " with content "
-                 << oneline(to_string(get_message_content_object(message->content.get(), td_, dialog_id, message->date,
-                                                                 is_content_secret, false, -1)));
+      if (content_type != MessageContentType::Unsupported) {
+        LOG(ERROR) << "Receive media group identifier " << message_info.media_album_id << " in " << message_id
+                   << " from " << dialog_id << " with content "
+                   << oneline(to_string(get_message_content_object(message->content.get(), td_, dialog_id,
+                                                                   message->date, is_content_secret, false, -1)));
+      }
     } else {
       message->media_album_id = message_info.media_album_id;
     }
@@ -17553,6 +17556,7 @@ Status MessagesManager::can_get_message_viewers(DialogId dialog_id, const Messag
 
   if (m->content->get_type() == MessageContentType::Poll &&
       get_message_content_poll_is_anonymous(td_, m->content.get())) {
+    return Status::Error(400, "Anonymous poll viewers are unavailable");
   }
 
   return Status::OK();
@@ -21426,8 +21430,8 @@ td_api::object_ptr<td_api::messageCalendar> MessagesManager::get_dialog_message_
   } while (random_id == 0 || found_dialog_message_calendars_.find(random_id) != found_dialog_message_calendars_.end());
   found_dialog_message_calendars_[random_id];  // reserve place for result
 
-  if (filter == MessageSearchFilter::Empty || filter == MessageSearchFilter::Call ||
-      filter == MessageSearchFilter::MissedCall || filter == MessageSearchFilter::Mention ||
+  CHECK(filter != MessageSearchFilter::Call && filter != MessageSearchFilter::MissedCall);
+  if (filter == MessageSearchFilter::Empty || filter == MessageSearchFilter::Mention ||
       filter == MessageSearchFilter::UnreadMention) {
     promise.set_error(Status::Error(400, "The filter is not supported"));
     return {};
@@ -21697,7 +21701,6 @@ std::pair<int32, vector<MessageId>> MessagesManager::search_dialog_messages(
              << " and with limit " << limit;
 
   switch (dialog_id.get_type()) {
-    case DialogType::None:
     case DialogType::User:
     case DialogType::Chat:
     case DialogType::Channel:
@@ -21712,6 +21715,7 @@ std::pair<int32, vector<MessageId>> MessagesManager::search_dialog_messages(
         promise.set_error(Status::Error(500, "Search messages in secret chats is not supported"));
       }
       break;
+    case DialogType::None:
     default:
       UNREACHABLE();
       promise.set_error(Status::Error(500, "Search messages is not supported"));
@@ -22444,8 +22448,8 @@ std::pair<int32, vector<FullMessageId>> MessagesManager::search_messages(
     return {};
   }
 
-  if (filter == MessageSearchFilter::Call || filter == MessageSearchFilter::MissedCall ||
-      filter == MessageSearchFilter::Mention || filter == MessageSearchFilter::UnreadMention ||
+  CHECK(filter != MessageSearchFilter::Call && filter != MessageSearchFilter::MissedCall);
+  if (filter == MessageSearchFilter::Mention || filter == MessageSearchFilter::UnreadMention ||
       filter == MessageSearchFilter::FailedToSend || filter == MessageSearchFilter::Pinned) {
     promise.set_error(Status::Error(400, "The filter is not supported"));
     return {};
@@ -22702,8 +22706,8 @@ void MessagesManager::get_dialog_sparse_message_positions(
     return promise.set_error(Status::Error(400, "Invalid limit specified"));
   }
 
-  if (filter == MessageSearchFilter::Empty || filter == MessageSearchFilter::Call ||
-      filter == MessageSearchFilter::MissedCall || filter == MessageSearchFilter::Mention ||
+  CHECK(filter != MessageSearchFilter::Call && filter != MessageSearchFilter::MissedCall);
+  if (filter == MessageSearchFilter::Empty || filter == MessageSearchFilter::Mention ||
       filter == MessageSearchFilter::UnreadMention || filter == MessageSearchFilter::Pinned) {
     return promise.set_error(Status::Error(400, "The filter is not supported"));
   }
