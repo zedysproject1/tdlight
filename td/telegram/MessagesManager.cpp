@@ -2873,12 +2873,17 @@ class BlockFromRepliesQuery final : public Td::ResultHandler {
 
 class DeleteParticipantHistoryQuery final : public Td::ResultHandler {
   Promise<AffectedHistory> promise_;
+  ChannelId channel_id_;
+  DialogId sender_dialog_id_;
 
  public:
   explicit DeleteParticipantHistoryQuery(Promise<AffectedHistory> &&promise) : promise_(std::move(promise)) {
   }
 
   void send(ChannelId channel_id, DialogId sender_dialog_id) {
+    channel_id_ = channel_id;
+    sender_dialog_id_ = sender_dialog_id;
+
     auto input_channel = td_->contacts_manager_->get_input_channel(channel_id);
     if (input_channel == nullptr) {
       return promise_.set_error(Status::Error(400, "Chat is not accessible"));
@@ -2902,7 +2907,9 @@ class DeleteParticipantHistoryQuery final : public Td::ResultHandler {
   }
 
   void on_error(Status status) final {
-    // td_->contacts_manager_->on_get_channel_error(channel_id_, status, "DeleteParticipantHistoryQuery");
+    if (sender_dialog_id_.get_type() != DialogType::Channel) {
+      td_->contacts_manager_->on_get_channel_error(channel_id_, status, "DeleteParticipantHistoryQuery");
+    }
     promise_.set_error(std::move(status));
   }
 };
@@ -12176,6 +12183,30 @@ void MessagesManager::set_dialog_online_member_count(DialogId dialog_id, int32 o
   Dialog *d = get_dialog(dialog_id);
   if (d == nullptr) {
     return;
+  }
+
+  if (online_member_count < 0) {
+    LOG(ERROR) << "Receive online_member_count = " << online_member_count << " in " << dialog_id;
+    online_member_count = 0;
+  }
+
+  switch (dialog_id.get_type()) {
+    case DialogType::Chat: {
+      auto participant_count = td_->contacts_manager_->get_chat_participant_count(dialog_id.get_chat_id());
+      if (online_member_count > participant_count) {
+        online_member_count = participant_count;
+      }
+      break;
+    }
+    case DialogType::Channel: {
+      auto participant_count = td_->contacts_manager_->get_channel_participant_count(dialog_id.get_channel_id());
+      if (participant_count != 0 && online_member_count > participant_count) {
+        online_member_count = participant_count;
+      }
+      break;
+    }
+    default:
+      break;
   }
 
   auto &info = dialog_online_member_counts_[dialog_id];
