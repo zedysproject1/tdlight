@@ -10920,22 +10920,28 @@ void MessagesManager::find_newer_messages(const Message *m, MessageId min_messag
 }
 
 void MessagesManager::find_unloadable_messages(const Dialog *d, int32 unload_before_date, const Message *m,
-                                               vector<MessageId> &message_ids, int32 &left_to_unload) const {
+                                               vector<MessageId> &message_ids,
+                                               bool &has_left_to_unload_messages) const {
   if (m == nullptr) {
     return;
   }
 
-  find_unloadable_messages(d, unload_before_date, m->left.get(), message_ids, left_to_unload);
+  find_unloadable_messages(d, unload_before_date, m->left.get(), message_ids, has_left_to_unload_messages);
 
   if (can_unload_message(d, m)) {
     if (m->last_access_date <= unload_before_date) {
       message_ids.push_back(m->message_id);
     } else {
-      left_to_unload++;
+      has_left_to_unload_messages = true;
     }
   }
 
-  find_unloadable_messages(d, unload_before_date, m->right.get(), message_ids, left_to_unload);
+  if (has_left_to_unload_messages && m->date > unload_before_date) {
+    // we aren't interested in unloading too new messages
+    return;
+  }
+
+  find_unloadable_messages(d, unload_before_date, m->right.get(), message_ids, has_left_to_unload_messages);
 }
 
 void MessagesManager::delete_dialog_messages_by_sender(DialogId dialog_id, DialogId sender_dialog_id,
@@ -10995,7 +11001,7 @@ void MessagesManager::delete_dialog_messages_by_sender(DialogId dialog_id, Dialo
   }
 
   vector<MessageId> message_ids;
-  find_messages(d->messages.get(), message_ids, [this, sender_dialog_id](const Message *m) {
+  find_messages(d->messages.get(), message_ids, [sender_dialog_id](const Message *m) {
     return sender_dialog_id == MessagesManager::get_message_sender(m);
   });
 
@@ -11202,6 +11208,11 @@ int32 MessagesManager::get_unload_dialog_delay() const {
   return narrow_cast<int32>(G()->shared_config().get_option_integer("message_unload_delay", default_unload_delay));
 }
 
+int32 MessagesManager::get_next_unload_dialog_delay() const {
+  auto delay = get_unload_dialog_delay();
+  return Random::fast(delay / 4, delay / 2);
+}
+
 void MessagesManager::unload_dialog(DialogId dialog_id) {
   if (G()->close_flag()) {
     return;
@@ -11224,9 +11235,9 @@ void MessagesManager::unload_dialog(DialogId dialog_id) {
   }
 
   vector<MessageId> to_unload_message_ids;
-  int32 left_to_unload = 0;
+  bool has_left_to_unload_messages = false;
   find_unloadable_messages(d, G()->unix_time_cached() - get_unload_dialog_delay() + 2, d->messages.get(),
-                           to_unload_message_ids, left_to_unload);
+                           to_unload_message_ids, has_left_to_unload_messages);
 
   vector<int64> unloaded_message_ids;
   for (auto message_id : to_unload_message_ids) {
@@ -11244,9 +11255,9 @@ void MessagesManager::unload_dialog(DialogId dialog_id) {
         make_tl_object<td_api::updateDeleteMessages>(dialog_id.get(), std::move(unloaded_message_ids), false, true));
   }
 
-  if (left_to_unload > 0) {
-    LOG(DEBUG) << "Need to unload " << left_to_unload << " messages more in " << dialog_id;
-    pending_unload_dialog_timeout_.add_timeout_in(d->dialog_id.get(), get_unload_dialog_delay());
+  if (has_left_to_unload_messages) {
+    LOG(DEBUG) << "Need to unload more messages in " << dialog_id;
+    pending_unload_dialog_timeout_.add_timeout_in(d->dialog_id.get(), get_next_unload_dialog_delay());
   } else {
     d->has_unload_timeout = false;
   }
@@ -20274,8 +20285,8 @@ void MessagesManager::close_dialog(Dialog *d) {
 
   if (is_message_unload_enabled()) {
     CHECK(!d->has_unload_timeout);
+    pending_unload_dialog_timeout_.set_timeout_in(dialog_id.get(), get_next_unload_dialog_delay());
     d->has_unload_timeout = true;
-    pending_unload_dialog_timeout_.set_timeout_in(dialog_id.get(), get_unload_dialog_delay());
   }
 
   for (auto &it : d->pending_viewed_live_locations) {
@@ -24212,8 +24223,14 @@ void MessagesManager::get_dialog_send_message_as_dialog_ids(
       } else {
         add_sender(get_my_dialog_id());
       }
-      for (auto channel_id : created_public_broadcasts_) {
-        add_sender(DialogId(channel_id));
+      auto sorted_channel_ids = transform(created_public_broadcasts_, [&](ChannelId channel_id) {
+        auto participant_count = td_->contacts_manager_->get_channel_participant_count(channel_id);
+        return std::make_pair(-participant_count, channel_id.get());
+      });
+      std::sort(sorted_channel_ids.begin(), sorted_channel_ids.end());
+
+      for (auto channel_id : sorted_channel_ids) {
+        add_sender(DialogId(ChannelId(channel_id.second)));
       }
     }
     return promise.set_value(std::move(senders));
@@ -24265,7 +24282,7 @@ void MessagesManager::set_dialog_default_send_message_as_dialog_id(DialogId dial
         break;
       }
       if (!is_broadcast_channel(message_sender_dialog_id) ||
-          td_->contacts_manager_->get_channel_username(dialog_id.get_channel_id()).empty()) {
+          td_->contacts_manager_->get_channel_username(message_sender_dialog_id.get_channel_id()).empty()) {
         return promise.set_error(Status::Error(400, "Message sender chat must be a public channel"));
       }
       break;
@@ -33200,7 +33217,7 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
 
   if (!d->is_opened && d->messages != nullptr && is_message_unload_enabled() && !d->has_unload_timeout) {
     LOG(INFO) << "Schedule unload of " << dialog_id;
-    pending_unload_dialog_timeout_.add_timeout_in(dialog_id.get(), get_unload_dialog_delay());
+    pending_unload_dialog_timeout_.add_timeout_in(dialog_id.get(), get_next_unload_dialog_delay());
     d->has_unload_timeout = true;
   }
 

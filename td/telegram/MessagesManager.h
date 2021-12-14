@@ -2005,6 +2005,8 @@ class MessagesManager final : public Actor {
 
   int32 get_unload_dialog_delay() const;
 
+  int32 get_next_unload_dialog_delay() const;
+
   void unload_dialog(DialogId dialog_id);
 
   void delete_all_dialog_messages(Dialog *d, bool remove_from_dialog_list, bool is_permanently_deleted);
@@ -2061,7 +2063,7 @@ class MessagesManager final : public Actor {
   static void find_newer_messages(const Message *m, MessageId min_message_id, vector<MessageId> &message_ids);
 
   void find_unloadable_messages(const Dialog *d, int32 unload_before_date, const Message *m,
-                                vector<MessageId> &message_ids, int32 &left_to_unload) const;
+                                vector<MessageId> &message_ids, bool &has_left_to_unload_messages) const;
 
   void on_pending_message_views_timeout(DialogId dialog_id);
 
