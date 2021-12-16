@@ -3269,7 +3269,7 @@ bool Td::is_internal_config_option(Slice name) {
       return name == "revoke_pm_inbox" || name == "revoke_time_limit" || name == "revoke_pm_time_limit" ||
              name == "rating_e_decay" || name == "recent_stickers_limit";
     case 's':
-      return name == "saved_animations_limit";
+      return name == "saved_animations_limit" || name == "session_count";
     case 'v':
       return name == "video_note_size_max";
     case 'w':
@@ -3283,96 +3283,158 @@ void Td::on_config_option_updated(const string &name) {
   if (close_flag_) {
     return;
   }
-  if (name == "auth") {
-    send_closure(auth_manager_actor_, &AuthManager::on_authorization_lost,
-                 G()->shared_config().get_option_string(name));
-    return;
-  } else if (name == "saved_animations_limit") {
-    return animations_manager_->on_update_saved_animations_limit(
-        narrow_cast<int32>(G()->shared_config().get_option_integer(name)));
-  } else if (name == "animation_search_emojis") {
-    return animations_manager_->on_update_animation_search_emojis(G()->shared_config().get_option_string(name));
-  } else if (name == "animation_search_provider") {
-    return animations_manager_->on_update_animation_search_provider(G()->shared_config().get_option_string(name));
-  } else if (name == "animated_emoji_zoom") {
-    // update animated emoji zoom only at launch
-    return;
-  } else if (name == "recent_stickers_limit") {
-    return stickers_manager_->on_update_recent_stickers_limit(
-        narrow_cast<int32>(G()->shared_config().get_option_integer(name)));
-  } else if (name == "favorite_stickers_limit") {
-    stickers_manager_->on_update_favorite_stickers_limit(
-        narrow_cast<int32>(G()->shared_config().get_option_integer(name)));
-  } else if (name == "disable_animated_emoji") {
-    stickers_manager_->on_update_disable_animated_emojis();
-  } else if (name == "my_id") {
-    G()->set_my_id(G()->shared_config().get_option_integer(name));
-  } else if (name == "otherwise_relogin_days") {
-    auto days = narrow_cast<int32>(G()->shared_config().get_option_integer(name));
-    if (days > 0) {
-      vector<SuggestedAction> added_actions{SuggestedAction{SuggestedAction::Type::SetPassword, DialogId(), days}};
-      send_closure(G()->td(), &Td::send_update, get_update_suggested_actions_object(added_actions, {}));
-    }
-    return;
-  } else if (name == "session_count") {
-    G()->net_query_dispatcher().update_session_count();
-  } else if (name == "use_pfs") {
-    G()->net_query_dispatcher().update_use_pfs();
-  } else if (name == "use_storage_optimizer") {
-    send_closure(storage_manager_, &StorageManager::update_use_storage_optimizer);
-  } else if (name == "rating_e_decay") {
-    return send_closure(top_dialog_manager_actor_, &TopDialogManager::update_rating_e_decay);
-  } else if (name == "disable_contact_registered_notifications") {
-    send_closure(notification_manager_actor_,
-                 &NotificationManager::on_disable_contact_registered_notifications_changed);
-  } else if (name == "disable_top_chats") {
-    send_closure(top_dialog_manager_actor_, &TopDialogManager::update_is_enabled,
-                 !G()->shared_config().get_option_boolean(name));
-  } else if (name == "connection_parameters") {
-    if (G()->mtproto_header().set_parameters(G()->shared_config().get_option_string(name))) {
-      G()->net_query_dispatcher().update_mtproto_header();
-    }
-  } else if (name == "is_emulator") {
-    if (G()->mtproto_header().set_is_emulator(G()->shared_config().get_option_boolean(name))) {
-      G()->net_query_dispatcher().update_mtproto_header();
-    }
-  } else if (name == "localization_target") {
-    send_closure(language_pack_manager_, &LanguagePackManager::on_language_pack_changed);
-    if (G()->mtproto_header().set_language_pack(G()->shared_config().get_option_string(name))) {
-      G()->net_query_dispatcher().update_mtproto_header();
-    }
-  } else if (name == "language_pack_id") {
-    send_closure(language_pack_manager_, &LanguagePackManager::on_language_code_changed);
-    if (G()->mtproto_header().set_language_code(G()->shared_config().get_option_string(name))) {
-      G()->net_query_dispatcher().update_mtproto_header();
-    }
-  } else if (name == "language_pack_version") {
-    return send_closure(language_pack_manager_, &LanguagePackManager::on_language_pack_version_changed, false, -1);
-  } else if (name == "base_language_pack_version") {
-    return send_closure(language_pack_manager_, &LanguagePackManager::on_language_pack_version_changed, true, -1);
-  } else if (name == "utc_time_offset") {
-    if (G()->mtproto_header().set_tz_offset(static_cast<int32>(G()->shared_config().get_option_integer(name)))) {
-      G()->net_query_dispatcher().update_mtproto_header();
-    }
-  } else if (name == "notification_group_count_max") {
-    send_closure(notification_manager_actor_, &NotificationManager::on_notification_group_count_max_changed, true);
-  } else if (name == "notification_group_size_max") {
-    send_closure(notification_manager_actor_, &NotificationManager::on_notification_group_size_max_changed);
-  } else if (name == "online_cloud_timeout_ms") {
-    return send_closure(notification_manager_actor_, &NotificationManager::on_online_cloud_timeout_changed);
-  } else if (name == "notification_cloud_delay_ms") {
-    return send_closure(notification_manager_actor_, &NotificationManager::on_notification_cloud_delay_changed);
-  } else if (name == "notification_default_delay_ms") {
-    return send_closure(notification_manager_actor_, &NotificationManager::on_notification_default_delay_changed);
-  } else if (name == "ignored_restriction_reasons") {
-    return send_closure(contacts_manager_actor_, &ContactsManager::on_ignored_restriction_reasons_changed);
-  } else if (name == "dice_emojis") {
-    return send_closure(stickers_manager_actor_, &StickersManager::on_update_dice_emojis);
-  } else if (name == "dice_success_values") {
-    return send_closure(stickers_manager_actor_, &StickersManager::on_update_dice_success_values);
-  } else if (name == "emoji_sounds") {
-    return send_closure(stickers_manager_actor_, &StickersManager::on_update_emoji_sounds);
-  } else if (is_internal_config_option(name)) {
+  switch (name[0]) {
+    case 'a':
+      if (name == "animated_emoji_zoom") {
+        // nothing to do: animated emoji zoom is updated only at launch
+      }
+      if (name == "animation_search_emojis") {
+        animations_manager_->on_update_animation_search_emojis(G()->shared_config().get_option_string(name));
+      }
+      if (name == "animation_search_provider") {
+        animations_manager_->on_update_animation_search_provider(G()->shared_config().get_option_string(name));
+      }
+      if (name == "auth") {
+        send_closure(auth_manager_actor_, &AuthManager::on_authorization_lost,
+                     G()->shared_config().get_option_string(name));
+      }
+      break;
+    case 'b':
+      if (name == "base_language_pack_version") {
+        send_closure(language_pack_manager_, &LanguagePackManager::on_language_pack_version_changed, true, -1);
+      }
+      break;
+    case 'c':
+      if (name == "connection_parameters") {
+        if (G()->mtproto_header().set_parameters(G()->shared_config().get_option_string(name))) {
+          G()->net_query_dispatcher().update_mtproto_header();
+        }
+      }
+      break;
+    case 'd':
+      if (name == "dice_emojis") {
+        send_closure(stickers_manager_actor_, &StickersManager::on_update_dice_emojis);
+      }
+      if (name == "dice_success_values") {
+        send_closure(stickers_manager_actor_, &StickersManager::on_update_dice_success_values);
+      }
+      if (name == "disable_animated_emoji") {
+        stickers_manager_->on_update_disable_animated_emojis();
+      }
+      if (name == "disable_contact_registered_notifications") {
+        send_closure(notification_manager_actor_,
+                     &NotificationManager::on_disable_contact_registered_notifications_changed);
+      }
+      if (name == "disable_top_chats") {
+        send_closure(top_dialog_manager_actor_, &TopDialogManager::update_is_enabled,
+                     !G()->shared_config().get_option_boolean(name));
+      }
+      break;
+    case 'e':
+      if (name == "emoji_sounds") {
+        send_closure(stickers_manager_actor_, &StickersManager::on_update_emoji_sounds);
+      }
+      break;
+    case 'f':
+      if (name == "favorite_stickers_limit") {
+        stickers_manager_->on_update_favorite_stickers_limit(
+            narrow_cast<int32>(G()->shared_config().get_option_integer(name)));
+      }
+      break;
+    case 'i':
+      if (name == "ignored_restriction_reasons") {
+        send_closure(contacts_manager_actor_, &ContactsManager::on_ignored_restriction_reasons_changed);
+      }
+      if (name == "is_emulator") {
+        if (G()->mtproto_header().set_is_emulator(G()->shared_config().get_option_boolean(name))) {
+          G()->net_query_dispatcher().update_mtproto_header();
+        }
+      }
+      break;
+    case 'l':
+      if (name == "language_pack_id") {
+        send_closure(language_pack_manager_, &LanguagePackManager::on_language_code_changed);
+        if (G()->mtproto_header().set_language_code(G()->shared_config().get_option_string(name))) {
+          G()->net_query_dispatcher().update_mtproto_header();
+        }
+      }
+      if (name == "language_pack_version") {
+        send_closure(language_pack_manager_, &LanguagePackManager::on_language_pack_version_changed, false, -1);
+      }
+      if (name == "localization_target") {
+        send_closure(language_pack_manager_, &LanguagePackManager::on_language_pack_changed);
+        if (G()->mtproto_header().set_language_pack(G()->shared_config().get_option_string(name))) {
+          G()->net_query_dispatcher().update_mtproto_header();
+        }
+      }
+      break;
+    case 'm':
+      if (name == "my_id") {
+        G()->set_my_id(G()->shared_config().get_option_integer(name));
+      }
+      break;
+    case 'n':
+      if (name == "notification_cloud_delay_ms") {
+        send_closure(notification_manager_actor_, &NotificationManager::on_notification_cloud_delay_changed);
+      }
+      if (name == "notification_default_delay_ms") {
+        send_closure(notification_manager_actor_, &NotificationManager::on_notification_default_delay_changed);
+      }
+      if (name == "notification_group_count_max") {
+        send_closure(notification_manager_actor_, &NotificationManager::on_notification_group_count_max_changed, true);
+      }
+      if (name == "notification_group_size_max") {
+        send_closure(notification_manager_actor_, &NotificationManager::on_notification_group_size_max_changed);
+      }
+      break;
+    case 'o':
+      if (name == "online_cloud_timeout_ms") {
+        send_closure(notification_manager_actor_, &NotificationManager::on_online_cloud_timeout_changed);
+      }
+      if (name == "otherwise_relogin_days") {
+        auto days = narrow_cast<int32>(G()->shared_config().get_option_integer(name));
+        if (days > 0) {
+          vector<SuggestedAction> added_actions{SuggestedAction{SuggestedAction::Type::SetPassword, DialogId(), days}};
+          send_closure(G()->td(), &Td::send_update, get_update_suggested_actions_object(added_actions, {}));
+        }
+      }
+      break;
+    case 'r':
+      if (name == "rating_e_decay") {
+        send_closure(top_dialog_manager_actor_, &TopDialogManager::update_rating_e_decay);
+      }
+      if (name == "recent_stickers_limit") {
+        stickers_manager_->on_update_recent_stickers_limit(
+            narrow_cast<int32>(G()->shared_config().get_option_integer(name)));
+      }
+      break;
+    case 's':
+      if (name == "saved_animations_limit") {
+        animations_manager_->on_update_saved_animations_limit(
+            narrow_cast<int32>(G()->shared_config().get_option_integer(name)));
+      }
+      if (name == "session_count") {
+        G()->net_query_dispatcher().update_session_count();
+      }
+      break;
+    case 'u':
+      if (name == "use_pfs") {
+        G()->net_query_dispatcher().update_use_pfs();
+      }
+      if (name == "use_storage_optimizer") {
+        send_closure(storage_manager_, &StorageManager::update_use_storage_optimizer);
+      }
+      if (name == "utc_time_offset") {
+        if (G()->mtproto_header().set_tz_offset(static_cast<int32>(G()->shared_config().get_option_integer(name)))) {
+          G()->net_query_dispatcher().update_mtproto_header();
+        }
+      }
+      break;
+    default:
+      break;
+  }
+
+  if (is_internal_config_option(name)) {
     return;
   }
 
@@ -7388,7 +7450,7 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
 
   LOG(INFO) << "Set option " << request.name_;
 
-  auto set_integer_option = [&](Slice name, int64 min = 0, int64 max = std::numeric_limits<int32>::max()) {
+  auto set_integer_option = [&](Slice name, int64 min_value = 0, int64 max_value = std::numeric_limits<int32>::max()) {
     if (request.name_ != name) {
       return false;
     }
@@ -7401,13 +7463,13 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
       G()->shared_config().set_option_empty(name);
     } else {
       int64 value = static_cast<td_api::optionValueInteger *>(request.value_.get())->value_;
-      if (value < min || value > max) {
+      if (value < min_value || value > max_value) {
         send_error_raw(id, 400,
                        PSLICE() << "Option's \"" << name << "\" value " << value << " is outside of a valid range ["
-                                << min << ", " << max << "]");
+                                << min_value << ", " << max_value << "]");
         return true;
       }
-      G()->shared_config().set_option_integer(name, clamp(value, min, max));
+      G()->shared_config().set_option_integer(name, clamp(value, min_value, max_value));
     }
     send_closure(actor_id(this), &Td::send_result, id, make_tl_object<td_api::ok>());
     return true;
@@ -7652,9 +7714,6 @@ void Td::on_request(uint64 id, td_api::setOption &request) {
       }
       break;
     case 's':
-      if (set_integer_option("session_count", 0, 50)) {
-        return;
-      }
       if (set_integer_option("storage_max_files_size")) {
         return;
       }
