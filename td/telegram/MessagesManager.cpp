@@ -838,11 +838,11 @@ class GetCommonDialogsQuery final : public Td::ResultHandler {
     user_id_ = user_id;
     offset_chat_id_ = offset_chat_id;
 
-    auto input_user = td_->contacts_manager_->get_input_user(user_id);
-    CHECK(input_user != nullptr);
+    auto r_input_user = td_->contacts_manager_->get_input_user(user_id);
+    CHECK(r_input_user.is_ok());
 
     send_query(G()->net_query_creator().create(
-        telegram_api::messages_getCommonChats(std::move(input_user), offset_chat_id, limit)));
+        telegram_api::messages_getCommonChats(r_input_user.move_as_ok(), offset_chat_id, limit)));
   }
 
   void on_result(BufferSlice packet) final {
@@ -13830,7 +13830,7 @@ std::pair<DialogId, unique_ptr<MessagesManager::Message>> MessagesManager::creat
   bool has_forward_info = message_info.forward_header != nullptr;
 
   if (sender_dialog_id.is_valid() && sender_dialog_id != dialog_id && have_dialog_info_force(sender_dialog_id)) {
-    force_create_dialog(sender_dialog_id, "create_message", true);
+    force_create_dialog(sender_dialog_id, "create_message", sender_dialog_id.get_type() != DialogType::User);
   }
 
   LOG(INFO) << "Receive " << message_id << " in " << dialog_id << " from " << sender_user_id << "/" << sender_dialog_id;
@@ -19756,12 +19756,12 @@ DialogId MessagesManager::create_new_group_chat(const vector<UserId> &user_ids, 
 
   vector<tl_object_ptr<telegram_api::InputUser>> input_users;
   for (auto user_id : user_ids) {
-    auto input_user = td_->contacts_manager_->get_input_user(user_id);
-    if (input_user == nullptr) {
-      promise.set_error(Status::Error(400, "User not found"));
+    auto r_input_user = td_->contacts_manager_->get_input_user(user_id);
+    if (r_input_user.is_error()) {
+      promise.set_error(r_input_user.move_as_error());
       return DialogId();
     }
-    input_users.push_back(std::move(input_user));
+    input_users.push_back(r_input_user.move_as_ok());
   }
 
   do {
@@ -19815,11 +19815,14 @@ DialogId MessagesManager::create_new_channel_chat(const string &title, bool is_m
 }
 
 void MessagesManager::create_new_secret_chat(UserId user_id, Promise<SecretChatId> &&promise) {
-  auto user_base = td_->contacts_manager_->get_input_user(user_id);
-  if (user_base == nullptr || user_base->get_id() != telegram_api::inputUser::ID) {
-    return promise.set_error(Status::Error(400, "User not found"));
+  auto r_input_user = td_->contacts_manager_->get_input_user(user_id);
+  if (r_input_user.is_error()) {
+    return promise.set_error(r_input_user.move_as_error());
   }
-  auto user = move_tl_object_as<telegram_api::inputUser>(user_base);
+  if (r_input_user.ok()->get_id() != telegram_api::inputUser::ID) {
+    return promise.set_error(Status::Error(400, "Can't create secret chat with self"));
+  }
+  auto user = static_cast<const telegram_api::inputUser *>(r_input_user.ok().get());
 
   send_closure(G()->secret_chats_manager(), &SecretChatsManager::create_chat, UserId(user->user_id_),
                user->access_hash_, std::move(promise));
@@ -25371,12 +25374,12 @@ void MessagesManager::do_send_bot_start_message(UserId bot_user_id, DialogId dia
   if (input_peer == nullptr) {
     return on_send_message_fail(random_id, Status::Error(400, "Have no info about the chat"));
   }
-  auto bot_input_user = td_->contacts_manager_->get_input_user(bot_user_id);
-  if (bot_input_user == nullptr) {
-    return on_send_message_fail(random_id, Status::Error(400, "Have no info about the bot"));
+  auto r_bot_input_user = td_->contacts_manager_->get_input_user(bot_user_id);
+  if (r_bot_input_user.is_error()) {
+    return on_send_message_fail(random_id, r_bot_input_user.move_as_error());
   }
 
-  m->send_query_ref = td_->create_handler<StartBotQuery>()->send(std::move(bot_input_user), dialog_id,
+  m->send_query_ref = td_->create_handler<StartBotQuery>()->send(r_bot_input_user.move_as_ok(), dialog_id,
                                                                  std::move(input_peer), parameter, random_id);
 }
 

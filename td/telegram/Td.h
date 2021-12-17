@@ -65,6 +65,7 @@ class LinkManager;
 class MessagesManager;
 class NetStatsManager;
 class NotificationManager;
+class OptionManager;
 class PasswordManager;
 class PhoneNumberManager;
 class PollManager;
@@ -104,6 +105,8 @@ class Td final : public Actor {
   Td &operator=(Td &&) = delete;
   ~Td() final;
 
+  static constexpr const char *TDLIB_VERSION = "1.7.10";
+
   struct Options {
     std::shared_ptr<NetQueryStats> net_query_stats;
   };
@@ -122,12 +125,13 @@ class Td final : public Actor {
 
   void on_result(NetQueryPtr query);
 
-  void on_update_server_time_difference();
-
   void on_online_updated(bool force, bool send_update);
+
   void on_update_status_success(bool is_online);
 
   bool is_online() const;
+
+  void set_is_online(bool is_online);
 
   void set_is_bot_online(bool is_bot_online);
 
@@ -182,6 +186,8 @@ class Td final : public Actor {
   ActorOwn<MessagesManager> messages_manager_actor_;
   unique_ptr<NotificationManager> notification_manager_;
   ActorOwn<NotificationManager> notification_manager_actor_;
+  unique_ptr<OptionManager> option_manager_;
+  ActorOwn<OptionManager> option_manager_actor_;
   unique_ptr<PollManager> poll_manager_;
   ActorOwn<PollManager> poll_manager_actor_;
   unique_ptr<SponsoredMessageManager> sponsored_message_manager_;
@@ -259,7 +265,6 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> static_request(td_api::object_ptr<td_api::Function> function);
 
  private:
-  static constexpr const char *TDLIB_VERSION = "1.7.10";
   static constexpr int64 ONLINE_ALARM_ID = 0;
   static constexpr int64 PING_SERVER_ALARM_ID = -1;
   static constexpr int32 PING_SERVER_TIMEOUT = 300;
@@ -320,8 +325,6 @@ class Td final : public Actor {
 
   TermsOfService pending_terms_of_service_;
 
-  double last_sent_server_time_difference_ = 1e100;
-
   struct DownloadInfo {
     int32 offset = -1;
     int32 limit = -1;
@@ -356,10 +359,6 @@ class Td final : public Actor {
   void clear_requests();
 
   void on_file_download_finished(FileId file_id);
-
-  static bool is_internal_config_option(Slice name);
-
-  void on_config_option_updated(const string &name);
 
   class OnRequest;
 
