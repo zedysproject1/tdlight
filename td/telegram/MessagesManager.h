@@ -1266,6 +1266,7 @@ class MessagesManager final : public Actor {
     bool was_opened = false;
 
     bool need_restore_reply_markup = true;
+    bool need_drop_default_send_message_as_dialog_id = false;
 
     bool have_full_history = false;
     bool is_empty = false;
