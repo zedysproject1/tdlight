@@ -7385,12 +7385,10 @@ void MessagesManager::on_dialog_action(DialogId dialog_id, MessageId top_thread_
     }
   }
 
-  if (!G()->shared_config().get_option_boolean("ignore_update_user_chat_action")) {
-    if (top_thread_message_id.is_valid()) {
-      send_update_chat_action(dialog_id, MessageId(), typing_dialog_id, action);
-    }
-    send_update_chat_action(dialog_id, top_thread_message_id, typing_dialog_id, action);
+  if (top_thread_message_id.is_valid()) {
+    send_update_chat_action(dialog_id, MessageId(), typing_dialog_id, action);
   }
+  send_update_chat_action(dialog_id, top_thread_message_id, typing_dialog_id, action);
 }
 
 void MessagesManager::cancel_dialog_action(DialogId dialog_id, const Message *m) {
@@ -14022,7 +14020,7 @@ FullMessageId MessagesManager::on_get_message(MessageInfo &&message_info, bool f
     need_update = false;
 
     if (old_message_id.is_valid() && message_id.is_valid() && message_id < old_message_id &&
-        !can_overflow_message_id(dialog_id)) {
+        !has_qts_messages(dialog_id)) {
       LOG(ERROR) << "Sent " << old_message_id << " to " << dialog_id << " as " << message_id;
     }
 
@@ -24052,7 +24050,7 @@ void MessagesManager::fix_server_reply_to_message_id(DialogId dialog_id, Message
   }
 
   if (!message_id.is_scheduled() && !reply_in_dialog_id.is_valid() && reply_to_message_id >= message_id) {
-    if (!can_overflow_message_id(dialog_id)) {
+    if (!has_qts_messages(dialog_id)) {
       LOG(ERROR) << "Receive reply to wrong " << reply_to_message_id << " in " << message_id << " in " << dialog_id;
     }
     reply_to_message_id = MessageId();
@@ -25523,7 +25521,7 @@ void MessagesManager::do_send_inline_query_result_message(DialogId dialog_id, co
       random_id, query_id, result_id);
 }
 
-bool MessagesManager::can_overflow_message_id(DialogId dialog_id) {
+bool MessagesManager::has_qts_messages(DialogId dialog_id) {
   switch (dialog_id.get_type()) {
     case DialogType::User:
     case DialogType::Chat:
@@ -29862,7 +29860,7 @@ FullMessageId MessagesManager::on_send_message_success(int64 random_id, MessageI
     send_update_message_content(d, sent_message.get(), false, source);
   }
 
-  if (old_message_id.is_valid() && new_message_id < old_message_id && !can_overflow_message_id(dialog_id)) {
+  if (old_message_id.is_valid() && new_message_id < old_message_id && !has_qts_messages(dialog_id)) {
     LOG(ERROR) << "Sent " << old_message_id << " to " << dialog_id << " as " << new_message_id;
   }
 
@@ -30728,13 +30726,13 @@ void MessagesManager::on_update_dialog_pending_join_requests(DialogId dialog_id,
     return;
   }
 
-  auto pending_join_request_user_ids = UserId::get_user_ids(pending_requesters);
-  td::remove_if(pending_join_request_user_ids, [](UserId user_id) { return !user_id.is_valid(); });
-  set_dialog_pending_join_requests(d, pending_join_request_count, std::move(pending_join_request_user_ids));
+  set_dialog_pending_join_requests(d, pending_join_request_count, UserId::get_user_ids(pending_requesters));
 }
 
 void MessagesManager::fix_pending_join_requests(DialogId dialog_id, int32 &pending_join_request_count,
                                                 vector<UserId> &pending_join_request_user_ids) const {
+  td::remove_if(pending_join_request_user_ids, [](UserId user_id) { return !user_id.is_valid(); });
+
   bool need_drop_pending_join_requests = [&] {
     if (pending_join_request_count < 0) {
       return true;
@@ -30772,6 +30770,11 @@ void MessagesManager::fix_pending_join_requests(DialogId dialog_id, int32 &pendi
     LOG(ERROR) << "Fix pending join request count from " << pending_join_request_count << " to "
                << pending_join_request_user_ids.size();
     pending_join_request_count = narrow_cast<int32>(pending_join_request_user_ids.size());
+  }
+
+  static constexpr size_t MAX_PENDING_JOIN_REQUESTS = 3;
+  if (pending_join_request_user_ids.size() > MAX_PENDING_JOIN_REQUESTS) {
+    pending_join_request_user_ids.resize(MAX_PENDING_JOIN_REQUESTS);
   }
 }
 
@@ -32958,9 +32961,11 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
           LOG(FATAL) << "Force restart because of message_id overflow in " << dialog_id << " from "
                      << d->last_new_message_id << " to " << message_id;
         }
-        LOG(ERROR) << "New " << message_id << " in " << dialog_id << " from " << source
-                   << " has identifier less than last_new_message_id = " << d->last_new_message_id;
-        dump_debug_message_op(d);
+        if (!has_qts_messages(dialog_id)) {
+          LOG(ERROR) << "New " << message_id << " in " << dialog_id << " from " << source
+                     << " has identifier less than last_new_message_id = " << d->last_new_message_id;
+          dump_debug_message_op(d);
+        }
       }
     }
   }
@@ -33328,19 +33333,15 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
           ++it;
           auto next_message = *it;
           if (next_message != nullptr) {
-            if (next_message->message_id.is_server()) {
-              if (G()->shared_config().get_option_boolean("enable_reactive_channel_difference", false) == false) {
+            if (next_message->message_id.is_server() && !has_qts_messages(dialog_id)) {
               LOG(ERROR) << "Attach " << message_id << " from " << source << " before " << next_message->message_id
                          << " and after " << previous_message_id << " in " << dialog_id;
               dump_debug_message_op(d);
-              }
             }
           } else {
-            if (G()->shared_config().get_option_boolean("enable_reactive_channel_difference", false) == false) {
             LOG(ERROR) << "Have_next is true, but there is no next message after " << previous_message_id << " from "
                        << source << " in " << dialog_id;
             dump_debug_message_op(d);
-            }
           }
         }
 
@@ -33958,8 +33959,8 @@ void MessagesManager::delete_message_files(DialogId dialog_id, const Message *m)
 
 bool MessagesManager::need_delete_file(FullMessageId full_message_id, FileId file_id) const {
   if (being_readded_message_id_ == full_message_id) {
-  return false;
-}
+    return false;
+  }
 
   auto main_file_id = td_->file_manager_->get_file_view(file_id).file_id();
   auto full_message_ids = td_->file_reference_manager_->get_some_message_file_sources(main_file_id);
@@ -33984,8 +33985,8 @@ bool MessagesManager::need_delete_message_files(DialogId dialog_id, const Messag
     return false;
   }
   if (being_readded_message_id_ == FullMessageId{dialog_id, m->message_id}) {
-  return false;
-}
+    return false;
+  }
 
   if (m->forward_info != nullptr && m->forward_info->from_dialog_id.is_valid() &&
       m->forward_info->from_message_id.is_valid()) {
@@ -36525,7 +36526,7 @@ void MessagesManager::run_after_channel_difference(DialogId dialog_id, Promise<U
 
   const Dialog *d = get_dialog(dialog_id);
   get_channel_difference(dialog_id, d == nullptr ? load_channel_pts(dialog_id) : d->pts, true,
-                                 "run_after_channel_difference");
+                         "run_after_channel_difference");
 }
 
 bool MessagesManager::running_get_channel_difference(DialogId dialog_id) const {
