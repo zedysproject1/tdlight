@@ -4545,7 +4545,6 @@ class CliClient final : public Actor {
       rl_callback_handler_remove();
 #endif
       Scheduler::instance()->finish();
-      LOG(WARNING) << "STOP";
       stop();
     }
   }
