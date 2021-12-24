@@ -26,7 +26,6 @@
 #include "td/telegram/CountryInfoManager.h"
 #include "td/telegram/DeviceTokenManager.h"
 #include "td/telegram/DialogAction.h"
-#include "td/telegram/DialogAdministrator.h"
 #include "td/telegram/DialogEventLog.h"
 #include "td/telegram/DialogFilter.h"
 #include "td/telegram/DialogFilterId.h"
@@ -1803,7 +1802,7 @@ class JoinChatByInviteLinkRequest final : public RequestActor<DialogId> {
 
   void do_send_result() final {
     CHECK(dialog_id_.is_valid());
-    td_->messages_manager_->force_create_dialog(dialog_id_, "join chat by invite link");
+    td_->messages_manager_->force_create_dialog(dialog_id_, "join chat via an invite link");
     send_result(td_->messages_manager_->get_chat_object(dialog_id_));
   }
 
@@ -4732,10 +4731,10 @@ void Td::on_request(uint64 id, const td_api::getMessages &request) {
   CREATE_REQUEST(GetMessagesRequest, request.chat_id_, request.message_ids_);
 }
 
-void Td::on_request(uint64 id, const td_api::getChatSponsoredMessages &request) {
+void Td::on_request(uint64 id, const td_api::getChatSponsoredMessage &request) {
   CHECK_IS_USER();
   CREATE_REQUEST_PROMISE();
-  sponsored_message_manager_->get_dialog_sponsored_messages(DialogId(request.chat_id_), std::move(promise));
+  sponsored_message_manager_->get_dialog_sponsored_message(DialogId(request.chat_id_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::viewSponsoredMessage &request) {
@@ -5339,11 +5338,11 @@ void Td::on_request(uint64 id, const td_api::getChatAvailableMessageSenders &req
   messages_manager_->get_dialog_send_message_as_dialog_ids(DialogId(request.chat_id_), std::move(promise));
 }
 
-void Td::on_request(uint64 id, const td_api::setChatDefaultMessageSender &request) {
+void Td::on_request(uint64 id, const td_api::setChatMessageSender &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
   TRY_RESULT_PROMISE(promise, message_sender_dialog_id,
-                     get_message_sender_dialog_id(this, request.default_message_sender_id_, true, false));
+                     get_message_sender_dialog_id(this, request.message_sender_id_, true, false));
   messages_manager_->set_dialog_default_send_message_as_dialog_id(DialogId(request.chat_id_), message_sender_dialog_id,
                                                                   std::move(promise));
 }
@@ -5898,7 +5897,7 @@ void Td::on_request(uint64 id, const td_api::leaveGroupCall &request) {
   group_call_manager_->leave_group_call(GroupCallId(request.group_call_id_), std::move(promise));
 }
 
-void Td::on_request(uint64 id, const td_api::discardGroupCall &request) {
+void Td::on_request(uint64 id, const td_api::endGroupCall &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
   group_call_manager_->discard_group_call(GroupCallId(request.group_call_id_), std::move(promise));
@@ -5999,9 +5998,9 @@ void Td::on_request(uint64 id, const td_api::setChatPhoto &request) {
   messages_manager_->set_dialog_photo(DialogId(request.chat_id_), request.photo_, std::move(promise));
 }
 
-void Td::on_request(uint64 id, const td_api::setChatMessageTtlSetting &request) {
+void Td::on_request(uint64 id, const td_api::setChatMessageTtl &request) {
   CREATE_OK_REQUEST_PROMISE();
-  messages_manager_->set_dialog_message_ttl_setting(DialogId(request.chat_id_), request.ttl_, std::move(promise));
+  messages_manager_->set_dialog_message_ttl(DialogId(request.chat_id_), request.ttl_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::setChatPermissions &request) {
@@ -6224,7 +6223,7 @@ void Td::on_request(uint64 id, td_api::createChatInviteLink &request) {
   CLEAN_INPUT_STRING(request.name_);
   CREATE_REQUEST_PROMISE();
   contacts_manager_->export_dialog_invite_link(DialogId(request.chat_id_), std::move(request.name_),
-                                               request.expire_date_, request.member_limit_,
+                                               request.expiration_date_, request.member_limit_,
                                                request.creates_join_request_, false, std::move(promise));
 }
 
@@ -6233,8 +6232,8 @@ void Td::on_request(uint64 id, td_api::editChatInviteLink &request) {
   CLEAN_INPUT_STRING(request.invite_link_);
   CREATE_REQUEST_PROMISE();
   contacts_manager_->edit_dialog_invite_link(DialogId(request.chat_id_), request.invite_link_, std::move(request.name_),
-                                             request.expire_date_, request.member_limit_, request.creates_join_request_,
-                                             std::move(promise));
+                                             request.expiration_date_, request.member_limit_,
+                                             request.creates_join_request_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::getChatInviteLink &request) {

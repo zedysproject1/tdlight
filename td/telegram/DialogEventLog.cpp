@@ -17,7 +17,7 @@
 #include "td/telegram/InputGroupCallId.h"
 #include "td/telegram/MessageSender.h"
 #include "td/telegram/MessagesManager.h"
-#include "td/telegram/MessageTtlSetting.h"
+#include "td/telegram/MessageTtl.h"
 #include "td/telegram/StickersManager.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/telegram_api.h"
@@ -30,7 +30,8 @@
 namespace td {
 
 static td_api::object_ptr<td_api::ChatEventAction> get_chat_event_action_object(
-    Td *td, ChannelId channel_id, tl_object_ptr<telegram_api::ChannelAdminLogEventAction> &&action_ptr) {
+    Td *td, ChannelId channel_id, tl_object_ptr<telegram_api::ChannelAdminLogEventAction> &&action_ptr,
+    DialogId &actor_dialog_id) {
   CHECK(action_ptr != nullptr);
   switch (action_ptr->get_id()) {
     case telegram_api::channelAdminLogEventActionParticipantJoin::ID:
@@ -150,8 +151,9 @@ static td_api::object_ptr<td_api::ChatEventAction> get_chat_event_action_object(
     }
     case telegram_api::channelAdminLogEventActionUpdatePinned::ID: {
       auto action = move_tl_object_as<telegram_api::channelAdminLogEventActionUpdatePinned>(action_ptr);
-      auto message =
-          td->messages_manager_->get_dialog_event_log_message_object(DialogId(channel_id), std::move(action->message_));
+      DialogId sender_dialog_id;
+      auto message = td->messages_manager_->get_dialog_event_log_message_object(
+          DialogId(channel_id), std::move(action->message_), sender_dialog_id);
       if (message == nullptr) {
         return nullptr;
       }
@@ -166,19 +168,24 @@ static td_api::object_ptr<td_api::ChatEventAction> get_chat_event_action_object(
     }
     case telegram_api::channelAdminLogEventActionEditMessage::ID: {
       auto action = move_tl_object_as<telegram_api::channelAdminLogEventActionEditMessage>(action_ptr);
-      auto old_message = td->messages_manager_->get_dialog_event_log_message_object(DialogId(channel_id),
-                                                                                    std::move(action->prev_message_));
-      auto new_message = td->messages_manager_->get_dialog_event_log_message_object(DialogId(channel_id),
-                                                                                    std::move(action->new_message_));
+      DialogId old_sender_dialog_id;
+      auto old_message = td->messages_manager_->get_dialog_event_log_message_object(
+          DialogId(channel_id), std::move(action->prev_message_), old_sender_dialog_id);
+      DialogId new_sender_dialog_id;
+      auto new_message = td->messages_manager_->get_dialog_event_log_message_object(
+          DialogId(channel_id), std::move(action->new_message_), new_sender_dialog_id);
       if (old_message == nullptr || new_message == nullptr) {
         return nullptr;
+      }
+      if (old_sender_dialog_id == new_sender_dialog_id) {
+        actor_dialog_id = old_sender_dialog_id;
       }
       return td_api::make_object<td_api::chatEventMessageEdited>(std::move(old_message), std::move(new_message));
     }
     case telegram_api::channelAdminLogEventActionStopPoll::ID: {
       auto action = move_tl_object_as<telegram_api::channelAdminLogEventActionStopPoll>(action_ptr);
-      auto message =
-          td->messages_manager_->get_dialog_event_log_message_object(DialogId(channel_id), std::move(action->message_));
+      auto message = td->messages_manager_->get_dialog_event_log_message_object(
+          DialogId(channel_id), std::move(action->message_), actor_dialog_id);
       if (message == nullptr) {
         return nullptr;
       }
@@ -186,8 +193,8 @@ static td_api::object_ptr<td_api::ChatEventAction> get_chat_event_action_object(
     }
     case telegram_api::channelAdminLogEventActionDeleteMessage::ID: {
       auto action = move_tl_object_as<telegram_api::channelAdminLogEventActionDeleteMessage>(action_ptr);
-      auto message =
-          td->messages_manager_->get_dialog_event_log_message_object(DialogId(channel_id), std::move(action->message_));
+      auto message = td->messages_manager_->get_dialog_event_log_message_object(
+          DialogId(channel_id), std::move(action->message_), actor_dialog_id);
       if (message == nullptr) {
         return nullptr;
       }
@@ -287,7 +294,7 @@ static td_api::object_ptr<td_api::ChatEventAction> get_chat_event_action_object(
       if (!input_group_call_id.is_valid()) {
         return nullptr;
       }
-      return td_api::make_object<td_api::chatEventVideoChatDiscarded>(
+      return td_api::make_object<td_api::chatEventVideoChatEnded>(
           td->group_call_manager_->get_group_call_id(input_group_call_id, DialogId(channel_id)).get());
     }
     case telegram_api::channelAdminLogEventActionParticipantMute::ID: {
@@ -324,10 +331,10 @@ static td_api::object_ptr<td_api::ChatEventAction> get_chat_event_action_object(
     }
     case telegram_api::channelAdminLogEventActionChangeHistoryTTL::ID: {
       auto action = move_tl_object_as<telegram_api::channelAdminLogEventActionChangeHistoryTTL>(action_ptr);
-      auto old_value = MessageTtlSetting(clamp(action->prev_value_, 0, 86400 * 366));
-      auto new_value = MessageTtlSetting(clamp(action->new_value_, 0, 86400 * 366));
-      return td_api::make_object<td_api::chatEventMessageTtlSettingChanged>(old_value.get_message_ttl_setting_object(),
-                                                                            new_value.get_message_ttl_setting_object());
+      auto old_value = MessageTtl(clamp(action->prev_value_, 0, 86400 * 366));
+      auto new_value = MessageTtl(clamp(action->new_value_, 0, 86400 * 366));
+      return td_api::make_object<td_api::chatEventMessageTtlChanged>(old_value.get_message_ttl_object(),
+                                                                     new_value.get_message_ttl_object());
     }
     case telegram_api::channelAdminLogEventActionToggleNoForwards::ID: {
       auto action = move_tl_object_as<telegram_api::channelAdminLogEventActionToggleNoForwards>(action_ptr);
@@ -394,13 +401,20 @@ class GetChannelAdminLogQuery final : public Td::ResultHandler {
       }
       LOG_IF(ERROR, !td_->contacts_manager_->have_user(user_id)) << "Have no info about " << user_id;
 
-      auto action = get_chat_event_action_object(td_, channel_id_, std::move(event->action_));
+      DialogId actor_dialog_id;
+      auto action = get_chat_event_action_object(td_, channel_id_, std::move(event->action_), actor_dialog_id);
       if (action == nullptr) {
         continue;
       }
-      result->events_.push_back(td_api::make_object<td_api::chatEvent>(
-          event->id_, event->date_, td_->contacts_manager_->get_user_id_object(user_id, "chatEvent"),
-          std::move(action)));
+      if (user_id == ContactsManager::get_channel_bot_user_id() && actor_dialog_id.is_valid() &&
+          actor_dialog_id.get_type() != DialogType::User) {
+        user_id = UserId();
+      } else {
+        actor_dialog_id = DialogId();
+      }
+      auto actor = get_message_sender_object_const(td_, user_id, actor_dialog_id, "GetChannelAdminLogQuery");
+      result->events_.push_back(
+          td_api::make_object<td_api::chatEvent>(event->id_, event->date_, std::move(actor), std::move(action)));
     }
 
     promise_.set_value(std::move(result));

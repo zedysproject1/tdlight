@@ -55,6 +55,8 @@ namespace td {
 
 struct BinlogEvent;
 
+struct MinChannel;
+
 class Td;
 
 class ContactsManager final : public Actor {
@@ -492,8 +494,11 @@ class ContactsManager final : public Actor {
   DialogParticipantStatus get_chat_permissions(ChatId chat_id) const;
   bool is_appointed_chat_administrator(ChatId chat_id) const;
 
-  bool have_channel(ChannelId channel_id) const;
   bool have_min_channel(ChannelId channel_id) const;
+  const MinChannel *get_min_channel(ChannelId channel_id) const;
+  void add_min_channel(ChannelId channel_id, const MinChannel &min_channel);
+
+  bool have_channel(ChannelId channel_id) const;
   bool have_channel_force(ChannelId channel_id);
   bool get_channel(ChannelId channel_id, int left_tries, Promise<Unit> &&promise);
   void reload_channel(ChannelId channel_id, Promise<Unit> &&promise);
@@ -1520,7 +1525,7 @@ class ContactsManager final : public Actor {
 
   tl_object_ptr<td_api::basicGroupFullInfo> get_basic_group_full_info_object(const ChatFull *chat_full) const;
 
-  static td_api::object_ptr<td_api::updateSupergroup> get_update_unknown_supergroup_object(ChannelId channel_id);
+  td_api::object_ptr<td_api::updateSupergroup> get_update_unknown_supergroup_object(ChannelId channel_id) const;
 
   static tl_object_ptr<td_api::supergroup> get_supergroup_object(ChannelId channel_id, const Channel *c);
 
@@ -1651,7 +1656,7 @@ class ContactsManager final : public Actor {
   mutable std::unordered_set<ChatId, ChatIdHash> unknown_chats_;
   std::unordered_map<ChatId, FileSourceId, ChatIdHash> chat_full_file_source_ids_;
 
-  std::unordered_set<ChannelId, ChannelIdHash> min_channels_;
+  std::unordered_map<ChannelId, unique_ptr<MinChannel>, ChannelIdHash> min_channels_;
   std::unordered_map<ChannelId, unique_ptr<Channel>, ChannelIdHash> channels_;
   std::unordered_map<ChannelId, unique_ptr<ChannelFull>, ChannelIdHash> channels_full_;
   mutable std::unordered_set<ChannelId, ChannelIdHash> unknown_channels_;

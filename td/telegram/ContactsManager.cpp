@@ -25,7 +25,8 @@
 #include "td/telegram/MemoryManager.h"
 #include "td/telegram/MessageSender.h"
 #include "td/telegram/MessagesManager.h"
-#include "td/telegram/MessageTtlSetting.h"
+#include "td/telegram/MessageTtl.h"
+#include "td/telegram/MinChannel.h"
 #include "td/telegram/misc.h"
 #include "td/telegram/net/NetQuery.h"
 #include "td/telegram/NotificationManager.h"
@@ -1974,7 +1975,7 @@ class ImportChatInviteQuery final : public Td::ResultHandler {
     auto dialog_ids = UpdatesManager::get_chat_dialog_ids(ptr.get());
     if (dialog_ids.size() != 1u) {
       LOG(ERROR) << "Receive wrong result for ImportChatInviteQuery: " << to_string(ptr);
-      return on_error(Status::Error(500, "Internal Server Error: failed to join chat by invite link"));
+      return on_error(Status::Error(500, "Internal Server Error: failed to join chat via invite link"));
     }
     auto dialog_id = dialog_ids[0];
 
@@ -4606,6 +4607,10 @@ const DialogPhoto *ContactsManager::get_chat_dialog_photo(ChatId chat_id) const 
 const DialogPhoto *ContactsManager::get_channel_dialog_photo(ChannelId channel_id) const {
   auto c = get_channel(channel_id);
   if (c == nullptr) {
+    auto min_channel = get_min_channel(channel_id);
+    if (min_channel != nullptr) {
+      return &min_channel->photo_;
+    }
     return nullptr;
   }
   return &c->photo;
@@ -4644,6 +4649,10 @@ string ContactsManager::get_chat_title(ChatId chat_id) const {
 string ContactsManager::get_channel_title(ChannelId channel_id) const {
   auto c = get_channel(channel_id);
   if (c == nullptr) {
+    auto min_channel = get_min_channel(channel_id);
+    if (min_channel != nullptr) {
+      return min_channel->title_;
+    }
     return string();
   }
   return c->title;
@@ -10149,8 +10158,8 @@ void ContactsManager::update_secret_chat(SecretChat *c, SecretChatId secret_chat
       c->is_state_changed = false;
     }
     if (c->is_ttl_changed) {
-      send_closure_later(G()->messages_manager(), &MessagesManager::on_update_dialog_message_ttl_setting,
-                         DialogId(secret_chat_id), MessageTtlSetting(c->ttl));
+      send_closure_later(G()->messages_manager(), &MessagesManager::on_update_dialog_message_ttl,
+                         DialogId(secret_chat_id), MessageTtl(c->ttl));
       c->is_ttl_changed = false;
     }
   }
@@ -10359,11 +10368,11 @@ void ContactsManager::on_get_user_full(tl_object_ptr<telegram_api::userFull> &&u
   td_->messages_manager_->on_update_dialog_has_scheduled_server_messages(
       DialogId(user_id), (user->flags_ & USER_FULL_FLAG_HAS_SCHEDULED_MESSAGES) != 0);
   {
-    MessageTtlSetting message_ttl_setting;
+    MessageTtl message_ttl;
     if ((user->flags_ & USER_FULL_FLAG_HAS_MESSAGE_TTL) != 0) {
-      message_ttl_setting = MessageTtlSetting(user->ttl_period_);
+      message_ttl = MessageTtl(user->ttl_period_);
     }
-    td_->messages_manager_->on_update_dialog_message_ttl_setting(DialogId(user_id), message_ttl_setting);
+    td_->messages_manager_->on_update_dialog_message_ttl(DialogId(user_id), message_ttl);
   }
 
   UserFull *user_full = add_user_full(user_id);
@@ -10636,11 +10645,11 @@ void ContactsManager::on_get_chat_full(tl_object_ptr<telegram_api::ChatFull> &&c
                          default_join_group_call_as_dialog_id, false);
     }
     {
-      MessageTtlSetting message_ttl_setting;
+      MessageTtl message_ttl;
       if ((chat->flags_ & CHAT_FULL_FLAG_HAS_MESSAGE_TTL) != 0) {
-        message_ttl_setting = MessageTtlSetting(chat->ttl_period_);
+        message_ttl = MessageTtl(chat->ttl_period_);
       }
-      td_->messages_manager_->on_update_dialog_message_ttl_setting(DialogId(chat_id), message_ttl_setting);
+      td_->messages_manager_->on_update_dialog_message_ttl(DialogId(chat_id), message_ttl);
     }
 
     ChatFull *chat_full = add_chat_full(chat_id);
@@ -10713,11 +10722,11 @@ void ContactsManager::on_get_chat_full(tl_object_ptr<telegram_api::ChatFull> &&c
                                                                    std::move(channel->recent_requesters_));
 
     {
-      MessageTtlSetting message_ttl_setting;
+      MessageTtl message_ttl;
       if ((channel->flags_ & CHANNEL_FULL_FLAG_HAS_MESSAGE_TTL) != 0) {
-        message_ttl_setting = MessageTtlSetting(channel->ttl_period_);
+        message_ttl = MessageTtl(channel->ttl_period_);
       }
-      td_->messages_manager_->on_update_dialog_message_ttl_setting(DialogId(channel_id), message_ttl_setting);
+      td_->messages_manager_->on_update_dialog_message_ttl(DialogId(channel_id), message_ttl);
     }
 
     auto c = get_channel(channel_id);
@@ -14457,6 +14466,10 @@ bool ContactsManager::is_channel_public(const Channel *c) {
 ContactsManager::ChannelType ContactsManager::get_channel_type(ChannelId channel_id) const {
   auto c = get_channel(channel_id);
   if (c == nullptr) {
+    auto min_channel = get_min_channel(channel_id);
+    if (min_channel != nullptr) {
+      return min_channel->is_megagroup_ ? ChannelType::Megagroup : ChannelType::Broadcast;
+    }
     return ChannelType::Unknown;
   }
   return get_channel_type(c);
@@ -14567,6 +14580,21 @@ bool ContactsManager::have_channel(ChannelId channel_id) const {
 
 bool ContactsManager::have_min_channel(ChannelId channel_id) const {
   return min_channels_.count(channel_id) > 0;
+}
+
+const MinChannel *ContactsManager::get_min_channel(ChannelId channel_id) const {
+  auto it = min_channels_.find(channel_id);
+  if (it == min_channels_.end()) {
+    return nullptr;
+  }
+  return it->second.get();
+}
+
+void ContactsManager::add_min_channel(ChannelId channel_id, const MinChannel &min_channel) {
+  if (have_channel(channel_id) || have_min_channel(channel_id)) {
+    return;
+  }
+  min_channels_[channel_id] = td::make_unique<MinChannel>(min_channel);
 }
 
 const ContactsManager::Channel *ContactsManager::get_channel(ChannelId channel_id) const {
@@ -15602,8 +15630,8 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
     Channel *c = get_channel_force(channel_id);
     LOG(ERROR) << "Receive empty " << to_string(channel) << " from " << source << ", have "
                << to_string(get_supergroup_object(channel_id, c));
-    if (c == nullptr) {
-      min_channels_.insert(channel_id);
+    if (c == nullptr && !have_min_channel(channel_id)) {
+      min_channels_[channel_id] = td::make_unique<MinChannel>();
     }
     return;
   }
@@ -15671,7 +15699,6 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
   }();
 
   if (is_min) {
-    // TODO there can be better support for min channels
     Channel *c = get_channel_force(channel_id);
     if (c != nullptr) {
       LOG(DEBUG) << "Receive known min " << channel_id;
@@ -15706,7 +15733,16 @@ void ContactsManager::on_chat_update(telegram_api::channel &channel, const char 
 
       update_channel(c, channel_id);
     } else {
-      min_channels_.insert(channel_id);
+      auto min_channel = td::make_unique<MinChannel>();
+      min_channel->photo_ =
+          get_dialog_photo(td_->file_manager_.get(), DialogId(channel_id), access_hash, std::move(channel.photo_));
+      if (td_->auth_manager_->is_bot()) {
+        min_channel->photo_.minithumbnail.clear();
+      }
+      min_channel->title_ = std::move(channel.title_);
+      min_channel->is_megagroup_ = is_megagroup;
+
+      min_channels_[channel_id] = std::move(min_channel);
     }
     return;
   }
@@ -15806,8 +15842,8 @@ void ContactsManager::on_chat_update(telegram_api::channelForbidden &channel, co
     Channel *c = get_channel_force(channel_id);
     LOG(ERROR) << "Receive empty " << to_string(channel) << " from " << source << ", have "
                << to_string(get_supergroup_object(channel_id, c));
-    if (c == nullptr) {
-      min_channels_.insert(channel_id);
+    if (c == nullptr && !have_min_channel(channel_id)) {
+      min_channels_[channel_id] = td::make_unique<MinChannel>();
     }
     return;
   }
@@ -16131,15 +16167,21 @@ tl_object_ptr<td_api::basicGroupFullInfo> ContactsManager::get_basic_group_full_
 }
 
 td_api::object_ptr<td_api::updateSupergroup> ContactsManager::get_update_unknown_supergroup_object(
-    ChannelId channel_id) {
+    ChannelId channel_id) const {
+  auto min_channel = get_min_channel(channel_id);
   return td_api::make_object<td_api::updateSupergroup>(td_api::make_object<td_api::supergroup>(
       channel_id.get(), string(), 0, DialogParticipantStatus::Banned(0).get_chat_member_status_object(), 0, false,
-      false, false, false, true, false, false, string(), false, false));
+      false, false, false, min_channel == nullptr ? true : !min_channel->is_megagroup_, false, false, string(), false,
+      false));
 }
 
 int64 ContactsManager::get_supergroup_id_object(ChannelId channel_id, const char *source) const {
   if (channel_id.is_valid() && get_channel(channel_id) == nullptr && unknown_channels_.count(channel_id) == 0) {
-    LOG(ERROR) << "Have no info about " << channel_id << " received from " << source;
+    if (have_min_channel(channel_id)) {
+      LOG(INFO) << "Have only min " << channel_id << " received from " << source;
+    } else {
+      LOG(ERROR) << "Have no info about " << channel_id << " received from " << source;
+    }
     unknown_channels_.insert(channel_id);
     send_closure(G()->td(), &Td::send_update, get_update_unknown_supergroup_object(channel_id));
   }

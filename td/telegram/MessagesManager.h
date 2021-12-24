@@ -35,7 +35,7 @@
 #include "td/telegram/MessagesDb.h"
 #include "td/telegram/MessageSearchFilter.h"
 #include "td/telegram/MessageThreadInfo.h"
-#include "td/telegram/MessageTtlSetting.h"
+#include "td/telegram/MessageTtl.h"
 #include "td/telegram/net/DcId.h"
 #include "td/telegram/net/NetQuery.h"
 #include "td/telegram/Notification.h"
@@ -312,7 +312,7 @@ class MessagesManager final : public Actor {
   void on_update_dialog_default_send_message_as_dialog_id(DialogId dialog_id, DialogId default_send_as_dialog_id,
                                                           bool force);
 
-  void on_update_dialog_message_ttl_setting(DialogId dialog_id, MessageTtlSetting message_ttl_setting);
+  void on_update_dialog_message_ttl(DialogId dialog_id, MessageTtl message_ttl);
 
   void on_update_dialog_filters();
 
@@ -430,7 +430,7 @@ class MessagesManager final : public Actor {
 
   Result<vector<MessageId>> resend_messages(DialogId dialog_id, vector<MessageId> message_ids) TD_WARN_UNUSED_RESULT;
 
-  void set_dialog_message_ttl_setting(DialogId dialog_id, int32 ttl, Promise<Unit> &&promise);
+  void set_dialog_message_ttl(DialogId dialog_id, int32 ttl, Promise<Unit> &&promise);
 
   Status send_screenshot_taken_notification_message(DialogId dialog_id);
 
@@ -774,7 +774,7 @@ class MessagesManager final : public Actor {
   tl_object_ptr<td_api::message> get_dialog_message_by_date_object(int64 random_id);
 
   td_api::object_ptr<td_api::message> get_dialog_event_log_message_object(
-      DialogId dialog_id, tl_object_ptr<telegram_api::Message> &&message);
+      DialogId dialog_id, tl_object_ptr<telegram_api::Message> &&message, DialogId &sender_dialog_id);
 
   tl_object_ptr<td_api::message> get_message_object(FullMessageId full_message_id, const char *source);
 
@@ -1207,7 +1207,7 @@ class MessagesManager final : public Actor {
     MessageId last_pinned_message_id;
     MessageId reply_markup_message_id;
     DialogNotificationSettings notification_settings;
-    MessageTtlSetting message_ttl_setting;
+    MessageTtl message_ttl;
     unique_ptr<DraftMessage> draft_message;
     unique_ptr<DialogActionBar> action_bar;
     LogEventIdWithGeneration save_draft_message_log_event_id;
@@ -1289,7 +1289,7 @@ class MessagesManager final : public Actor {
     bool had_last_yet_unsent_message = false;  // whether the dialog was stored to database without last message
     bool has_active_group_call = false;
     bool is_group_call_empty = false;
-    bool is_message_ttl_setting_inited = false;
+    bool is_message_ttl_inited = false;
     bool has_expected_active_group_call_id = false;
     bool has_bots = false;
     bool is_has_bots_inited = false;
@@ -2400,9 +2400,9 @@ class MessagesManager final : public Actor {
 
   void send_update_chat_video_chat(const Dialog *d);
 
-  void send_update_chat_default_message_sender_id(const Dialog *d);
+  void send_update_chat_message_sender(const Dialog *d);
 
-  void send_update_chat_message_ttl_setting(const Dialog *d);
+  void send_update_chat_message_ttl(const Dialog *d);
 
   void send_update_chat_has_scheduled_messages(Dialog *d, bool from_deletion);
 
@@ -2601,7 +2601,7 @@ class MessagesManager final : public Actor {
 
   td_api::object_ptr<td_api::videoChat> get_video_chat_object(const Dialog *d) const;
 
-  td_api::object_ptr<td_api::MessageSender> get_default_sender_id_object(const Dialog *d) const;
+  td_api::object_ptr<td_api::MessageSender> get_default_message_sender_object(const Dialog *d) const;
 
   td_api::object_ptr<td_api::chat> get_chat_object(const Dialog *d) const;
 
@@ -3111,9 +3111,9 @@ class MessagesManager final : public Actor {
     return !LOG_IS_STRIPPED(ERROR) && false;
   }
 
-  static void dump_debug_message_op(const Dialog *d, int priority = 0);
+  void add_message_dependencies(Dependencies &dependencies, const Message *m);
 
-  static void add_message_dependencies(Dependencies &dependencies, const Message *m);
+  static void dump_debug_message_op(const Dialog *d, int priority = 0);
 
   static void save_send_message_log_event(DialogId dialog_id, const Message *m);
 
