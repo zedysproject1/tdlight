@@ -29383,7 +29383,7 @@ void MessagesManager::send_update_chat_last_message_impl(const Dialog *d, const 
     return;
   }
 
-  if (!G()->shared_config().get_option_boolean("ignore_update_chat_last_message")) {
+  if (G()->shared_config().get_option_boolean("ignore_update_chat_last_message")) {
     return;
   }
 
