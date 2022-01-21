@@ -3007,12 +3007,15 @@ td_api::object_ptr<td_api::AuthorizationState> Td::get_fake_authorization_state_
   }
 }
 
-DbKey Td::as_db_key(string key) {
+DbKey Td::as_db_key(string key, bool custom_db) {
   // Database will still be effectively not encrypted, but
   // 1. SQLite database will be protected from corruption, because that's how sqlcipher works
   // 2. security through obscurity
   // 3. no need for reencryption of SQLite database
   if (key.empty()) {
+    if (custom_db) {
+      return DbKey::empty();
+    }
     return DbKey::raw_key("cucumber");
   }
   return DbKey::raw_key(std::move(key));
@@ -3080,11 +3083,11 @@ void Td::request(uint64 id, tl_object_ptr<td_api::Function> function) {
       switch (function_id) {
         case td_api::checkDatabaseEncryptionKey::ID: {
           auto check_key = move_tl_object_as<td_api::checkDatabaseEncryptionKey>(function);
-          return answer_ok_query(id, init(as_db_key(std::move(check_key->encryption_key_))));
+          return answer_ok_query(id, init(as_db_key(std::move(check_key->encryption_key_), parameters_.use_custom_db_format)));
         }
         case td_api::setDatabaseEncryptionKey::ID: {
           auto set_key = move_tl_object_as<td_api::setDatabaseEncryptionKey>(function);
-          return answer_ok_query(id, init(as_db_key(std::move(set_key->new_encryption_key_))));
+          return answer_ok_query(id, init(as_db_key(std::move(set_key->new_encryption_key_), parameters_.use_custom_db_format)));
         }
         case td_api::destroy::ID:
           // need to send response synchronously before actual destroying
@@ -4245,7 +4248,8 @@ Status Td::set_parameters(td_api::object_ptr<td_api::tdlibParameters> parameters
   }
 
   parameters_.use_test_dc = parameters->use_test_dc_;
-  parameters_.database_directory = parameters->database_directory_;
+  parameters_.database_directory = Global::get_database_directory_path(parameters->database_directory_);
+  parameters_.use_custom_db_format = Global::get_use_custom_database(parameters->database_directory_);
   parameters_.files_directory = parameters->files_directory_;
   parameters_.api_id = parameters->api_id_;
   parameters_.api_hash = parameters->api_hash_;
@@ -4310,7 +4314,7 @@ void Td::on_request(uint64 id, const td_api::checkDatabaseEncryptionKey &request
 
 void Td::on_request(uint64 id, td_api::setDatabaseEncryptionKey &request) {
   CREATE_OK_REQUEST_PROMISE();
-  G()->td_db()->get_binlog()->change_key(as_db_key(std::move(request.new_encryption_key_)), std::move(promise));
+  G()->td_db()->get_binlog()->change_key(as_db_key(std::move(request.new_encryption_key_), parameters_.use_custom_db_format), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::getAuthorizationState &request) {

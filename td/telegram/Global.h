@@ -87,6 +87,56 @@ class Global final : public ActorContext {
 
   Status init(const TdParameters &parameters, ActorId<Td> td, unique_ptr<TdDb> td_db_ptr) TD_WARN_UNUSED_RESULT;
 
+  static bool get_use_custom_database(const std::string &database_directory) {
+    auto s = get_database_directory_opts(database_directory);
+    size_t qmarkpos;
+    std::string token;
+    size_t find_start_index = 0;
+    while ((qmarkpos = s.find_first_of('&'), find_start_index) != std::string::npos) {
+      token = s.substr(find_start_index, qmarkpos - find_start_index);
+      find_start_index = qmarkpos;
+      if ((qmarkpos = token.find_first_of('=')) != std::string::npos) {
+        std::string propkey = token.substr(0, qmarkpos), propval = token.substr(qmarkpos + 1);
+        if (propkey == "use_custom_database_format" && propval == "true") {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  static std::string get_database_directory_path(const std::string &database_directory) {
+    if (database_directory.empty()) {
+      return database_directory;
+    }
+    size_t qmarkpos;
+    if ((qmarkpos = database_directory.find_first_of('?')) != std::string::npos) {
+      std::string path = database_directory.substr(0, qmarkpos),
+                  opts = database_directory.substr(qmarkpos + 1);
+      return path;
+    } else {
+      return database_directory;
+    }
+  }
+
+  static std::string get_database_directory_opts(const std::string &database_directory) {
+    if (database_directory.empty()) {
+      return database_directory;
+    }
+    size_t qmarkpos;
+    if ((qmarkpos = database_directory.find_first_of('?')) != std::string::npos) {
+      std::string path = database_directory.substr(0, qmarkpos),
+                  opts = database_directory.substr(qmarkpos + 1);
+      return opts;
+    } else {
+      return "";
+    }
+  }
+
+  bool get_use_custom_database() const {
+      return parameters_.use_custom_db_format;
+  };
+
   Slice get_dir() const {
     return parameters_.database_directory;
   }

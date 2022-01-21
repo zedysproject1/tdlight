@@ -1344,7 +1344,7 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::addLogMessage &request);
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::testReturnError &request);
 
-  static DbKey as_db_key(string key);
+  static DbKey as_db_key(string key, bool custom_db);
   Status init(DbKey key) TD_WARN_UNUSED_RESULT;
   void init_options_and_network();
   void init_connection_creator();
