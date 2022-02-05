@@ -452,7 +452,9 @@ vector<int32> PollManager::get_vote_percentage(const vector<int32> &voter_counts
   std::unordered_map<int32, Option> options;
   for (size_t i = 0; i < result.size(); i++) {
     auto &option = options[voter_counts[i]];
-    option.pos = narrow_cast<int32>(i);
+    if (option.pos == -1) {
+      option.pos = narrow_cast<int32>(i);
+    }
     option.count++;
   }
   vector<Option> sorted_options;
@@ -474,7 +476,11 @@ vector<int32> PollManager::get_vote_percentage(const vector<int32> &voter_counts
       // prefer options with smallest gap
       return gap[lhs.pos] < gap[rhs.pos];
     }
-    return lhs.count > rhs.count;  // prefer more popular options
+    if (lhs.count != rhs.count) {
+      // prefer more popular options
+      return lhs.count > rhs.count;
+    }
+    return lhs.pos < rhs.pos;  // prefer the first encountered option
   });
 
   // dynamic programming or brute force can give perfect result, but for now we use simple gready approach
@@ -1543,7 +1549,7 @@ PollId PollManager::on_get_poll(PollId poll_id, tl_object_ptr<telegram_api::poll
       }
       auto max_voter_count = std::numeric_limits<int32>::max() / narrow_cast<int32>(poll->options.size()) - 2;
       if (poll_result->voters_ > max_voter_count) {
-        LOG(ERROR) << "Have too much " << poll_result->voters_ << " poll voters for an option in " << poll_id;
+        LOG(ERROR) << "Have too many " << poll_result->voters_ << " poll voters for an option in " << poll_id;
         poll_result->voters_ = max_voter_count;
       }
       if (poll_result->voters_ != option.voter_count) {
@@ -1671,6 +1677,9 @@ void PollManager::on_get_poll_vote(PollId poll_id, UserId user_id, vector<Buffer
 }
 
 void PollManager::on_binlog_events(vector<BinlogEvent> &&events) {
+  if (G()->close_flag()) {
+    return;
+  }
   for (auto &event : events) {
     switch (event.type_) {
       case LogEvent::HandlerType::SetPollAnswer: {

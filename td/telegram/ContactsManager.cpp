@@ -3086,7 +3086,7 @@ class GetBroadcastStatsQuery final : public Td::ResultHandler {
     for (auto &info : result->recent_message_interactions_) {
       td_->messages_manager_->on_update_message_interaction_info({DialogId(channel_id_), MessageId(info->message_id_)},
                                                                  info->view_count_, info->forward_count_, false,
-                                                                 nullptr);
+                                                                 nullptr, false, nullptr);
     }
     promise_.set_value(std::move(result));
   }
@@ -4512,7 +4512,7 @@ tl_object_ptr<telegram_api::InputPeer> ContactsManager::get_input_peer_channel(C
 bool ContactsManager::have_input_peer_channel(const Channel *c, ChannelId channel_id, AccessRights access_rights,
                                               bool from_linked) const {
   if (c == nullptr) {
-    LOG(DEBUG) << "Have no supergroup";
+    LOG(DEBUG) << "Have no " << channel_id;
     return false;
   }
   if (access_rights == AccessRights::Know) {
@@ -4522,7 +4522,7 @@ bool ContactsManager::have_input_peer_channel(const Channel *c, ChannelId channe
     return true;
   }
   if (c->status.is_banned()) {
-    LOG(DEBUG) << "Was banned in a supergroup";
+    LOG(DEBUG) << "Was banned in " << channel_id;
     return false;
   }
   if (c->status.is_member()) {
@@ -4558,7 +4558,7 @@ bool ContactsManager::have_input_peer_channel(const Channel *c, ChannelId channe
       }
     }
   }
-  LOG(DEBUG) << "Have no access to a private supergroup";
+  LOG(DEBUG) << "Have no access to " << channel_id;
   return false;
 }
 
@@ -10681,6 +10681,9 @@ void ContactsManager::on_get_chat_full(tl_object_ptr<telegram_api::ChatFull> &&c
     td_->messages_manager_->on_update_dialog_notify_settings(DialogId(chat_id), std::move(chat->notify_settings_),
                                                              "on_get_chat_full");
 
+    td_->messages_manager_->on_update_dialog_available_reactions(DialogId(chat_id),
+                                                                 std::move(chat->available_reactions_));
+
     td_->messages_manager_->on_update_dialog_theme_name(DialogId(chat_id), std::move(chat->theme_emoticon_));
 
     td_->messages_manager_->on_update_dialog_pending_join_requests(DialogId(chat_id), chat->requests_pending_,
@@ -10726,6 +10729,9 @@ void ContactsManager::on_get_chat_full(tl_object_ptr<telegram_api::ChatFull> &&c
 
     td_->messages_manager_->on_update_dialog_notify_settings(DialogId(channel_id), std::move(channel->notify_settings_),
                                                              "on_get_channel_full");
+
+    td_->messages_manager_->on_update_dialog_available_reactions(DialogId(channel_id),
+                                                                 std::move(channel->available_reactions_));
 
     td_->messages_manager_->on_update_dialog_theme_name(DialogId(channel_id), std::move(channel->theme_emoticon_));
 

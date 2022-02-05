@@ -3259,7 +3259,7 @@ Status NotificationManager::process_push_notification_payload(string payload, bo
     loc_args.clear();
   }
   if (loc_args.size() > 1) {
-    return Status::Error("Receive too much arguments");
+    return Status::Error("Receive too many arguments");
   }
 
   if (loc_args.size() == 1) {
@@ -4099,6 +4099,9 @@ void NotificationManager::try_send_update_active_notifications() {
 }
 
 void NotificationManager::on_binlog_events(vector<BinlogEvent> &&events) {
+  if (G()->close_flag()) {
+    return;
+  }
   VLOG(notifications) << "Begin to process " << events.size() << " binlog events";
   for (auto &event : events) {
     if (!G()->parameters().use_message_db || is_disabled() || max_notification_group_count_ == 0) {
