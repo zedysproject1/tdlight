@@ -62,5 +62,4 @@ int main(int argc, char **argv) {
 #else
   runner.run_all();
 #endif
-  return 0;
 }
