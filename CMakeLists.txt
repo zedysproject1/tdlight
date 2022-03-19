@@ -293,6 +293,7 @@ set(TDLIB_SOURCE
   td/telegram/CallDiscardReason.cpp
   td/telegram/CallManager.cpp
   td/telegram/CallbackQueriesManager.cpp
+  td/telegram/ChannelParticipantFilter.cpp
   td/telegram/ClientActor.cpp
   td/telegram/ConfigManager.cpp
   td/telegram/ConfigShared.cpp
@@ -314,6 +315,7 @@ set(TDLIB_SOURCE
   td/telegram/DialogInviteLink.cpp
   td/telegram/DialogLocation.cpp
   td/telegram/DialogParticipant.cpp
+  td/telegram/DialogParticipantFilter.cpp
   td/telegram/DialogSource.cpp
   td/telegram/Document.cpp
   td/telegram/DocumentsManager.cpp
@@ -483,6 +485,7 @@ set(TDLIB_SOURCE
   td/telegram/CallbackQueriesManager.h
   td/telegram/ChainId.h
   td/telegram/ChannelId.h
+  td/telegram/ChannelParticipantFilter.h
   td/telegram/ChatId.h
   td/telegram/ClientActor.h
   td/telegram/ConfigManager.h
@@ -509,6 +512,7 @@ set(TDLIB_SOURCE
   td/telegram/DialogListId.h
   td/telegram/DialogLocation.h
   td/telegram/DialogParticipant.h
+  td/telegram/DialogParticipantFilter.h
   td/telegram/DialogSource.h
   td/telegram/Document.h
   td/telegram/DocumentsManager.h
