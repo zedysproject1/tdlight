@@ -11194,9 +11194,10 @@ void ContactsManager::on_update_user_phone_number(User *u, UserId user_id, strin
   if (u->phone_number != phone_number) {
     if (!u->phone_number.empty()) {
       auto it = resolved_phone_numbers_.find(u->phone_number);
-      CHECK(it != resolved_phone_numbers_.end());
+      if (it != resolved_phone_numbers_.end()) {
       if (it->second == user_id) {
         resolved_phone_numbers_.erase(it);
+      }
       }
     }
 
