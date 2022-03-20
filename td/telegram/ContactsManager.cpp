@@ -11199,7 +11199,6 @@ void ContactsManager::on_update_user_phone_number(User *u, UserId user_id, strin
       if (it != resolved_phone_numbers_.end() && it->second == user_id) {
         resolved_phone_numbers_.erase(it);
       }
-      }
     }
 
     u->phone_number = std::move(phone_number);
@@ -11798,7 +11797,7 @@ void ContactsManager::update_user_online_member_count(User *u) {
         auto chat_id = dialog_id.get_chat_id();
         auto chat_full = get_chat_full(chat_id);
         CHECK(chat_full != nullptr);
-          update_chat_online_member_count(chat_full, chat_id, false);
+        update_chat_online_member_count(chat_full, chat_id, false);
         break;
       }
       case DialogType::Channel: {
