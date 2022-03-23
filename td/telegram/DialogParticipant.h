@@ -33,6 +33,7 @@ class AdministratorRights {
   static constexpr uint32 CAN_PROMOTE_MEMBERS = 1 << 8;
   static constexpr uint32 CAN_MANAGE_CALLS = 1 << 9;
   static constexpr uint32 CAN_MANAGE_DIALOG = 1 << 10;
+  static constexpr uint32 IS_ANONYMOUS = 1 << 13;
 
   static constexpr uint32 ALL_ADMINISTRATOR_RIGHTS =
       CAN_CHANGE_INFO_AND_SETTINGS | CAN_POST_MESSAGES | CAN_EDIT_MESSAGES | CAN_DELETE_MESSAGES | CAN_INVITE_USERS |
@@ -46,11 +47,12 @@ class AdministratorRights {
   }
 
  public:
-  AdministratorRights(bool can_manage_dialog, bool can_change_info, bool can_post_messages, bool can_edit_messages,
-                      bool can_delete_messages, bool can_invite_users, bool can_restrict_members, bool can_pin_messages,
-                      bool can_promote_members, bool can_manage_calls);
+  AdministratorRights(bool is_anonymous, bool can_manage_dialog, bool can_change_info, bool can_post_messages,
+                      bool can_edit_messages, bool can_delete_messages, bool can_invite_users,
+                      bool can_restrict_members, bool can_pin_messages, bool can_promote_members,
+                      bool can_manage_calls);
 
-  telegram_api::object_ptr<telegram_api::chatAdminRights> get_chat_admin_rights(bool is_anonymous) const;
+  telegram_api::object_ptr<telegram_api::chatAdminRights> get_chat_admin_rights() const;
 
   bool can_manage_dialog() const {
     return (flags_ & CAN_MANAGE_DIALOG) != 0;
@@ -95,6 +97,10 @@ class AdministratorRights {
 
   bool can_manage_calls() const {
     return (flags_ & CAN_MANAGE_CALLS) != 0;
+  }
+
+  bool is_anonymous() const {
+    return (flags_ & IS_ANONYMOUS) != 0;
   }
 
   template <class StorerT>
@@ -221,7 +227,6 @@ StringBuilder &operator<<(StringBuilder &string_builder, const RestrictedRights 
 
 class DialogParticipantStatus {
   // only flags 11 and 12 are unused
-  static constexpr uint32 IS_ANONYMOUS = 1 << 13;
   static constexpr uint32 HAS_RANK = 1 << 14;
   static constexpr uint32 CAN_BE_EDITED = 1 << 15;
 
@@ -251,9 +256,12 @@ class DialogParticipantStatus {
   }
 
  public:
-  static DialogParticipantStatus Creator(bool is_member, bool is_anonymous, string rank);
+  static DialogParticipantStatus Creator(bool is_member, bool is_anonymous, string &&rank);
 
-  static DialogParticipantStatus Administrator(bool is_anonymous, string rank, bool can_be_edited,
+  static DialogParticipantStatus Administrator(AdministratorRights administrator_rights, string &&rank,
+                                               bool can_be_edited);
+
+  static DialogParticipantStatus Administrator(bool is_anonymous, string &&rank, bool can_be_edited,
                                                bool can_manage_dialog, bool can_change_info, bool can_post_messages,
                                                bool can_edit_messages, bool can_delete_messages, bool can_invite_users,
                                                bool can_restrict_members, bool can_pin_messages,
@@ -261,12 +269,8 @@ class DialogParticipantStatus {
 
   static DialogParticipantStatus Member();
 
-  static DialogParticipantStatus Restricted(bool is_member, int32 restricted_until_date, bool can_send_messages,
-                                            bool can_send_media, bool can_send_stickers, bool can_send_animations,
-                                            bool can_send_games, bool can_use_inline_bots,
-                                            bool can_add_web_page_previews, bool can_send_polls,
-                                            bool can_change_info_and_settings, bool can_invite_users,
-                                            bool can_pin_messages);
+  static DialogParticipantStatus Restricted(RestrictedRights restricted_rights, bool is_member,
+                                            int32 restricted_until_date);
 
   static DialogParticipantStatus Left();
 
@@ -414,7 +418,7 @@ class DialogParticipantStatus {
   }
 
   bool is_anonymous() const {
-    return (flags_ & IS_ANONYMOUS) != 0;
+    return get_administrator_rights().is_anonymous();
   }
 
   const string &get_rank() const {

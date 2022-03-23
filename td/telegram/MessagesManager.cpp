@@ -430,6 +430,10 @@ class GetDiscussionMessageQuery final : public Td::ResultHandler {
     if (expected_dialog_id_ == dialog_id_) {
       td_->messages_manager_->on_get_dialog_error(dialog_id_, status, "GetDiscussionMessageQuery");
     }
+    if (status.message() == "MSG_ID_INVALID") {
+      td_->messages_manager_->get_message_from_server({dialog_id_, message_id_}, Promise<Unit>(),
+                                                      "GetDiscussionMessageQuery");
+    }
     promise_.set_error(std::move(status));
   }
 };
@@ -10117,8 +10121,7 @@ void MessagesManager::on_get_history(DialogId dialog_id, MessageId from_message_
         for (const auto &debug_message : messages) {
           error += to_string(debug_message);
         }
-        // TODO move to ERROR
-        LOG(FATAL) << error;
+        LOG(ERROR) << error;
         promise.set_value(Unit());
         return;
       }
@@ -10140,6 +10143,26 @@ void MessagesManager::on_get_history(DialogId dialog_id, MessageId from_message_
         first_received_message_id >= d->first_database_message_id) {
       // it is likely that there are no more history messages on the server
       have_full_history = true;
+    }
+  }
+
+  if (d->last_new_message_id.is_valid()) {
+    // remove too new messages from response
+    while (!messages.empty()) {
+      if (get_message_dialog_id(messages[0]) == dialog_id &&
+          get_message_id(messages[0], false) <= d->last_new_message_id) {
+        // the message is old enough
+        break;
+      }
+
+      LOG(INFO) << "Ignore too new " << get_message_id(messages[0], false);
+      messages.erase(messages.begin());
+      if (messages.empty()) {
+        // received no suitable messages; try again
+        return promise.set_value(Unit());
+      } else {
+        last_received_message_id = get_message_id(messages[0], false);
+      }
     }
   }
 
@@ -24161,8 +24184,7 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
       break;
     }
     if (message->message_id >= last_received_message_id) {
-      // TODO move to ERROR
-      LOG(FATAL) << "Receive " << message->message_id << " after " << last_received_message_id
+      LOG(ERROR) << "Receive " << message->message_id << " after " << last_received_message_id
                  << " from database in the history of " << dialog_id << " from " << from_message_id << " with offset "
                  << offset << ", limit " << limit << ", from_the_end = " << from_the_end;
       break;
@@ -30580,7 +30602,7 @@ void MessagesManager::remove_message_dialog_notifications(Dialog *d, MessageId m
     set_dialog_last_notification(d->dialog_id, group_info, 0, NotificationId(),
                                  "remove_message_dialog_notifications 2");
   } else {
-    LOG(FATAL) << "TODO support notification deletion up to " << max_message_id << " if will be ever needed";
+    LOG(FATAL) << "TODO support notification deletion up to " << max_message_id << " if it would be ever needed";
   }
 
   send_closure_later(G()->notification_manager(), &NotificationManager::remove_notification_group, group_info.group_id,
@@ -38601,8 +38623,7 @@ void MessagesManager::on_get_channel_difference(
         for (const auto &message : difference->new_messages_) {
           auto message_id = get_message_id(message, false);
           if (message_id <= cur_message_id) {
-            // TODO move to ERROR
-            LOG(FATAL) << "Receive " << cur_message_id << " after " << message_id << " in channelDifference of "
+            LOG(ERROR) << "Receive " << cur_message_id << " after " << message_id << " in channelDifference of "
                        << dialog_id << " with pts " << request_pts << " and limit " << request_limit << ": "
                        << to_string(difference);
             after_get_channel_difference(dialog_id, false);
