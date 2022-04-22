@@ -44,6 +44,7 @@
 namespace td {
 
 class AnimationsManager;
+class AttachMenuManager;
 class AudiosManager;
 class AuthManager;
 class BackgroundManager;
@@ -66,6 +67,7 @@ class LinkManager;
 class MessagesManager;
 class NetStatsManager;
 class NotificationManager;
+class NotificationSettingsManager;
 class OptionManager;
 class PasswordManager;
 class PhoneNumberManager;
@@ -106,7 +108,7 @@ class Td final : public Actor {
   Td &operator=(Td &&) = delete;
   ~Td() final;
 
-  static constexpr const char *TDLIB_VERSION = "1.8.2";
+  static constexpr const char *TDLIB_VERSION = "1.8.3";
 
   struct Options {
     std::shared_ptr<NetQueryStats> net_query_stats;
@@ -145,6 +147,8 @@ class Td final : public Actor {
 
   unique_ptr<AnimationsManager> animations_manager_;
   ActorOwn<AnimationsManager> animations_manager_actor_;
+  unique_ptr<AttachMenuManager> attach_menu_manager_;
+  ActorOwn<AttachMenuManager> attach_menu_manager_actor_;
   unique_ptr<AuthManager> auth_manager_;
   ActorOwn<AuthManager> auth_manager_actor_;
   unique_ptr<BackgroundManager> background_manager_;
@@ -171,6 +175,8 @@ class Td final : public Actor {
   ActorOwn<MessagesManager> messages_manager_actor_;
   unique_ptr<NotificationManager> notification_manager_;
   ActorOwn<NotificationManager> notification_manager_actor_;
+  unique_ptr<NotificationSettingsManager> notification_settings_manager_;
+  ActorOwn<NotificationSettingsManager> notification_settings_manager_actor_;
   unique_ptr<OptionManager> option_manager_;
   ActorOwn<OptionManager> option_manager_actor_;
   unique_ptr<PollManager> poll_manager_;
@@ -851,6 +857,10 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::setPinnedChats &request);
 
+  void on_request(uint64 id, const td_api::getAttachmentMenuBot &request);
+
+  void on_request(uint64 id, const td_api::toggleBotIsAddedToAttachmentMenu &request);
+
   void on_request(uint64 id, td_api::setChatAvailableReactions &request);
 
   void on_request(uint64 id, td_api::setChatClientData &request);
@@ -877,7 +887,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::addChatMembers &request);
 
-  void on_request(uint64 id, const td_api::setChatMemberStatus &request);
+  void on_request(uint64 id, td_api::setChatMemberStatus &request);
 
   void on_request(uint64 id, const td_api::banChatMember &request);
 
@@ -1003,6 +1013,14 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::getCommands &request);
 
+  void on_request(uint64 id, td_api::setMenuButton &request);
+
+  void on_request(uint64 id, const td_api::getMenuButton &request);
+
+  void on_request(uint64 id, const td_api::setDefaultGroupAdministratorRights &request);
+
+  void on_request(uint64 id, const td_api::setDefaultChannelAdministratorRights &request);
+
   void on_request(uint64 id, const td_api::setLocation &request);
 
   void on_request(uint64 id, td_api::setProfilePhoto &request);
@@ -1097,6 +1115,14 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::removeFavoriteSticker &request);
 
+  void on_request(uint64 id, const td_api::getSavedNotificationSound &request);
+
+  void on_request(uint64 id, const td_api::getSavedNotificationSounds &request);
+
+  void on_request(uint64 id, td_api::addSavedNotificationSound &request);
+
+  void on_request(uint64 id, const td_api::removeSavedNotificationSound &request);
+
   void on_request(uint64 id, const td_api::getChatNotificationSettingsExceptions &request);
 
   void on_request(uint64 id, const td_api::getScopeNotificationSettings &request);
@@ -1158,6 +1184,16 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::getInlineQueryResults &request);
 
   void on_request(uint64 id, td_api::answerInlineQuery &request);
+
+  void on_request(uint64 id, td_api::getWebAppUrl &request);
+
+  void on_request(uint64 id, td_api::sendWebAppData &request);
+
+  void on_request(uint64 id, td_api::openWebApp &request);
+
+  void on_request(uint64 id, const td_api::closeWebApp &request);
+
+  void on_request(uint64 id, td_api::answerWebAppQuery &request);
 
   void on_request(uint64 id, td_api::getCallbackQueryAnswer &request);
 
@@ -1305,6 +1341,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getJsonString &request);
 
+  void on_request(uint64 id, const td_api::getThemeParametersJsonString &request);
+
   void on_request(uint64 id, const td_api::setLogStream &request);
 
   void on_request(uint64 id, const td_api::getLogStream &request);
@@ -1353,6 +1391,7 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getChatFilterDefaultIconName &request);
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::getJsonValue &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getJsonString &request);
+  static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getThemeParametersJsonString &request);
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::setLogStream &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getLogStream &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::setLogVerbosityLevel &request);

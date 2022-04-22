@@ -1474,9 +1474,7 @@ void GroupCallManager::finish_get_group_call(InputGroupCallId input_group_call_i
   }
 
   if (result.is_error()) {
-    for (auto &promise : promises) {
-      promise.set_error(result.error().clone());
-    }
+    fail_promises(promises, result.move_as_error());
     return;
   }
 
@@ -2951,16 +2949,10 @@ void GroupCallManager::process_group_call_after_join_requests(InputGroupCallId i
     return;
   }
 
-  auto promises = std::move(group_call->after_join);
-  reset_to_empty(group_call->after_join);
   if (!group_call->is_active || !group_call->is_joined) {
-    for (auto &promise : promises) {
-      promise.set_error(Status::Error(400, "GROUPCALL_JOIN_MISSING"));
-    }
+    fail_promises(group_call->after_join, Status::Error(400, "GROUPCALL_JOIN_MISSING"));
   } else {
-    for (auto &promise : promises) {
-      promise.set_value(Unit());
-    }
+    set_promises(group_call->after_join);
   }
 }
 
@@ -3778,6 +3770,7 @@ void GroupCallManager::toggle_group_call_participant_is_muted(GroupCallId group_
                                                promise = std::move(promise)](Result<Unit> &&result) mutable {
     if (result.is_error()) {
       promise.set_error(result.move_as_error());
+      promise = Promise<Unit>();
     }
     send_closure(actor_id, &GroupCallManager::on_toggle_group_call_participant_is_muted, input_group_call_id, dialog_id,
                  generation, std::move(promise));
@@ -3873,6 +3866,7 @@ void GroupCallManager::set_group_call_participant_volume_level(GroupCallId group
                                                promise = std::move(promise)](Result<Unit> &&result) mutable {
     if (result.is_error()) {
       promise.set_error(result.move_as_error());
+      promise = Promise<Unit>();
     }
     send_closure(actor_id, &GroupCallManager::on_set_group_call_participant_volume_level, input_group_call_id,
                  dialog_id, generation, std::move(promise));
@@ -3972,6 +3966,7 @@ void GroupCallManager::toggle_group_call_participant_is_hand_raised(GroupCallId 
                                                promise = std::move(promise)](Result<Unit> &&result) mutable {
     if (result.is_error()) {
       promise.set_error(result.move_as_error());
+      promise = Promise<Unit>();
     }
     send_closure(actor_id, &GroupCallManager::on_toggle_group_call_participant_is_hand_raised, input_group_call_id,
                  dialog_id, generation, std::move(promise));
@@ -4344,10 +4339,7 @@ InputGroupCallId GroupCallManager::update_group_call(const tl_object_ptr<telegra
       // never update ended calls
     } else if (!call.is_active) {
       // always update to an ended call, droping also is_joined, is_speaking and other local flags
-      auto promises = std::move(group_call->after_join);
-      for (auto &promise : promises) {
-        promise.set_error(Status::Error(400, "Group call ended"));
-      }
+      fail_promises(group_call->after_join, Status::Error(400, "Group call ended"));
       *group_call = std::move(call);
       need_update = true;
     } else {

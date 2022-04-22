@@ -6,7 +6,7 @@ if (POLICY CMP0065)
   cmake_policy(SET CMP0065 NEW)
 endif()
 
-project(TDLib VERSION 1.8.2 LANGUAGES CXX C)
+project(TDLib VERSION 1.8.3 LANGUAGES CXX C)
 
 if (NOT DEFINED CMAKE_MODULE_PATH)
   set(CMAKE_MODULE_PATH "")
@@ -282,6 +282,7 @@ set(TDLIB_SOURCE
 
   td/telegram/Account.cpp
   td/telegram/AnimationsManager.cpp
+  td/telegram/AttachMenuManager.cpp
   td/telegram/AudiosManager.cpp
   td/telegram/AuthManager.cpp
   td/telegram/AutoDownloadSettings.cpp
@@ -289,6 +290,8 @@ set(TDLIB_SOURCE
   td/telegram/BackgroundType.cpp
   td/telegram/BotCommand.cpp
   td/telegram/BotCommandScope.cpp
+  td/telegram/BotMenuButton.cpp
+  td/telegram/BotMenuButton.h
   td/telegram/CallActor.cpp
   td/telegram/CallDiscardReason.cpp
   td/telegram/CallManager.cpp
@@ -393,6 +396,8 @@ set(TDLIB_SOURCE
   td/telegram/NewPasswordState.cpp
   td/telegram/NotificationManager.cpp
   td/telegram/NotificationSettings.cpp
+  td/telegram/NotificationSettingsManager.cpp
+  td/telegram/NotificationSound.cpp
   td/telegram/NotificationType.cpp
   td/telegram/OptionManager.cpp
   td/telegram/Payments.cpp
@@ -400,6 +405,7 @@ set(TDLIB_SOURCE
   td/telegram/PhoneNumberManager.cpp
   td/telegram/PrivacyManager.cpp
   td/telegram/Photo.cpp
+  td/telegram/PhotoSize.cpp
   td/telegram/PhotoSizeSource.cpp
   td/telegram/PollManager.cpp
   td/telegram/QueryCombiner.cpp
@@ -470,6 +476,7 @@ set(TDLIB_SOURCE
   td/telegram/Account.h
   td/telegram/AffectedHistory.h
   td/telegram/AnimationsManager.h
+  td/telegram/AttachMenuManager.h
   td/telegram/AudiosManager.h
   td/telegram/AuthManager.h
   td/telegram/AutoDownloadSettings.h
@@ -486,6 +493,7 @@ set(TDLIB_SOURCE
   td/telegram/ChainId.h
   td/telegram/ChannelId.h
   td/telegram/ChannelParticipantFilter.h
+  td/telegram/ChannelType.h
   td/telegram/ChatId.h
   td/telegram/ClientActor.h
   td/telegram/ConfigManager.h
@@ -617,12 +625,17 @@ set(TDLIB_SOURCE
   td/telegram/NotificationId.h
   td/telegram/NotificationManager.h
   td/telegram/NotificationSettings.h
+  td/telegram/NotificationSettingsManager.h
+  td/telegram/NotificationSound.h
+  td/telegram/NotificationSoundType.h
   td/telegram/NotificationType.h
   td/telegram/OptionManager.h
   td/telegram/PasswordManager.h
   td/telegram/Payments.h
   td/telegram/PhoneNumberManager.h
   td/telegram/Photo.h
+  td/telegram/PhotoFormat.h
+  td/telegram/PhotoSize.h
   td/telegram/PhotoSizeSource.h
   td/telegram/PollId.h
   td/telegram/PollManager.h
@@ -701,6 +714,7 @@ set(TDLIB_SOURCE
   td/telegram/NotificationSettings.hpp
   td/telegram/Payments.hpp
   td/telegram/Photo.hpp
+  td/telegram/PhotoSize.hpp
   td/telegram/PhotoSizeSource.hpp
   td/telegram/PollId.hpp
   td/telegram/PollManager.hpp
