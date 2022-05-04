@@ -5,6 +5,7 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 #include "td/telegram/PhotoSize.h"
+#include "td/telegram/ConfigShared.h"
 
 #include "td/telegram/files/FileLocation.h"
 #include "td/telegram/files/FileManager.h"
@@ -231,12 +232,12 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
     case telegram_api::photoStrippedSize::ID: {
       auto size = move_tl_object_as<telegram_api::photoStrippedSize>(size_ptr);
       if (format != PhotoFormat::Jpeg) {
-				if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
-					LOG(DEBUG) << "Receive unexpected JPEG minithumbnail";
-				} else {
-					LOG(ERROR) << "Receive unexpected JPEG minithumbnail in photo " << id << " from " << source << " of format "
-										 << format;
-				}
+        if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+          LOG(DEBUG) << "Receive unexpected JPEG minithumbnail";
+        } else {
+          LOG(ERROR) << "Receive unexpected JPEG minithumbnail in photo " << id << " from " << source << " of format "
+                     << format;
+        }
         if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
           return std::string("");
         } else {
