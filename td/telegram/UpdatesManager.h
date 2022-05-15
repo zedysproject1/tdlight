@@ -221,11 +221,16 @@ class UpdatesManager final : public Actor {
   int32 retry_time_ = 1;
   Timeout retry_timeout_;
 
+  double next_data_reload_time_ = 0.0;
+  Timeout data_reload_timeout_;
+
   bool running_get_difference_ = false;
   int32 last_get_difference_pts_ = 0;
   int32 last_get_difference_qts_ = 0;
   int32 min_postponed_update_pts_ = 0;
   int32 min_postponed_update_qts_ = 0;
+
+  void start_up() final;
 
   void tear_down() final;
 
@@ -330,6 +335,12 @@ class UpdatesManager final : public Actor {
   void before_get_difference(bool is_initial);
 
   void after_get_difference();
+
+  void schedule_data_reload();
+
+  static void try_reload_data_static(void *td);
+
+  void try_reload_data();
 
   static bool have_update_pts_changed(const vector<tl_object_ptr<telegram_api::Update>> &updates);
 

@@ -89,9 +89,9 @@ class StickersManager final : public Actor {
 
   void on_send_animated_emoji_clicks(DialogId dialog_id, const string &emoji);
 
-  bool is_sent_animated_emoji_click(DialogId dialog_id, Slice emoji);
+  bool is_sent_animated_emoji_click(DialogId dialog_id, const string &emoji);
 
-  Status on_animated_emoji_message_clicked(Slice emoji, FullMessageId full_message_id, string data);
+  Status on_animated_emoji_message_clicked(string &&emoji, FullMessageId full_message_id, string data);
 
   bool is_active_reaction(const string &reaction) const;
 
@@ -134,6 +134,10 @@ class StickersManager final : public Actor {
   void change_sticker_set(StickerSetId set_id, bool is_installed, bool is_archived, Promise<Unit> &&promise);
 
   void view_featured_sticker_sets(const vector<StickerSetId> &sticker_set_ids);
+
+  void reload_reactions();
+
+  void reload_special_sticker_set_by_type(SpecialStickerSetType type, bool is_recursive = false);
 
   void on_get_available_reactions(tl_object_ptr<telegram_api::messages_AvailableReactions> &&available_reactions_ptr);
 
@@ -320,8 +324,6 @@ class StickersManager final : public Actor {
   void on_find_sticker_sets_fail(const string &query, Status &&error);
 
   void send_get_attached_stickers_query(FileId file_id, Promise<Unit> &&promise);
-
-  void after_get_difference();
 
   void get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const;
 
@@ -676,7 +678,7 @@ class StickersManager final : public Actor {
 
   vector<FileId> get_animated_emoji_click_stickers(const StickerSet *sticker_set, Slice emoji) const;
 
-  void choose_animated_emoji_click_sticker(const StickerSet *sticker_set, Slice message_text,
+  void choose_animated_emoji_click_sticker(const StickerSet *sticker_set, string message_text,
                                            FullMessageId full_message_id, double start_time,
                                            Promise<td_api::object_ptr<td_api::sticker>> &&promise);
 
@@ -704,8 +706,6 @@ class StickersManager final : public Actor {
 
   void load_reactions();
 
-  void reload_reactions();
-
   void update_active_reactions();
 
   td_api::object_ptr<td_api::updateReactions> get_update_reactions_object() const;
@@ -720,8 +720,6 @@ class StickersManager final : public Actor {
   void load_special_sticker_set_by_type(SpecialStickerSetType type);
 
   void load_special_sticker_set(SpecialStickerSet &sticker_set);
-
-  void reload_special_sticker_set_by_type(SpecialStickerSetType type, bool is_recursive = false);
 
   void reload_special_sticker_set(SpecialStickerSet &sticker_set, int32 hash);
 

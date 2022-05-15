@@ -1647,7 +1647,11 @@ void GroupCallManager::on_get_group_call_participants(
   if (is_load) {
     auto *group_call_participants = add_group_call_participants(input_group_call_id);
     if (group_call_participants->next_offset == offset) {
-      group_call_participants->next_offset = std::move(participants->next_offset_);
+      if (!offset.empty() && participants->next_offset_.empty() && group_call_participants->joined_date_asc) {
+        LOG(INFO) << "Ignore empty next_offset";
+      } else {
+        group_call_participants->next_offset = std::move(participants->next_offset_);
+      }
     }
 
     if (is_empty || is_sync) {
@@ -1826,6 +1830,8 @@ void GroupCallManager::on_update_group_call_participants(
 
   auto &pending_version_updates = group_call_participants->pending_version_updates_[version].updates;
   auto &pending_mute_updates = group_call_participants->pending_mute_updates_[version].updates;
+  LOG(INFO) << "Have " << pending_version_updates.size() << " versioned and " << pending_mute_updates.size()
+            << " mute pending updates for " << input_group_call_id;
   for (auto &group_call_participant : participants) {
     GroupCallParticipant participant(group_call_participant, version);
     if (!participant.is_valid()) {
@@ -1878,6 +1884,9 @@ bool GroupCallManager::process_pending_group_call_participant_updates(InputGroup
   bool need_rejoin = true;
   auto &pending_version_updates = participants_it->second->pending_version_updates_;
   auto &pending_mute_updates = participants_it->second->pending_mute_updates_;
+
+  LOG(INFO) << "Process " << pending_version_updates.size() << " versioned and " << pending_mute_updates.size()
+            << " mute updates for " << input_group_call_id;
 
   auto process_mute_updates = [&] {
     while (!pending_mute_updates.empty()) {
@@ -2036,7 +2045,7 @@ void GroupCallManager::on_sync_group_call_participants(InputGroupCallId input_gr
 GroupCallParticipantOrder GroupCallManager::get_real_participant_order(bool can_self_unmute,
                                                                        const GroupCallParticipant &participant,
                                                                        const GroupCallParticipants *participants) {
-  auto real_order = participant.get_real_order(can_self_unmute, participants->joined_date_asc, false);
+  auto real_order = participant.get_real_order(can_self_unmute, participants->joined_date_asc);
   if (real_order >= participants->min_order) {
     return real_order;
   }
@@ -2106,7 +2115,7 @@ void GroupCallManager::process_group_call_participants(
     }
 
     if (is_load) {
-      auto real_order = participant.get_real_order(can_self_unmute, joined_date_asc, true);
+      auto real_order = participant.get_server_order(can_self_unmute, joined_date_asc);
       if (real_order > min_order) {
         LOG(ERROR) << "Receive group call participant " << participant.dialog_id << " with order " << real_order
                    << " after group call participant " << debug_min_order_dialog_id << " with order " << min_order;
@@ -4122,7 +4131,11 @@ void GroupCallManager::on_group_call_left_impl(GroupCall *group_call, bool need_
   auto input_group_call_id = get_input_group_call_id(group_call->group_call_id).ok();
   try_clear_group_call_participants(input_group_call_id);
   if (!group_call->need_rejoin) {
-    process_group_call_after_join_requests(input_group_call_id, "on_group_call_left_impl");
+    if (is_group_call_being_joined(input_group_call_id)) {
+      LOG(ERROR) << "Left a being joined group call. Did you change audio_source_id without leaving the group call?";
+    } else {
+      process_group_call_after_join_requests(input_group_call_id, "on_group_call_left_impl");
+    }
   }
 }
 

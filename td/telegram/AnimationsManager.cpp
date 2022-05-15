@@ -393,8 +393,7 @@ SecretInputMedia AnimationsManager::get_secret_input_media(FileId animation_file
   auto *animation = get_animation(animation_file_id);
   CHECK(animation != nullptr);
   auto file_view = td_->file_manager_->get_file_view(animation_file_id);
-  auto &encryption_key = file_view.encryption_key();
-  if (!file_view.is_encrypted_secret() || encryption_key.empty()) {
+  if (!file_view.is_encrypted_secret() || file_view.encryption_key().empty()) {
     return SecretInputMedia{};
   }
   if (file_view.has_remote_location()) {
@@ -420,12 +419,13 @@ SecretInputMedia AnimationsManager::get_secret_input_media(FileId animation_file
   }
   attributes.push_back(make_tl_object<secret_api::documentAttributeAnimated>());
 
-  return SecretInputMedia{
-      std::move(input_file),
-      make_tl_object<secret_api::decryptedMessageMediaDocument>(
-          std::move(thumbnail), animation->thumbnail.dimensions.width, animation->thumbnail.dimensions.height,
-          animation->mime_type, narrow_cast<int32>(file_view.size()), BufferSlice(encryption_key.key_slice()),
-          BufferSlice(encryption_key.iv_slice()), std::move(attributes), caption)};
+  return {std::move(input_file),
+          std::move(thumbnail),
+          animation->thumbnail.dimensions,
+          animation->mime_type,
+          file_view,
+          std::move(attributes),
+          caption};
 }
 
 void AnimationsManager::on_update_animation_search_emojis(string animation_search_emojis) {
@@ -883,12 +883,6 @@ string AnimationsManager::get_animation_search_text(FileId file_id) const {
   auto animation = get_animation(file_id);
   CHECK(animation != nullptr);
   return animation->file_name;
-}
-
-void AnimationsManager::after_get_difference() {
-  if (td_->is_online() && !td_->auth_manager_->is_bot()) {
-    get_saved_animations(Auto());
-  }
 }
 
 void AnimationsManager::get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const {

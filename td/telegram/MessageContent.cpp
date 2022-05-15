@@ -667,7 +667,7 @@ class MessageDice final : public MessageContent {
 
   MessageDice() = default;
   MessageDice(const string &emoji, int32 dice_value)
-      : emoji(emoji.empty() ? string(DEFAULT_EMOJI) : remove_emoji_modifiers(emoji).str()), dice_value(dice_value) {
+      : emoji(emoji.empty() ? string(DEFAULT_EMOJI) : remove_emoji_modifiers(emoji)), dice_value(dice_value) {
   }
 
   MessageContentType get_type() const final {
@@ -2100,10 +2100,10 @@ Result<InputMessageContent> get_input_message_content(
                                       std::move(thumbnail), std::move(sticker_file_ids));
 }
 
-bool can_have_input_media(const Td *td, const MessageContent *content) {
+bool can_have_input_media(const Td *td, const MessageContent *content, bool is_server) {
   switch (content->get_type()) {
     case MessageContentType::Game:
-      return static_cast<const MessageGame *>(content)->game.has_input_media();
+      return is_server || static_cast<const MessageGame *>(content)->game.has_input_media();
     case MessageContentType::Poll:
       return td->poll_manager_->has_input_media(static_cast<const MessagePoll *>(content)->poll_id);
     case MessageContentType::Unsupported:
@@ -2264,7 +2264,7 @@ SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
 static tl_object_ptr<telegram_api::InputMedia> get_input_media_impl(
     const MessageContent *content, Td *td, tl_object_ptr<telegram_api::InputFile> input_file,
     tl_object_ptr<telegram_api::InputFile> input_thumbnail, int32 ttl, const string &emoji) {
-  if (!can_have_input_media(td, content)) {
+  if (!can_have_input_media(td, content, false)) {
     return nullptr;
   }
   switch (content->get_type()) {
@@ -4358,10 +4358,10 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
                                                MessageContentDupType type, MessageCopyOptions &&copy_options) {
   CHECK(content != nullptr);
   if (copy_options.send_copy) {
-    CHECK(type == MessageContentDupType::Copy);
+    CHECK(type == MessageContentDupType::Copy || type == MessageContentDupType::ServerCopy);
   }
   if (type != MessageContentDupType::Forward && type != MessageContentDupType::SendViaBot &&
-      !can_have_input_media(td, content)) {
+      !can_have_input_media(td, content, type == MessageContentDupType::ServerCopy)) {
     return nullptr;
   }
 
@@ -4382,7 +4382,8 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
   if (to_secret) {
     thumbnail_file_id = get_message_content_thumbnail_file_id(content, td);
   }
-  auto replace_caption = type == MessageContentDupType::Copy && copy_options.replace_caption;
+  auto replace_caption = (type == MessageContentDupType::Copy || type == MessageContentDupType::ServerCopy) &&
+                         copy_options.replace_caption;
   switch (content->get_type()) {
     case MessageContentType::Animation: {
       auto result = make_unique<MessageAnimation>(*static_cast<const MessageAnimation *>(content));
@@ -4512,7 +4513,7 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
       return std::move(result);
     }
     case MessageContentType::Poll:
-      if (type == MessageContentDupType::Copy) {
+      if (type == MessageContentDupType::Copy || type == MessageContentDupType::ServerCopy) {
         return make_unique<MessagePoll>(
             td->poll_manager_->dup_poll(static_cast<const MessagePoll *>(content)->poll_id));
       } else {
@@ -5505,17 +5506,17 @@ void get_message_content_animated_emoji_click_sticker(const MessageContent *cont
 }
 
 void on_message_content_animated_emoji_clicked(const MessageContent *content, FullMessageId full_message_id, Td *td,
-                                               Slice emoji, string data) {
+                                               string &&emoji, string &&data) {
   if (content->get_type() != MessageContentType::Text) {
     return;
   }
 
-  emoji = remove_emoji_modifiers(emoji);
+  remove_emoji_modifiers_in_place(emoji);
   auto &text = static_cast<const MessageText *>(content)->text;
   if (!text.entities.empty() || remove_emoji_modifiers(text.text) != emoji) {
     return;
   }
-  auto error = td->stickers_manager_->on_animated_emoji_message_clicked(emoji, full_message_id, data);
+  auto error = td->stickers_manager_->on_animated_emoji_message_clicked(std::move(emoji), full_message_id, data);
   if (error.is_error()) {
     LOG(WARNING) << "Failed to process animated emoji click with data \"" << data << "\": " << error;
   }

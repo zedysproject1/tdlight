@@ -38,10 +38,12 @@
 #include "td/telegram/PollId.h"
 #include "td/telegram/PollManager.h"
 #include "td/telegram/PrivacyManager.h"
+#include "td/telegram/PublicDialogType.h"
 #include "td/telegram/ScheduledServerMessageId.h"
 #include "td/telegram/SecretChatId.h"
 #include "td/telegram/SecretChatsManager.h"
 #include "td/telegram/ServerMessageId.h"
+#include "td/telegram/SpecialStickerSetType.h"
 #include "td/telegram/StateManager.h"
 #include "td/telegram/StickerSetId.h"
 #include "td/telegram/StickersManager.h"
@@ -179,6 +181,26 @@ void UpdatesManager::tear_down() {
   parent_.reset();
 
   LOG(DEBUG) << "Have " << being_processed_updates_ << " unprocessed updates to apply";
+}
+
+void UpdatesManager::start_up() {
+  class StateCallback final : public StateManager::Callback {
+   public:
+    explicit StateCallback(ActorId<UpdatesManager> parent) : parent_(std::move(parent)) {
+    }
+    bool on_online(bool is_online) final {
+      if (is_online) {
+        send_closure(parent_, &UpdatesManager::try_reload_data);
+      }
+      return parent_.is_alive();
+    }
+
+   private:
+    ActorId<UpdatesManager> parent_;
+  };
+  send_closure(G()->state_manager(), &StateManager::add_callback, make_unique<StateCallback>(actor_id(this)));
+
+  next_data_reload_time_ = Time::now() - 1;
 }
 
 void UpdatesManager::hangup_shared() {
@@ -1557,15 +1579,65 @@ void UpdatesManager::after_get_difference() {
                          << postponed_pts_updates_.size() << " pending pts updates";
   }
 
-  td_->animations_manager_->after_get_difference();
-  td_->contacts_manager_->after_get_difference();
   td_->download_manager_->after_get_difference();
   td_->inline_queries_manager_->after_get_difference();
   td_->messages_manager_->after_get_difference();
   td_->notification_settings_manager_->after_get_difference();
-  td_->stickers_manager_->after_get_difference();
   send_closure_later(td_->notification_manager_actor_, &NotificationManager::after_get_difference);
   send_closure(G()->state_manager(), &StateManager::on_synchronized, true);
+
+  try_reload_data();
+}
+
+void UpdatesManager::schedule_data_reload() {
+  if (data_reload_timeout_.has_timeout()) {
+    return;
+  }
+
+  auto timeout = next_data_reload_time_ - Time::now();
+  LOG(INFO) << "Schedule data reload in " << timeout;
+  data_reload_timeout_.set_callback(std::move(try_reload_data_static));
+  data_reload_timeout_.set_callback_data(static_cast<void *>(td_));
+  data_reload_timeout_.set_timeout_in(timeout);
+}
+
+void UpdatesManager::try_reload_data_static(void *td) {
+  CHECK(td != nullptr);
+  if (G()->close_flag()) {
+    return;
+  }
+
+  static_cast<Td *>(td)->updates_manager_->try_reload_data();
+}
+
+void UpdatesManager::try_reload_data() {
+  if (td_->auth_manager_->is_bot() || running_get_difference_ || !td_->is_online()) {
+    return;
+  }
+
+  auto now = Time::now();
+  if (now < next_data_reload_time_) {
+    schedule_data_reload();
+    return;
+  }
+  next_data_reload_time_ = now + Random::fast(3000, 4200);
+
+  LOG(INFO) << "Reload data";
+  td_->animations_manager_->get_saved_animations(Auto());
+  td_->contacts_manager_->reload_created_public_dialogs(PublicDialogType::HasUsername, Auto());
+  td_->contacts_manager_->reload_created_public_dialogs(PublicDialogType::IsLocationBased, Auto());
+  td_->notification_settings_manager_->reload_saved_ringtones(Auto());
+  td_->stickers_manager_->reload_reactions();
+  td_->stickers_manager_->get_installed_sticker_sets(false, Auto());
+  td_->stickers_manager_->get_installed_sticker_sets(true, Auto());
+  td_->stickers_manager_->get_featured_sticker_sets(0, 1000, Auto());
+  td_->stickers_manager_->get_recent_stickers(false, Auto());
+  td_->stickers_manager_->get_recent_stickers(true, Auto());
+  td_->stickers_manager_->get_favorite_stickers(Auto());
+  td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::animated_emoji());
+  td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::animated_emoji_click());
+
+  schedule_data_reload();
 }
 
 void UpdatesManager::on_pending_updates(vector<tl_object_ptr<telegram_api::Update>> &&updates, int32 seq_begin,

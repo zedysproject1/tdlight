@@ -2676,22 +2676,6 @@ class GetInlineQueryResultsRequest final : public RequestOnceActor {
   }
 };
 
-class GetSupportUserRequest final : public RequestActor<> {
-  UserId user_id_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    user_id_ = td_->contacts_manager_->get_support_user(std::move(promise));
-  }
-
-  void do_send_result() final {
-    send_result(td_->contacts_manager_->get_user_object(user_id_));
-  }
-
- public:
-  GetSupportUserRequest(ActorShared<Td> td, uint64 request_id) : RequestActor(std::move(td), request_id) {
-  }
-};
-
 class SearchBackgroundRequest final : public RequestActor<> {
   string name_;
 
@@ -3687,9 +3671,6 @@ void Td::close_impl(bool destroy_flag) {
 
 class Td::DownloadFileCallback final : public FileManager::DownloadCallback {
  public:
-  void on_progress(FileId file_id) final {
-  }
-
   void on_download_ok(FileId file_id) final {
     send_closure(G()->td(), &Td::on_file_download_finished, file_id);
   }
@@ -3701,9 +3682,6 @@ class Td::DownloadFileCallback final : public FileManager::DownloadCallback {
 
 class Td::UploadFileCallback final : public FileManager::UploadCallback {
  public:
-  void on_progress(FileId file_id) final {
-  }
-
   void on_upload_ok(FileId file_id, tl_object_ptr<telegram_api::InputFile> input_file) final {
     // cancel file upload of the file to allow next upload with the same file to succeed
     send_closure(G()->file_manager(), &FileManager::cancel_upload, file_id);
@@ -7766,7 +7744,8 @@ void Td::on_request(uint64 id, td_api::checkPhoneNumberConfirmationCode &request
 
 void Td::on_request(uint64 id, const td_api::getSupportUser &request) {
   CHECK_IS_USER();
-  CREATE_NO_ARGS_REQUEST(GetSupportUserRequest);
+  CREATE_REQUEST_PROMISE();
+  contacts_manager_->get_support_user(std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::getBackgrounds &request) {

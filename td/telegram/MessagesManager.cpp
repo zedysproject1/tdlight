@@ -4545,8 +4545,6 @@ class ResolveUsernameQuery final : public Td::ResultHandler {
 
 class MessagesManager::UploadMediaCallback final : public FileManager::UploadCallback {
  public:
-  void on_progress(FileId file_id) final {
-  }
   void on_upload_ok(FileId file_id, tl_object_ptr<telegram_api::InputFile> input_file) final {
     send_closure_later(G()->messages_manager(), &MessagesManager::on_upload_media, file_id, std::move(input_file),
                        nullptr);
@@ -7453,8 +7451,8 @@ void MessagesManager::on_dialog_action(DialogId dialog_id, MessageId top_thread_
         FullMessageId full_message_id{dialog_id, MessageId(ServerMessageId(clicking_info.message_id))};
         auto *m = get_message_force(full_message_id, "on_dialog_action");
         if (m != nullptr) {
-          on_message_content_animated_emoji_clicked(m->content.get(), full_message_id, td_, clicking_info.emoji,
-                                                    std::move(clicking_info.data));
+          on_message_content_animated_emoji_clicked(m->content.get(), full_message_id, td_,
+                                                    std::move(clicking_info.emoji), std::move(clicking_info.data));
         }
       }
       return;
@@ -9612,8 +9610,8 @@ void MessagesManager::on_get_messages(vector<tl_object_ptr<telegram_api::Message
                                       bool is_scheduled, Promise<Unit> &&promise, const char *source) {
   TRY_STATUS_PROMISE(promise, G()->close_status());
 
-  LOG(DEBUG) << "Receive " << messages.size() << " messages";
   for (auto &message : messages) {
+    LOG(INFO) << "Receive " << to_string(message);
     on_get_message(std::move(message), false, is_channel_message, is_scheduled, false, false, source);
   }
   promise.set_value(Unit());
@@ -15138,7 +15136,7 @@ void MessagesManager::remove_dialog_mention_notifications(Dialog *d) {
     CHECK(m != nullptr);
     CHECK(m->message_id.is_valid());
     if (m->notification_id.is_valid() && is_message_notification_active(d, m) &&
-        is_from_mention_notification_group(d, m)) {
+        is_from_mention_notification_group(m)) {
       removed_notification_ids_set.insert(m->notification_id);
     }
   }
@@ -15150,7 +15148,7 @@ void MessagesManager::remove_dialog_mention_notifications(Dialog *d) {
     if (message_id != d->pinned_message_notification_message_id) {
       auto m = get_message_force(d, message_id, "remove_dialog_mention_notifications");
       if (m != nullptr && m->notification_id.is_valid() && is_message_notification_active(d, m)) {
-        CHECK(is_from_mention_notification_group(d, m));
+        CHECK(is_from_mention_notification_group(m));
         removed_notification_ids_set.insert(m->notification_id);
       }
     }
@@ -15846,7 +15844,7 @@ void MessagesManager::remove_message_notification_id(Dialog *d, Message *m, bool
     return;
   }
 
-  auto from_mentions = is_from_mention_notification_group(d, m);
+  auto from_mentions = is_from_mention_notification_group(m);
   auto &group_info = get_notification_group_info(d, m);
   if (!group_info.group_id.is_valid()) {
     return;
@@ -15913,7 +15911,7 @@ void MessagesManager::fix_dialog_last_notification_id(Dialog *d, bool from_menti
   if (*it != nullptr && ((*it)->message_id == message_id || (*it)->have_next)) {
     while (*it != nullptr) {
       const Message *m = *it;
-      if (is_from_mention_notification_group(d, m) == from_mentions && m->notification_id.is_valid() &&
+      if (is_from_mention_notification_group(m) == from_mentions && m->notification_id.is_valid() &&
           is_message_notification_active(d, m) && m->message_id != message_id) {
         bool is_fixed = set_dialog_last_notification(d->dialog_id, group_info, m->date, m->notification_id,
                                                      "fix_dialog_last_notification_id");
@@ -26567,7 +26565,7 @@ bool MessagesManager::can_resend_message(const Message *m) const {
   auto content_type = m->content->get_type();
   if (m->via_bot_user_id.is_valid() || m->hide_via_bot) {
     // via bot message
-    if (!can_have_input_media(td_, m->content.get())) {
+    if (!can_have_input_media(td_, m->content.get(), false)) {
       return false;
     }
 
@@ -27737,10 +27735,16 @@ class MessagesManager::ForwardMessagesLogEvent {
   DialogId from_dialog_id;
   vector<MessageId> message_ids;
   vector<Message *> messages_in;
+  bool drop_author;
+  bool drop_media_captions;
   vector<unique_ptr<Message>> messages_out;
 
   template <class StorerT>
   void store(StorerT &storer) const {
+    BEGIN_STORE_FLAGS();
+    STORE_FLAG(drop_author);
+    STORE_FLAG(drop_media_captions);
+    END_STORE_FLAGS();
     td::store(to_dialog_id, storer);
     td::store(from_dialog_id, storer);
     td::store(message_ids, storer);
@@ -27749,6 +27753,12 @@ class MessagesManager::ForwardMessagesLogEvent {
 
   template <class ParserT>
   void parse(ParserT &parser) {
+    if (parser.version() >= static_cast<int32>(Version::UseServerForwardAsCopy)) {
+      BEGIN_PARSE_FLAGS();
+      PARSE_FLAG(drop_author);
+      PARSE_FLAG(drop_media_captions);
+      END_PARSE_FLAGS();
+    }
     td::parse(to_dialog_id, parser);
     td::parse(from_dialog_id, parser);
     td::parse(message_ids, parser);
@@ -27758,15 +27768,17 @@ class MessagesManager::ForwardMessagesLogEvent {
 
 uint64 MessagesManager::save_forward_messages_log_event(DialogId to_dialog_id, DialogId from_dialog_id,
                                                         const vector<Message *> &messages,
-                                                        const vector<MessageId> &message_ids) {
-  ForwardMessagesLogEvent log_event{to_dialog_id, from_dialog_id, message_ids, messages, Auto()};
+                                                        const vector<MessageId> &message_ids, bool drop_author,
+                                                        bool drop_media_captions) {
+  ForwardMessagesLogEvent log_event{to_dialog_id, from_dialog_id,      message_ids, messages,
+                                    drop_author,  drop_media_captions, Auto()};
   return binlog_add(G()->td_db()->get_binlog(), LogEvent::HandlerType::ForwardMessages,
                     get_log_event_storer(log_event));
 }
 
 void MessagesManager::do_forward_messages(DialogId to_dialog_id, DialogId from_dialog_id,
                                           const vector<Message *> &messages, const vector<MessageId> &message_ids,
-                                          uint64 log_event_id) {
+                                          bool drop_author, bool drop_media_captions, uint64 log_event_id) {
   CHECK(messages.size() == message_ids.size());
   if (messages.empty()) {
     return;
@@ -27776,7 +27788,8 @@ void MessagesManager::do_forward_messages(DialogId to_dialog_id, DialogId from_d
   }
 
   if (log_event_id == 0 && G()->parameters().use_message_db) {
-    log_event_id = save_forward_messages_log_event(to_dialog_id, from_dialog_id, messages, message_ids);
+    log_event_id = save_forward_messages_log_event(to_dialog_id, from_dialog_id, messages, message_ids, drop_author,
+                                                   drop_media_captions);
   }
 
   auto schedule_date = get_message_schedule_date(messages[0]);
@@ -27800,6 +27813,12 @@ void MessagesManager::do_forward_messages(DialogId to_dialog_id, DialogId from_d
   }
   if (messages[0]->noforwards) {
     flags |= SEND_MESSAGE_FLAG_NOFORWARDS;
+  }
+  if (drop_author) {
+    flags |= telegram_api::messages_forwardMessages::DROP_AUTHOR_MASK;
+  }
+  if (drop_media_captions) {
+    flags |= telegram_api::messages_forwardMessages::DROP_MEDIA_CAPTIONS_MASK;
   }
 
   vector<int64> random_ids =
@@ -27873,10 +27892,13 @@ unique_ptr<MessagesManager::MessageForwardInfo> MessagesManager::create_message_
 }
 
 void MessagesManager::fix_forwarded_message(Message *m, DialogId to_dialog_id, const Message *forwarded_message,
-                                            int64 media_album_id) const {
-  m->via_bot_user_id = forwarded_message->via_bot_user_id;
+                                            int64 media_album_id, bool drop_author) const {
+  bool is_game = m->content->get_type() == MessageContentType::Game;
+  if (!drop_author || is_game) {
+    m->via_bot_user_id = forwarded_message->via_bot_user_id;
+  }
   m->media_album_id = media_album_id;
-  if (forwarded_message->view_count > 0 && m->forward_info != nullptr && m->view_count == 0 &&
+  if (!drop_author && forwarded_message->view_count > 0 && m->forward_info != nullptr && m->view_count == 0 &&
       !(m->message_id.is_scheduled() && is_broadcast_channel(to_dialog_id))) {
     m->view_count = forwarded_message->view_count;
     m->forward_count = forwarded_message->forward_count;
@@ -27987,12 +28009,23 @@ Result<MessagesManager::ForwardedMessages> MessagesManager::get_forwarded_messag
 
   bool to_secret = to_dialog_id.get_type() == DialogType::SecretChat;
 
+  bool can_use_server_forward = !to_secret;
+  for (auto &copy_option : copy_options) {
+    if (!copy_option.is_supported_server_side()) {
+      can_use_server_forward = false;
+      break;
+    }
+  }
+  CHECK(can_use_server_forward || copy_options.size() == 1);
+
   ForwardedMessages result;
   result.to_dialog = to_dialog;
   result.from_dialog = from_dialog;
   result.message_send_options = message_send_options;
   auto &copied_messages = result.copied_messages;
   auto &forwarded_message_contents = result.forwarded_message_contents;
+  result.drop_author = can_use_server_forward && copy_options[0].send_copy;
+  result.drop_media_captions = can_use_server_forward && copy_options[0].replace_caption;
 
   std::unordered_map<int64, std::pair<int64, int32>> new_copied_media_album_ids;
   std::unordered_map<int64, std::pair<int64, int32>> new_forwarded_media_album_ids;
@@ -28014,25 +28047,28 @@ Result<MessagesManager::ForwardedMessages> MessagesManager::get_forwarded_messag
     }
 
     bool need_copy = !message_id.is_server() || to_secret || copy_options[i].send_copy;
+    bool is_local_copy = need_copy && !(message_id.is_server() && can_use_server_forward &&
+                                        forwarded_message->content->get_type() != MessageContentType::Dice);
     if (!(need_copy && td_->auth_manager_->is_bot()) && !can_save_message(from_dialog_id, forwarded_message)) {
       LOG(INFO) << "Forward of " << message_id << " is restricted";
       continue;
     }
 
-    auto type = need_copy ? MessageContentDupType::Copy : MessageContentDupType::Forward;
+    auto type = need_copy ? (is_local_copy ? MessageContentDupType::Copy : MessageContentDupType::ServerCopy)
+                          : MessageContentDupType::Forward;
     auto top_thread_message_id = copy_options[i].top_thread_message_id;
     auto reply_to_message_id = copy_options[i].reply_to_message_id;
     auto reply_markup = std::move(copy_options[i].reply_markup);
     unique_ptr<MessageContent> content =
         dup_message_content(td_, to_dialog_id, forwarded_message->content.get(), type, std::move(copy_options[i]));
     if (content == nullptr) {
-      LOG(INFO) << "Can't forward " << message_id;
+      LOG(INFO) << "Can't forward content of " << message_id;
       continue;
     }
 
     reply_to_message_id = get_reply_to_message_id(to_dialog, top_thread_message_id, reply_to_message_id, false);
 
-    auto can_send_status = can_send_message_content(to_dialog_id, content.get(), !need_copy, td_);
+    auto can_send_status = can_send_message_content(to_dialog_id, content.get(), !is_local_copy, td_);
     if (can_send_status.is_error()) {
       LOG(INFO) << "Can't forward " << message_id << ": " << can_send_status.message();
       continue;
@@ -28050,8 +28086,8 @@ Result<MessagesManager::ForwardedMessages> MessagesManager::get_forwarded_messag
     }
 
     if (forwarded_message->media_album_id != 0) {
-      auto &new_media_album_id = need_copy ? new_copied_media_album_ids[forwarded_message->media_album_id]
-                                           : new_forwarded_media_album_ids[forwarded_message->media_album_id];
+      auto &new_media_album_id = is_local_copy ? new_copied_media_album_ids[forwarded_message->media_album_id]
+                                               : new_forwarded_media_album_ids[forwarded_message->media_album_id];
       new_media_album_id.second++;
       if (new_media_album_id.second == 2) {  // have at least 2 messages in the new album
         CHECK(new_media_album_id.first == 0);
@@ -28063,7 +28099,7 @@ Result<MessagesManager::ForwardedMessages> MessagesManager::get_forwarded_messag
       }
     }
 
-    if (need_copy) {
+    if (is_local_copy) {
       copied_messages.push_back({std::move(content), top_thread_message_id, reply_to_message_id,
                                  std::move(reply_markup), forwarded_message->media_album_id,
                                  get_message_disable_web_page_preview(forwarded_message), i});
@@ -28123,6 +28159,8 @@ Result<td_api::object_ptr<td_api::messages>> MessagesManager::forward_messages(
   auto message_send_options = forwarded_messages_info.message_send_options;
   auto &copied_messages = forwarded_messages_info.copied_messages;
   auto &forwarded_message_contents = forwarded_messages_info.forwarded_message_contents;
+  auto drop_author = forwarded_messages_info.drop_author;
+  auto drop_media_captions = forwarded_messages_info.drop_media_captions;
 
   vector<td_api::object_ptr<td_api::message>> result(message_ids.size());
   vector<Message *> forwarded_messages;
@@ -28134,7 +28172,8 @@ Result<td_api::object_ptr<td_api::messages>> MessagesManager::forward_messages(
     CHECK(forwarded_message != nullptr);
 
     auto content = std::move(forwarded_message_contents[j].content);
-    auto forward_info = create_message_forward_info(from_dialog_id, to_dialog_id, forwarded_message);
+    auto forward_info =
+        drop_author ? nullptr : create_message_forward_info(from_dialog_id, to_dialog_id, forwarded_message);
     if (forward_info != nullptr && !forward_info->is_imported && !is_forward_info_sender_hidden(forward_info.get()) &&
         !forward_info->message_id.is_valid() && !forward_info->sender_dialog_id.is_valid() &&
         forward_info->sender_user_id.is_valid()) {
@@ -28162,7 +28201,8 @@ Result<td_api::object_ptr<td_api::messages>> MessagesManager::forward_messages(
                               &need_update_dialog_pos, j + 1 != forwarded_message_contents.size(),
                               std::move(forward_info));
     }
-    fix_forwarded_message(m, to_dialog_id, forwarded_message, forwarded_message_contents[j].media_album_id);
+    fix_forwarded_message(m, to_dialog_id, forwarded_message, forwarded_message_contents[j].media_album_id,
+                          drop_author);
     m->in_game_share = in_game_share;
     m->real_forward_from_dialog_id = from_dialog_id;
     m->real_forward_from_message_id = message_id;
@@ -28178,7 +28218,8 @@ Result<td_api::object_ptr<td_api::messages>> MessagesManager::forward_messages(
 
   if (!forwarded_messages.empty()) {
     CHECK(!only_preview);
-    do_forward_messages(to_dialog_id, from_dialog_id, forwarded_messages, forwarded_message_ids, 0);
+    do_forward_messages(to_dialog_id, from_dialog_id, forwarded_messages, forwarded_message_ids, drop_author,
+                        drop_media_captions, 0);
   }
 
   for (auto &copied_message : copied_messages) {
@@ -28837,7 +28878,7 @@ void MessagesManager::send_update_new_message(const Dialog *d, const Message *m)
 MessagesManager::NotificationGroupInfo &MessagesManager::get_notification_group_info(Dialog *d, const Message *m) {
   CHECK(d != nullptr);
   CHECK(m != nullptr);
-  return is_from_mention_notification_group(d, m) ? d->mention_notification_group : d->message_notification_group;
+  return is_from_mention_notification_group(m) ? d->mention_notification_group : d->message_notification_group;
 }
 
 NotificationGroupId MessagesManager::get_dialog_notification_group_id(DialogId dialog_id,
@@ -29107,13 +29148,13 @@ MessagesManager::MessageNotificationGroup MessagesManager::get_message_notificat
   return result;
 }
 
-bool MessagesManager::is_from_mention_notification_group(const Dialog *d, const Message *m) {
+bool MessagesManager::is_from_mention_notification_group(const Message *m) {
   return m->contains_mention && !m->is_mention_notification_disabled;
 }
 
 bool MessagesManager::is_message_notification_active(const Dialog *d, const Message *m) {
   CHECK(!m->message_id.is_scheduled());
-  if (is_from_mention_notification_group(d, m)) {
+  if (is_from_mention_notification_group(m)) {
     return m->notification_id.get() > d->mention_notification_group.max_removed_notification_id.get() &&
            m->message_id > d->mention_notification_group.max_removed_message_id &&
            (m->contains_unread_mention || m->message_id == d->pinned_message_notification_message_id);
@@ -29244,7 +29285,7 @@ vector<Notification> MessagesManager::get_message_notifications_from_database_fo
         continue;
       }
 
-      if (is_from_mention_notification_group(d, m) != from_mentions) {
+      if (is_from_mention_notification_group(m) != from_mentions) {
         VLOG(notifications) << "Receive from database " << m->message_id << " with " << m->notification_id
                             << " from another group";
         continue;
@@ -29502,7 +29543,7 @@ void MessagesManager::on_get_message_notifications_from_database(DialogId dialog
       continue;
     }
 
-    if (is_from_mention_notification_group(d, m) != from_mentions) {
+    if (is_from_mention_notification_group(m) != from_mentions) {
       VLOG(notifications) << "Receive from database " << m->message_id << " with " << m->notification_id
                           << " from another category";
       continue;
@@ -29569,7 +29610,7 @@ void MessagesManager::remove_message_notification(DialogId dialog_id, Notificati
     CHECK(m != nullptr);
     CHECK(m->notification_id == notification_id);
     CHECK(!m->message_id.is_scheduled());
-    if (is_from_mention_notification_group(d, m) == from_mentions && is_message_notification_active(d, m)) {
+    if (is_from_mention_notification_group(m) == from_mentions && is_message_notification_active(d, m)) {
       remove_message_notification_id(d, m, false, false);
     }
     return;
@@ -29632,8 +29673,8 @@ void MessagesManager::do_remove_message_notification(DialogId dialog_id, bool fr
   CHECK(d != nullptr);
 
   auto m = on_get_message_from_database(d, result[0], false, "do_remove_message_notification");
-  if (m != nullptr && m->notification_id == notification_id &&
-      is_from_mention_notification_group(d, m) == from_mentions && is_message_notification_active(d, m)) {
+  if (m != nullptr && m->notification_id == notification_id && is_from_mention_notification_group(m) == from_mentions &&
+      is_message_notification_active(d, m)) {
     remove_message_notification_id(d, m, false, false);
   }
 }
@@ -29799,7 +29840,7 @@ bool MessagesManager::may_need_message_notification(const Dialog *d, const Messa
     return false;
   }
 
-  if (is_from_mention_notification_group(d, m)) {
+  if (is_from_mention_notification_group(m)) {
     return true;
   }
 
@@ -29830,7 +29871,7 @@ bool MessagesManager::add_new_message_notification(Dialog *d, Message *m, bool f
     return false;
   }
 
-  auto from_mentions = is_from_mention_notification_group(d, m);
+  auto from_mentions = is_from_mention_notification_group(m);
   bool is_pinned = m->content->get_type() == MessageContentType::PinMessage;
   bool is_active =
       from_mentions ? m->contains_unread_mention || is_pinned : m->message_id > d->last_read_inbox_message_id;
@@ -29854,7 +29895,7 @@ bool MessagesManager::add_new_message_notification(Dialog *d, Message *m, bool f
 
   DialogId settings_dialog_id = d->dialog_id;
   Dialog *settings_dialog = d;
-  if (is_from_mention_notification_group(d, m)) {
+  if (is_from_mention_notification_group(m)) {
     // have a mention, so use notification settings from the dialog with the sender
     auto sender_dialog_id = get_message_sender(m);
     if (sender_dialog_id.is_valid()) {
@@ -34345,7 +34386,7 @@ MessagesManager::Message *MessagesManager::add_message_to_dialog(Dialog *d, uniq
       add_new_message_notification(d, message.get(), false);
     } else {
       if (message->from_database && message->notification_id.is_valid() &&
-          is_from_mention_notification_group(d, message.get()) && is_message_notification_active(d, message.get()) &&
+          is_from_mention_notification_group(message.get()) && is_message_notification_active(d, message.get()) &&
           is_dialog_mention_notifications_disabled(d) && message_id != d->pinned_message_notification_message_id) {
         auto notification_id = message->notification_id;
         VLOG(notifications) << "Remove mention " << notification_id << " in " << message_id << " in " << dialog_id;
@@ -35039,7 +35080,7 @@ void MessagesManager::delete_message_from_database(Dialog *d, MessageId message_
 
   if (m != nullptr && m->notification_id.is_valid()) {
     CHECK(!message_id.is_scheduled());
-    auto from_mentions = is_from_mention_notification_group(d, m);
+    auto from_mentions = is_from_mention_notification_group(m);
     auto &group_info = from_mentions ? d->mention_notification_group : d->message_notification_group;
 
     if (group_info.group_id.is_valid()) {
@@ -36014,6 +36055,9 @@ MessagesManager::Dialog *MessagesManager::add_new_dialog(unique_ptr<Dialog> &&d,
 
   auto dialog_it = dialogs_.emplace(dialog_id, std::move(d)).first;
 
+  CHECK(!being_added_new_dialog_id_.is_valid());
+  being_added_new_dialog_id_ = dialog_id;
+
   loaded_dialogs_.erase(dialog_id);
 
   Dialog *dialog = dialog_it->second.get();
@@ -36021,6 +36065,8 @@ MessagesManager::Dialog *MessagesManager::add_new_dialog(unique_ptr<Dialog> &&d,
   fix_dialog_action_bar(dialog, dialog->action_bar.get());
 
   send_update_new_chat(dialog);
+
+  being_added_new_dialog_id_ = DialogId();
 
   fix_new_dialog(dialog, std::move(last_database_message), last_database_message_id, order, last_clear_history_date,
                  last_clear_history_message_id, default_join_group_call_as_dialog_id, default_send_message_as_dialog_id,
@@ -36155,6 +36201,7 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
         CHECK(counter_message.first > 0);
         counter_message.first--;
         if (counter_message.first == 0) {
+          LOG(INFO) << "Add postponed last database message in " << pending_dialog_id;
           add_dialog_last_database_message(get_dialog(pending_dialog_id), std::move(counter_message.second));
           pending_add_dialog_last_database_message_.erase(pending_dialog_id);
         }
@@ -38755,7 +38802,8 @@ void MessagesManager::on_binlog_events(vector<BinlogEvent> &&events) {
           send_update_chat_last_message(to_dialog, "on_reforward_message");
         }
 
-        do_forward_messages(to_dialog_id, from_dialog_id, forwarded_messages, log_event.message_ids, event.id_);
+        do_forward_messages(to_dialog_id, from_dialog_id, forwarded_messages, log_event.message_ids,
+                            log_event.drop_author, log_event.drop_media_captions, event.id_);
         break;
       }
       case LogEvent::HandlerType::DeleteMessage: {
