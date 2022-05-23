@@ -75,6 +75,7 @@
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 #include "td/utils/StringBuilder.h"
+#include "td/utils/WaitFreeHashMap.h"
 
 #include <array>
 #include <functional>
@@ -1351,7 +1352,7 @@ class MessagesManager final : public Actor {
     int32 pending_read_channel_inbox_pts = 0;                      // for channels only
     int32 pending_read_channel_inbox_server_unread_count = 0;      // for channels only
     MessageId pending_read_channel_inbox_max_message_id;           // for channels only
-    std::unordered_map<int64, MessageId> random_id_to_message_id;  // for secret chats only
+    std::unordered_map<int64, MessageId> random_id_to_message_id;  // for secret chats and yet unsent messages only
 
     MessageId last_assigned_message_id;  // identifier of the last local or yet unsent message, assigned after
                                          // application start, used to guarantee that all assigned message identifiers
@@ -1866,7 +1867,7 @@ class MessagesManager final : public Actor {
 
   bool is_anonymous_administrator(DialogId dialog_id, string *author_signature) const;
 
-  int64 generate_new_random_id();
+  int64 generate_new_random_id(const Dialog *d);
 
   unique_ptr<Message> create_message_to_send(Dialog *d, MessageId top_thread_message_id, MessageId reply_to_message_id,
                                              const MessageSendOptions &options, unique_ptr<MessageContent> &&content,
@@ -1954,6 +1955,8 @@ class MessagesManager final : public Actor {
       unique_ptr<MessageContent> content;
       MessageId top_thread_message_id;
       MessageId reply_to_message_id;
+      MessageId original_message_id;
+      MessageId original_reply_to_message_id;
       unique_ptr<ReplyMarkup> reply_markup;
       int64 media_album_id;
       bool disable_web_page_preview;
@@ -2024,6 +2027,8 @@ class MessagesManager final : public Actor {
 
   void do_send_screenshot_taken_notification_message(DialogId dialog_id, const Message *m, uint64 log_event_id);
 
+  void restore_message_reply_to_message_id(Dialog *d, Message *m);
+
   Message *continue_send_message(DialogId dialog_id, unique_ptr<Message> &&m, uint64 log_event_id);
 
   bool is_message_unload_enabled() const;
@@ -2065,6 +2070,8 @@ class MessagesManager final : public Actor {
                                                   const char *source);
 
   void on_message_deleted(Dialog *d, Message *m, bool is_permanently_deleted, const char *source);
+
+  static bool is_deleted_message(const Dialog *d, MessageId message_id);
 
   int32 get_unload_dialog_delay() const;
 
@@ -2319,6 +2326,8 @@ class MessagesManager final : public Actor {
   void delete_all_dialog_messages_from_database(Dialog *d, MessageId max_message_id, const char *source);
 
   void delete_message_from_database(Dialog *d, MessageId message_id, const Message *m, bool is_permanently_deleted);
+
+  void update_reply_to_message_id(DialogId dialog_id, MessageId old_message_id, MessageId new_message_id);
 
   void delete_message_files(DialogId dialog_id, const Message *m) const;
 
@@ -3421,7 +3430,7 @@ class MessagesManager final : public Actor {
   };
   FlatHashMap<int64, PendingMessageGroupSend> pending_message_group_sends_;  // media_album_id -> ...
 
-  FlatHashMap<MessageId, DialogId, MessageIdHash> message_id_to_dialog_id_;
+  WaitFreeHashMap<MessageId, DialogId, MessageIdHash> message_id_to_dialog_id_;
   FlatHashMap<MessageId, DialogId, MessageIdHash> last_clear_history_message_id_to_dialog_id_;
 
   bool created_public_broadcasts_inited_ = false;
@@ -3484,6 +3493,7 @@ class MessagesManager final : public Actor {
   FlatHashMap<DialogId, uint64, DialogIdHash> get_dialog_query_log_event_id_;
 
   FlatHashMap<FullMessageId, int32, FullMessageIdHash> replied_by_yet_unsent_messages_;
+  FlatHashMap<FullMessageId, FlatHashSet<MessageId, MessageIdHash>, FullMessageIdHash> replied_yet_unsent_messages_;
 
   // full_message_id -> replies with media timestamps
   FlatHashMap<FullMessageId, FlatHashSet<MessageId, MessageIdHash>, FullMessageIdHash>
@@ -3594,6 +3604,9 @@ class MessagesManager final : public Actor {
   FlatHashMap<DialogId, vector<Promise<Unit>>, DialogIdHash> run_after_get_channel_difference_;
 
   ChangesProcessor<unique_ptr<PendingSecretMessage>> pending_secret_messages_;
+
+  FlatHashMap<DialogId, FlatHashMap<int64, MessageId>, DialogIdHash>
+      pending_secret_message_ids_;  // random_id -> message_id
 
   FlatHashMap<DialogId, vector<DialogId>, DialogIdHash> pending_add_dialog_last_database_message_dependent_dialogs_;
   FlatHashMap<DialogId, std::pair<int32, unique_ptr<Message>>, DialogIdHash>
