@@ -33,6 +33,7 @@
 #include "td/telegram/net/DcOptions.h"
 #include "td/telegram/net/NetQuery.h"
 #include "td/telegram/NotificationManager.h"
+#include "td/telegram/NotificationSettings.h"
 #include "td/telegram/NotificationSettingsManager.h"
 #include "td/telegram/Payments.h"
 #include "td/telegram/PollId.h"
@@ -1601,7 +1602,6 @@ void UpdatesManager::after_get_difference() {
   td_->download_manager_->after_get_difference();
   td_->inline_queries_manager_->after_get_difference();
   td_->messages_manager_->after_get_difference();
-  td_->notification_settings_manager_->after_get_difference();
   send_closure_later(td_->notification_manager_actor_, &NotificationManager::after_get_difference);
   send_closure(G()->state_manager(), &StateManager::on_synchronized, true);
   get_difference_start_time_ = 0.0;
@@ -1648,6 +1648,12 @@ void UpdatesManager::try_reload_data() {
   td_->contacts_manager_->reload_created_public_dialogs(PublicDialogType::HasUsername, Auto());
   td_->contacts_manager_->reload_created_public_dialogs(PublicDialogType::IsLocationBased, Auto());
   td_->notification_settings_manager_->reload_saved_ringtones(Auto());
+  td_->notification_settings_manager_->send_get_scope_notification_settings_query(NotificationSettingsScope::Private,
+                                                                                  Auto());
+  td_->notification_settings_manager_->send_get_scope_notification_settings_query(NotificationSettingsScope::Group,
+                                                                                  Auto());
+  td_->notification_settings_manager_->send_get_scope_notification_settings_query(NotificationSettingsScope::Channel,
+                                                                                  Auto());
   td_->stickers_manager_->reload_reactions();
   td_->stickers_manager_->get_installed_sticker_sets(false, Auto());
   td_->stickers_manager_->get_installed_sticker_sets(true, Auto());
@@ -1773,6 +1779,7 @@ void UpdatesManager::on_pending_updates(vector<tl_object_ptr<telegram_api::Updat
 
   size_t ordinary_new_message_count = 0;
   size_t scheduled_new_message_count = 0;
+  size_t update_message_id_count = 0;
   for (auto &update : updates) {
     if (update != nullptr) {
       auto constructor_id = update->get_id();
@@ -1781,11 +1788,13 @@ void UpdatesManager::on_pending_updates(vector<tl_object_ptr<telegram_api::Updat
         ordinary_new_message_count++;
       } else if (constructor_id == telegram_api::updateNewScheduledMessage::ID) {
         scheduled_new_message_count++;
+      } else if (constructor_id == telegram_api::updateMessageID::ID) {
+        update_message_id_count++;
       }
     }
   }
 
-  if (ordinary_new_message_count != 0 && scheduled_new_message_count != 0) {
+  if (update_message_id_count != 0 && ordinary_new_message_count != 0 && scheduled_new_message_count != 0) {
     LOG(ERROR) << "Receive mixed message types in updates:";
     for (auto &update : updates) {
       LOG(ERROR) << "Update: " << oneline(to_string(update));
@@ -3341,7 +3350,8 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateGeoLiveViewed> 
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateMessagePoll> update, Promise<Unit> &&promise) {
-  td_->poll_manager_->on_get_poll(PollId(update->poll_id_), std::move(update->poll_), std::move(update->results_));
+  td_->poll_manager_->on_get_poll(PollId(update->poll_id_), std::move(update->poll_), std::move(update->results_),
+                                  "updateMessagePoll");
   promise.set_value(Unit());
 }
 

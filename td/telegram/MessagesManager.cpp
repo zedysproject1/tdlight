@@ -871,6 +871,9 @@ class SearchPublicDialogsQuery final : public Td::ResultHandler {
 
   void on_error(Status status) final {
     if (!G()->is_expected_error(status)) {
+      if (status.message() == "QUERY_TOO_SHORT") {
+        return td_->messages_manager_->on_get_public_dialogs_search_result(query_, {}, {});
+      }
       LOG(ERROR) << "Receive error for SearchPublicDialogsQuery: " << status;
     }
     td_->messages_manager_->on_failed_public_dialogs_search(query_, std::move(status));
@@ -9683,7 +9686,7 @@ void MessagesManager::on_get_history(DialogId dialog_id, MessageId from_message_
     // new server messages were added to the dialog since the request was sent, but weren't received
     // they should have been received, so we must repeat the request to get them
     if (from_the_end) {
-      get_history_from_the_end_impl(d, false, false, std::move(promise));
+      get_history_from_the_end_impl(d, false, false, std::move(promise), "on_get_history");
     } else {
       get_history_impl(d, from_message_id, offset, limit, false, false, std::move(promise));
     }
@@ -9786,14 +9789,15 @@ void MessagesManager::on_get_history(DialogId dialog_id, MessageId from_message_
   }
 
   for (auto &message : messages) {
-    if (!have_next && from_the_end && get_message_id(message, false) < d->last_message_id) {
+    auto expected_message_id = get_message_id(message, false);
+    if (!have_next && from_the_end && expected_message_id < d->last_message_id) {
       // last message in the dialog should be attached to the next message if there is some
       have_next = true;
     }
 
     auto message_dialog_id = get_message_dialog_id(message);
     if (message_dialog_id != dialog_id) {
-      LOG(ERROR) << "Receive " << get_message_id(message, false) << " in wrong " << message_dialog_id << " instead of "
+      LOG(ERROR) << "Receive " << expected_message_id << " in wrong " << message_dialog_id << " instead of "
                  << dialog_id << ": " << oneline(to_string(message));
       continue;
     }
@@ -9802,6 +9806,7 @@ void MessagesManager::on_get_history(DialogId dialog_id, MessageId from_message_
         on_get_message(std::move(message), false, is_channel_message, false, false, have_next, "get history");
     auto message_id = full_message_id.get_message_id();
     if (message_id.is_valid()) {
+      CHECK(message_id == expected_message_id);
       if (!last_added_message_id.is_valid()) {
         last_added_message_id = message_id;
       }
@@ -12666,7 +12671,7 @@ void MessagesManager::set_dialog_max_unavailable_message_id(DialogId dialog_id, 
     }
 
     if (max_unavailable_message_id.is_valid() && max_unavailable_message_id.is_yet_unsent()) {
-      LOG(ERROR) << "Tried to update " << dialog_id << " last read outbox message with " << max_unavailable_message_id
+      LOG(ERROR) << "Tried to update " << dialog_id << " max unavailable message with " << max_unavailable_message_id
                  << " from " << source;
       return;
     }
@@ -17373,7 +17378,9 @@ void MessagesManager::synchronize_dialog_filters() {
 vector<DialogId> MessagesManager::search_public_dialogs(const string &query, Promise<Unit> &&promise) {
   LOG(INFO) << "Search public chats with query = \"" << query << '"';
 
-  if (utf8_length(query) < MIN_SEARCH_PUBLIC_DIALOG_PREFIX_LEN) {
+  auto query_length = utf8_length(query);
+  if (query_length < MIN_SEARCH_PUBLIC_DIALOG_PREFIX_LEN ||
+      (query_length == MIN_SEARCH_PUBLIC_DIALOG_PREFIX_LEN && query[0] == '@')) {
     string username = clean_username(query);
     if (username[0] == '@') {
       username = username.substr(1);
@@ -23631,7 +23638,7 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
     // new messages where added to the database since the request was sent
     // they should have been received from the database, so we must repeat the request to get them
     if (from_the_end) {
-      get_history_from_the_end_impl(d, true, only_local, std::move(promise));
+      get_history_from_the_end_impl(d, true, only_local, std::move(promise), "on_get_history_from_database 20");
     } else {
       get_history_impl(d, from_message_id, offset, limit, true, only_local, std::move(promise));
     }
@@ -23660,7 +23667,8 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
   auto debug_first_database_message_id = d->first_database_message_id;
   auto debug_last_message_id = d->last_message_id;
   auto debug_last_new_message_id = d->last_new_message_id;
-  auto last_received_message_id = MessageId::max();
+  auto first_received_message_id = MessageId::max();
+  MessageId last_received_message_id;
   size_t pos = 0;
   for (auto &message_slice : messages) {
     if (!d->first_database_message_id.is_valid() && !d->have_full_history) {
@@ -23675,13 +23683,16 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
       }
       break;
     }
-    if (message->message_id >= last_received_message_id) {
-      LOG(ERROR) << "Receive " << message->message_id << " after " << last_received_message_id
+    if (message->message_id >= first_received_message_id) {
+      LOG(ERROR) << "Receive " << message->message_id << " after " << first_received_message_id
                  << " from database in the history of " << dialog_id << " from " << from_message_id << " with offset "
                  << offset << ", limit " << limit << ", from_the_end = " << from_the_end;
       break;
     }
-    last_received_message_id = message->message_id;
+    first_received_message_id = message->message_id;
+    if (!last_received_message_id.is_valid()) {
+      last_received_message_id = message->message_id;
+    }
 
     if (message->message_id < d->first_database_message_id) {
       if (d->have_full_history) {
@@ -23718,10 +23729,11 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
       }
       if (next_message != nullptr && !next_message->have_previous) {
         LOG_CHECK(m->message_id < next_message->message_id)
-            << m->message_id << ' ' << next_message->message_id << ' ' << last_received_message_id << ' ' << dialog_id
-            << ' ' << from_message_id << ' ' << offset << ' ' << limit << ' ' << from_the_end << ' ' << only_local
-            << ' ' << messages.size() << ' ' << debug_first_database_message_id << ' ' << last_added_message_id << ' '
-            << added_new_message << ' ' << pos << ' ' << m << ' ' << next_message << ' ' << old_message << ' '
+            << m->message_id << ' ' << next_message->message_id << ' ' << first_received_message_id << ' '
+            << last_received_message_id << ' ' << dialog_id << ' ' << from_message_id << ' ' << offset << ' ' << limit
+            << ' ' << from_the_end << ' ' << only_local << ' ' << messages.size() << ' '
+            << debug_first_database_message_id << ' ' << last_added_message_id << ' ' << added_new_message << ' ' << pos
+            << ' ' << m << ' ' << next_message << ' ' << old_message << ' '
             << to_string(get_message_object(dialog_id, m, "on_get_history_from_database"))
             << to_string(get_message_object(dialog_id, next_message, "on_get_history_from_database"));
         LOG(INFO) << "Fix have_previous for " << next_message->message_id;
@@ -23744,35 +23756,39 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
 
   if (from_the_end && !last_added_message_id.is_valid() && d->first_database_message_id.is_valid() &&
       !d->have_full_history) {
-    if (last_received_message_id <= d->first_database_message_id) {
+    if (first_received_message_id <= d->first_database_message_id) {
       // database definitely has no messages from first_database_message_id to last_database_message_id; drop them
       set_dialog_first_database_message_id(d, MessageId(), "on_get_history_from_database 8");
       set_dialog_last_database_message_id(d, MessageId(), "on_get_history_from_database 9");
     } else {
-      CHECK(last_received_message_id.is_valid());
+      CHECK(first_received_message_id.is_valid());
       // if a message was received, but wasn't added, then it is likely to be already deleted
       // if it is less than d->last_database_message_id, then we can adjust d->last_database_message_id and
       // try again database search without chance to loop
-      if (last_received_message_id < d->last_database_message_id) {
-        set_dialog_last_database_message_id(d, last_received_message_id, "on_get_history_from_database 12");
+      if (first_received_message_id < d->last_database_message_id) {
+        set_dialog_last_database_message_id(d, first_received_message_id, "on_get_history_from_database 12");
 
-        get_history_from_the_end_impl(d, true, only_local, std::move(promise));
+        get_history_from_the_end_impl(d, true, only_local, std::move(promise), "on_get_history_from_database 21");
         return;
       }
 
       if (limit > 1) {
         // we expected to have messages [first_database_message_id, last_database_message_id] in the database, but
-        // received no messages or newer messages [last_received_message_id, ...], none of which can be added
+        // received messages [first_received_message_id, last_received_message_id], none of which can be added
         // first_database_message_id and last_database_message_id are very wrong, so it is better to drop them,
         // pretending that the database has no usable messages
-        if (last_received_message_id == MessageId::max()) {
+        if (first_received_message_id == MessageId::max()) {
+          CHECK(last_received_message_id == MessageId());
           LOG(ERROR) << "Receive no usable messages in " << dialog_id
-                     << " from database from the end, but expected messages from " << d->last_database_message_id
-                     << " up to " << d->first_database_message_id;
+                     << " from database from the end, but expected messages from " << d->first_database_message_id
+                     << " up to " << d->last_database_message_id
+                     << ". Have old last_database_message_id = " << old_last_database_message_id << " and "
+                     << messages.size() << " received messages";
         } else {
-          LOG(ERROR) << "Receive " << messages.size() << " unusable messages up to " << last_received_message_id
-                     << " in " << dialog_id << " from database from the end, but expected messages from "
-                     << d->last_database_message_id << " up to " << d->first_database_message_id;
+          LOG(ERROR) << "Receive " << messages.size() << " unusable messages [" << first_received_message_id << " ... "
+                     << last_received_message_id << "] in " << dialog_id
+                     << " from database from the end, but expected messages from " << d->first_database_message_id
+                     << " up to " << d->last_database_message_id;
         }
         set_dialog_first_database_message_id(d, MessageId(), "on_get_history_from_database 13");
         set_dialog_last_database_message_id(d, MessageId(), "on_get_history_from_database 14");
@@ -23821,7 +23837,7 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
     }
   }
   if (first_added_message_id.is_valid() && first_added_message_id != d->first_database_message_id &&
-      last_received_message_id < d->first_database_message_id && d->last_new_message_id.is_valid() &&
+      first_received_message_id < d->first_database_message_id && d->last_new_message_id.is_valid() &&
       !d->have_full_history) {
     CHECK(first_added_message_id > d->first_database_message_id);
     set_dialog_first_database_message_id(d, first_added_message_id, "on_get_history_from_database 10");
@@ -23839,11 +23855,12 @@ void MessagesManager::on_get_history_from_database(DialogId dialog_id, MessageId
 
 void MessagesManager::get_history_from_the_end(DialogId dialog_id, bool from_database, bool only_local,
                                                Promise<Unit> &&promise) {
-  get_history_from_the_end_impl(get_dialog(dialog_id), from_database, only_local, std::move(promise));
+  get_history_from_the_end_impl(get_dialog(dialog_id), from_database, only_local, std::move(promise),
+                                "get_history_from_the_end");
 }
 
 void MessagesManager::get_history_from_the_end_impl(const Dialog *d, bool from_database, bool only_local,
-                                                    Promise<Unit> &&promise) {
+                                                    Promise<Unit> &&promise, const char *source) {
   CHECK(d != nullptr);
   TRY_STATUS_PROMISE(promise, G()->close_status());
 
@@ -23861,7 +23878,7 @@ void MessagesManager::get_history_from_the_end_impl(const Dialog *d, bool from_d
       // repair last database message ID
       limit = 10;
     }
-    LOG(INFO) << "Get history from the end of " << dialog_id << " from database";
+    LOG(INFO) << "Get history from the end of " << dialog_id << " from database from " << source;
     MessagesDbMessagesQuery db_query;
     db_query.dialog_id = dialog_id;
     db_query.from_message_id = MessageId::max();
@@ -23885,7 +23902,7 @@ void MessagesManager::get_history_from_the_end_impl(const Dialog *d, bool from_d
       limit = 10;
     }
 
-    LOG(INFO) << "Get history from the end of " << dialog_id << " from server";
+    LOG(INFO) << "Get history from the end of " << dialog_id << " from server from " << source;
     td_->create_handler<GetHistoryQuery>(std::move(promise))
         ->send_get_from_the_end(dialog_id, d->last_new_message_id, limit);
   }
@@ -23962,7 +23979,7 @@ void MessagesManager::load_messages_impl(const Dialog *d, MessageId from_message
   bool from_database = (left_tries > 2 || only_local) && G()->parameters().use_message_db;
 
   if (from_message_id == MessageId()) {
-    get_history_from_the_end_impl(d, from_database, only_local, std::move(promise));
+    get_history_from_the_end_impl(d, from_database, only_local, std::move(promise), "load_messages_impl");
     return;
   }
   if ((!d->first_database_message_id.is_valid() || from_message_id <= d->first_database_message_id) &&
@@ -32906,7 +32923,7 @@ void MessagesManager::on_send_dialog_action_timeout(DialogId dialog_id) {
     return;
   }
   CHECK(m->message_id.is_yet_unsent());
-  if (m->forward_info != nullptr || m->had_forward_info || m->message_id.is_scheduled() ||
+  if (m->forward_info != nullptr || m->had_forward_info || m->is_copy || m->message_id.is_scheduled() ||
       m->sender_dialog_id.is_valid()) {
     return;
   }
@@ -36380,7 +36397,8 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
     d->last_new_message_id = MessageId();
   }
   if (last_message_id.is_valid()) {
-    if ((last_message_id.is_server() || dialog_type == DialogType::SecretChat) && !d->last_new_message_id.is_valid()) {
+    if ((last_message_id.is_server() || dialog_type == DialogType::SecretChat) && !last_message_id.is_yet_unsent() &&
+        !d->last_new_message_id.is_valid()) {
       LOG(ERROR) << "Bugfixing wrong last_new_message_id to " << last_message_id << " in " << dialog_id;
       // must be called before set_dialog_first_database_message_id and set_dialog_last_database_message_id
       set_dialog_last_new_message_id(d, last_message_id, "fix_new_dialog 1");
@@ -36418,19 +36436,24 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
       }
     };
 
+    auto last_message_date = last_database_message->date;
     if (dependent_dialog_count == 0) {
-      add_dialog_last_database_message(d, std::move(last_database_message));
+      if (!add_dialog_last_database_message(d, std::move(last_database_message))) {
+        // failed to add last message; keep the current position and get history from the database
+        d->pending_last_message_date = last_message_date;
+        d->pending_last_message_id = last_message_id;
+      }
     } else {
       // can't add message immediately, because need to notify first about adding of dependent dialogs
-      d->pending_last_message_date = last_database_message->date;
-      d->pending_last_message_id = last_database_message->message_id;
+      d->pending_last_message_date = last_message_date;
+      d->pending_last_message_id = last_message_id;
       pending_add_dialog_last_database_message_[dialog_id] = {dependent_dialog_count, std::move(last_database_message)};
     }
   } else if (last_database_message_id.is_valid()) {
     auto date = DialogDate(order, dialog_id).get_date();
     if (date < MIN_PINNED_DIALOG_DATE) {
       d->pending_last_message_date = date;
-      d->pending_last_message_id = last_database_message_id;
+      d->pending_last_message_id = last_message_id;
     }
   }
 
@@ -36558,7 +36581,7 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
   if (need_get_history && !td_->auth_manager_->is_bot() && dialog_id != being_added_dialog_id_ &&
       dialog_id != being_added_by_new_message_dialog_id_ && have_input_peer(dialog_id, AccessRights::Read) &&
       (d->order != DEFAULT_ORDER || is_dialog_sponsored(d))) {
-    get_history_from_the_end_impl(d, true, false, Auto());
+    get_history_from_the_end_impl(d, true, false, Auto(), "fix_new_dialog");
   }
   if (d->need_repair_server_unread_count && need_unread_counter(d->order)) {
     CHECK(dialog_type != DialogType::SecretChat);
@@ -36569,7 +36592,7 @@ void MessagesManager::fix_new_dialog(Dialog *d, unique_ptr<Message> &&last_datab
   }
 }
 
-void MessagesManager::add_dialog_last_database_message(Dialog *d, unique_ptr<Message> &&last_database_message) {
+bool MessagesManager::add_dialog_last_database_message(Dialog *d, unique_ptr<Message> &&last_database_message) {
   CHECK(d != nullptr);
   CHECK(last_database_message != nullptr);
   CHECK(last_database_message->left == nullptr);
@@ -36608,13 +36631,14 @@ void MessagesManager::add_dialog_last_database_message(Dialog *d, unique_ptr<Mes
     if (!td_->auth_manager_->is_bot() && dialog_id != being_added_dialog_id_ &&
         dialog_id != being_added_by_new_message_dialog_id_ && have_input_peer(dialog_id, AccessRights::Read) &&
         (d->order != DEFAULT_ORDER || is_dialog_sponsored(d))) {
-      get_history_from_the_end_impl(d, true, false, Auto());
+      get_history_from_the_end_impl(d, true, false, Auto(), "add_dialog_last_database_message 5");
     }
   }
 
   if (need_update_dialog_pos) {
-    update_dialog_pos(d, "add_dialog_last_database_message 5");
+    update_dialog_pos(d, "add_dialog_last_database_message 6");
   }
+  return m != nullptr;
 }
 
 void MessagesManager::update_dialogs_hints(const Dialog *d) {
@@ -38192,10 +38216,13 @@ void MessagesManager::on_get_channel_difference(
       }
 
       // bots can receive channelDifferenceEmpty with pts bigger than known pts
-      LOG_IF(ERROR, request_pts != difference->pts_ && !td_->auth_manager_->is_bot())
-          << "Receive channelDifferenceEmpty as result of getChannelDifference with pts = " << request_pts
-          << " and limit = " << request_limit << " in " << dialog_id << ", but pts has changed from " << request_pts
-          << " to " << difference->pts_;
+      // also, this can happen for deleted channels
+      if (request_pts != difference->pts_ && !td_->auth_manager_->is_bot() &&
+          have_input_peer(dialog_id, AccessRights::Read)) {
+        LOG(ERROR) << "Receive channelDifferenceEmpty as result of getChannelDifference with pts = " << request_pts
+                   << " and limit = " << request_limit << " in " << dialog_id << ", but pts has changed to "
+                   << difference->pts_;
+      }
       set_channel_pts(d, difference->pts_, "channel difference empty");
       break;
     }
@@ -38429,7 +38456,7 @@ void MessagesManager::after_get_channel_difference(DialogId dialog_id, bool succ
 
   if (d != nullptr && !td_->auth_manager_->is_bot() && have_access && !d->last_message_id.is_valid() && !d->is_empty &&
       (d->order != DEFAULT_ORDER || is_dialog_sponsored(d))) {
-    get_history_from_the_end_impl(d, true, false, Auto());
+    get_history_from_the_end_impl(d, true, false, Auto(), "after_get_channel_difference");
   }
 }
 
@@ -39501,7 +39528,7 @@ void MessagesManager::suffix_load_loop(Dialog *d) {
     get_history_impl(d, from_message_id, -1, 100, true, true, std::move(promise));
   } else {
     CHECK(from_message_id == MessageId());
-    get_history_from_the_end_impl(d, true, true, std::move(promise));
+    get_history_from_the_end_impl(d, true, true, std::move(promise), "suffix_load_loop");
   }
 }
 

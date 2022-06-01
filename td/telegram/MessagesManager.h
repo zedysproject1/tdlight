@@ -2235,7 +2235,8 @@ class MessagesManager final : public Actor {
 
   void get_history_from_the_end(DialogId dialog_id, bool from_database, bool only_local, Promise<Unit> &&promise);
 
-  void get_history_from_the_end_impl(const Dialog *d, bool from_database, bool only_local, Promise<Unit> &&promise);
+  void get_history_from_the_end_impl(const Dialog *d, bool from_database, bool only_local, Promise<Unit> &&promise,
+                                     const char *source);
 
   void get_history(DialogId dialog_id, MessageId from_message_id, int32 offset, int32 limit, bool from_database,
                    bool only_local, Promise<Unit> &&promise);
@@ -2694,7 +2695,7 @@ class MessagesManager final : public Actor {
                       DialogId default_join_group_call_as_dialog_id, DialogId default_send_message_as_dialog_id,
                       bool need_drop_default_send_message_as_dialog_id, bool is_loaded_from_database);
 
-  void add_dialog_last_database_message(Dialog *d, unique_ptr<Message> &&last_database_message);
+  bool add_dialog_last_database_message(Dialog *d, unique_ptr<Message> &&last_database_message);
 
   void fix_dialog_action_bar(const Dialog *d, DialogActionBar *action_bar);
 
