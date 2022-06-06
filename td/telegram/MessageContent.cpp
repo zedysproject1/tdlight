@@ -1193,6 +1193,9 @@ static void parse(unique_ptr<MessageContent> &content, ParserT &parser) {
           is_bad = true;
         }
       }
+      if (m->photo.is_empty()) {
+        is_bad = true;
+      }
       parse_caption(m->caption, parser);
       content = std::move(m);
       break;
@@ -1268,6 +1271,9 @@ static void parse(unique_ptr<MessageContent> &content, ParserT &parser) {
     case MessageContentType::ChatChangePhoto: {
       auto m = make_unique<MessageChatChangePhoto>();
       parse(m->photo, parser);
+      if (m->photo.is_empty()) {
+        is_bad = true;
+      }
       content = std::move(m);
       break;
     }
@@ -1776,7 +1782,8 @@ static Result<InputMessageContent> create_input_message_content(
 
       if (file_view.has_remote_location() && !file_view.remote_location().is_web()) {
         message_photo->photo.id = file_view.remote_location().get_id();
-      } else {
+      }
+      if (message_photo->photo.is_empty()) {
         message_photo->photo.id = 0;
       }
       message_photo->photo.date = G()->unix_time();
@@ -4935,9 +4942,13 @@ tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageCo
     }
     case MessageContentType::Photo: {
       const auto *m = static_cast<const MessagePhoto *>(content);
-      return make_tl_object<td_api::messagePhoto>(
-          get_photo_object(td->file_manager_.get(), m->photo),
-          get_formatted_text_object(m->caption, skip_bot_commands, max_media_timestamp), is_content_secret);
+      auto photo = get_photo_object(td->file_manager_.get(), m->photo);
+      if (photo == nullptr) {
+        LOG(ERROR) << "Have empty " << m->photo;
+        return make_tl_object<td_api::messageExpiredPhoto>();
+      }
+      auto caption = get_formatted_text_object(m->caption, skip_bot_commands, max_media_timestamp);
+      return make_tl_object<td_api::messagePhoto>(std::move(photo), std::move(caption), is_content_secret);
     }
     case MessageContentType::Sticker: {
       const auto *m = static_cast<const MessageSticker *>(content);
@@ -4989,7 +5000,12 @@ tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageCo
     }
     case MessageContentType::ChatChangePhoto: {
       const auto *m = static_cast<const MessageChatChangePhoto *>(content);
-      return make_tl_object<td_api::messageChatChangePhoto>(get_chat_photo_object(td->file_manager_.get(), m->photo));
+      auto photo = get_chat_photo_object(td->file_manager_.get(), m->photo);
+      if (photo == nullptr) {
+        LOG(ERROR) << "Have empty chat " << m->photo;
+        return make_tl_object<td_api::messageChatDeletePhoto>();
+      }
+      return make_tl_object<td_api::messageChatChangePhoto>(std::move(photo));
     }
     case MessageContentType::ChatDeletePhoto:
       return make_tl_object<td_api::messageChatDeletePhoto>();
