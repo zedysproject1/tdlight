@@ -6250,8 +6250,6 @@ void MessagesManager::memory_stats(vector<string> &output) {
   output.push_back(",");
   output.push_back("\"load_active_live_location_messages_queries_\":"); output.push_back(std::to_string(this->load_active_live_location_messages_queries_.size()));
   output.push_back(",");
-  output.push_back("\"message_id_to_dialog_id_\":"); output.push_back(std::to_string(this->message_id_to_dialog_id_.size()));
-  output.push_back(",");
   output.push_back("\"notification_group_id_to_dialog_id_\":"); output.push_back(std::to_string(this->notification_group_id_to_dialog_id_.size()));
   output.push_back(",");
   output.push_back("\"previous_repaired_read_inbox_max_message_id_\":"); output.push_back(std::to_string(this->previous_repaired_read_inbox_max_message_id_.size()));

@@ -1829,8 +1829,6 @@ void PollManager::on_binlog_events(vector<BinlogEvent> &&events) {
 void PollManager::memory_stats(vector<string> &output) {
   output.push_back("\"polls_\":"); output.push_back(std::to_string(polls_.size()));
   output.push_back(",");
-  output.push_back("\"poll_messages_\":"); output.push_back(std::to_string(poll_messages_.size()));
-  output.push_back(",");
   output.push_back("\"pending_answers_\":"); output.push_back(std::to_string(pending_answers_.size()));
   output.push_back(",");
   output.push_back("\"poll_voters_\":"); output.push_back(std::to_string(poll_voters_.size()));
