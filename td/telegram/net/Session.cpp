@@ -39,6 +39,7 @@
 #include "td/utils/Timer.h"
 #include "td/utils/tl_parsers.h"
 #include "td/utils/utf8.h"
+#include "td/utils/VectorQueue.h"
 
 #include <tuple>
 #include <utility>
@@ -46,6 +47,51 @@
 namespace td {
 
 namespace detail {
+
+class SemaphoreActor final : public Actor {
+ public:
+  explicit SemaphoreActor(size_t capacity) : capacity_(capacity) {
+  }
+
+  void execute(Promise<Promise<Unit>> promise) {
+    if (capacity_ == 0) {
+      pending_.push(std::move(promise));
+    } else {
+      start(std::move(promise));
+    }
+  }
+
+ private:
+  size_t capacity_;
+  VectorQueue<Promise<Promise<Unit>>> pending_;
+
+  void finish(Result<Unit>) {
+    capacity_++;
+    if (!pending_.empty()) {
+      start(pending_.pop());
+    }
+  }
+
+  void start(Promise<Promise<Unit>> promise) {
+    CHECK(capacity_ > 0);
+    capacity_--;
+    promise.set_value(promise_send_closure(actor_id(this), &SemaphoreActor::finish));
+  }
+};
+
+struct Semaphore {
+ public:
+  explicit Semaphore(size_t capacity) {
+    semaphore_ = create_actor<SemaphoreActor>("semaphore", capacity).release();
+  }
+
+  void execute(Promise<Promise<Unit>> promise) {
+    send_closure(semaphore_, &SemaphoreActor::execute, std::move(promise));
+  }
+
+ private:
+  ActorId<SemaphoreActor> semaphore_;
+};
 
 class GenAuthKeyActor final : public Actor {
  public:
@@ -79,11 +125,26 @@ class GenAuthKeyActor final : public Actor {
   CancellationTokenSource cancellation_token_source_;
 
   ActorOwn<mtproto::HandshakeActor> child_;
+  Promise<Unit> finish_promise_;
+
+  static TD_THREAD_LOCAL Semaphore *semaphore_;
+  Semaphore &get_handshake_semaphore() {
+    init_thread_local<Semaphore>(semaphore_, 50);
+    return *semaphore_;
+  }
 
   void start_up() final {
     // Bug in Android clang and MSVC
     // std::tuple<Result<int>> b(std::forward_as_tuple(Result<int>()));
+    get_handshake_semaphore().execute(promise_send_closure(actor_id(this), &GenAuthKeyActor::do_start_up));
+  }
 
+  void do_start_up(Result<Promise<Unit>> r_finish_promise) {
+    if (r_finish_promise.is_error()) {
+      LOG(ERROR) << "Unexpected error: " << r_finish_promise.error();
+    } else {
+      finish_promise_ = r_finish_promise.move_as_ok();
+    }
     callback_->request_raw_connection(
         nullptr, PromiseCreator::cancellable_lambda(
                      cancellation_token_source_.get_cancellation_token(),
@@ -118,6 +179,8 @@ class GenAuthKeyActor final : public Actor {
         std::move(handshake_promise_));
   }
 };
+
+TD_THREAD_LOCAL Semaphore *GenAuthKeyActor::semaphore_{};
 
 }  // namespace detail
 
@@ -1294,7 +1357,7 @@ void Session::on_handshake_ready(Result<unique_ptr<mtproto::AuthKeyHandshake>> r
   } else {
     auto handshake = r_handshake.move_as_ok();
     if (!handshake->is_ready_for_finish()) {
-      LOG(WARNING) << "Handshake is not yet ready";
+      LOG(INFO) << "Handshake is not yet ready";
       info.handshake_ = std::move(handshake);
     } else {
       if (is_main) {
@@ -1355,6 +1418,7 @@ void Session::create_gen_auth_key_actor(HandshakeId handshake_id) {
     mtproto::DhCallback *dh_callback_;
     std::shared_ptr<mtproto::PublicRsaKeyInterface> public_rsa_key_;
   };
+
   info.actor_ = create_actor<detail::GenAuthKeyActor>(
       PSLICE() << get_name() << "::GenAuthKey", get_name(), std::move(info.handshake_),
       td::make_unique<AuthKeyHandshakeContext>(DhCache::instance(), shared_auth_data_->public_rsa_key()),

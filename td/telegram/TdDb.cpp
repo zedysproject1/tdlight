@@ -64,7 +64,7 @@ Result<TdDb::EncryptionInfo> check_encryption(string path) {
 }
 
 Status init_binlog(Binlog &binlog, string path, BinlogKeyValue<Binlog> &binlog_pmc, BinlogKeyValue<Binlog> &config_pmc,
-                   TdDb::Events &events, DbKey key) {
+                   TdDb::OpenedDatabase &events, DbKey key) {
   auto callback = [&](const BinlogEvent &event) {
     switch (event.type_) {
       case LogEvent::HandlerType::SecretChats:
@@ -396,7 +396,21 @@ Status TdDb::init_sqlite(int32 scheduler_id, const TdParameters &parameters, con
   return Status::OK();
 }
 
-Status TdDb::init(int32 scheduler_id, const TdParameters &parameters, DbKey key, Events &events) {
+void TdDb::open(int32 scheduler_id, TdParameters parameters, DbKey key, Promise<OpenedDatabase> &&promise) {
+  if (scheduler_id >= 0 && Scheduler::instance()->sched_id() != scheduler_id) {
+    class Worker final : public Actor {
+     public:
+      void open(TdParameters &&parameters, DbKey &&key, Promise<OpenedDatabase> &&promise) {
+        TdDb::open(-1, std::move(parameters), std::move(key), std::move(promise));
+        stop();
+      }
+    };
+    send_closure(create_actor_on_scheduler<Worker>("worker", scheduler_id), &Worker::open, std::move(parameters),
+                 std::move(key), std::move(promise));
+    return;
+  }
+  OpenedDatabase result;
+
   // Init pmc
   Binlog *binlog_ptr = nullptr;
   auto binlog = std::shared_ptr<Binlog>(new Binlog, [&](Binlog *ptr) { binlog_ptr = ptr; });
@@ -408,7 +422,8 @@ Status TdDb::init(int32 scheduler_id, const TdParameters &parameters, DbKey key,
 
   bool encrypt_binlog = !key.is_empty();
   VLOG(td_init) << "Start binlog loading";
-  TRY_STATUS(init_binlog(*binlog, get_binlog_path(parameters), *binlog_pmc, *config_pmc, events, std::move(key)));
+  TRY_STATUS_PROMISE(
+      promise, init_binlog(*binlog, get_binlog_path(parameters), *binlog_pmc, *config_pmc, result, std::move(key)));
   VLOG(td_init) << "Finish binlog loading";
 
   binlog_pmc->external_init_finish(binlog);
@@ -436,15 +451,16 @@ Status TdDb::init(int32 scheduler_id, const TdParameters &parameters, DbKey key,
     }
   }
   VLOG(td_init) << "Start to init database";
-  auto init_sqlite_status = init_sqlite(scheduler_id, parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc);
+  auto db = make_unique<TdDb>();
+  auto init_sqlite_status = db->init_sqlite(scheduler_id, parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc);
   VLOG(td_init) << "Finish to init database";
   if (init_sqlite_status.is_error()) {
     LOG(ERROR) << "Destroy bad SQLite database because of " << init_sqlite_status;
-    if (sql_connection_ != nullptr) {
-      sql_connection_->get().close();
+    if (db->sql_connection_ != nullptr) {
+      db->sql_connection_->get().close();
     }
     SqliteDb::destroy(get_sqlite_path(parameters)).ignore();
-    TRY_STATUS(init_sqlite(scheduler_id, parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc));
+    TRY_STATUS_PROMISE(promise, db->init_sqlite(scheduler_id, parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc));
   }
   if (drop_sqlite_key) {
     binlog_pmc->erase("sqlite_key");
@@ -474,21 +490,17 @@ Status TdDb::init(int32 scheduler_id, const TdParameters &parameters, DbKey key,
   VLOG(td_init) << "Init concurrent_config_pmc";
   concurrent_config_pmc->external_init_finish(concurrent_binlog);
 
-  binlog_pmc_ = std::move(concurrent_binlog_pmc);
-  config_pmc_ = std::move(concurrent_config_pmc);
-  binlog_ = std::move(concurrent_binlog);
+  db->binlog_pmc_ = std::move(concurrent_binlog_pmc);
+  db->config_pmc_ = std::move(concurrent_config_pmc);
+  db->binlog_ = std::move(concurrent_binlog);
 
-  return Status::OK();
+  result.database = std::move(db);
+
+  promise.set_value(std::move(result));
 }
 
 TdDb::TdDb() = default;
 TdDb::~TdDb() = default;
-
-Result<unique_ptr<TdDb>> TdDb::open(int32 scheduler_id, const TdParameters &parameters, DbKey key, Events &events) {
-  auto db = make_unique<TdDb>();
-  TRY_STATUS(db->init(scheduler_id, parameters, std::move(key), events));
-  return std::move(db);
-}
 
 Result<TdDb::EncryptionInfo> TdDb::check_encryption(const TdParameters &parameters) {
   return ::td::check_encryption(get_binlog_path(parameters));
