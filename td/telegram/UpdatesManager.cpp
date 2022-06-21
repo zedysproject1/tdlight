@@ -53,6 +53,7 @@
 #include "td/telegram/TdDb.h"
 #include "td/telegram/telegram_api.hpp"
 #include "td/telegram/ThemeManager.h"
+#include "td/telegram/VoiceNotesManager.h"
 #include "td/telegram/WebPagesManager.h"
 
 #include "td/actor/MultiPromise.h"
@@ -1236,20 +1237,35 @@ int32 UpdatesManager::get_update_edit_message_pts(const telegram_api::Updates *u
   int32 pts = 0;
   auto updates = get_updates(updates_ptr);
   if (updates != nullptr) {
-    for (auto &update : *updates) {
+    for (auto &update_ptr : *updates) {
       int32 update_pts = [&] {
-        switch (update->get_id()) {
+        switch (update_ptr->get_id()) {
           case telegram_api::updateEditMessage::ID: {
-            auto update_ptr = static_cast<const telegram_api::updateEditMessage *>(update.get());
-            if (MessagesManager::get_full_message_id(update_ptr->message_, false) == full_message_id) {
-              return update_ptr->pts_;
+            auto update = static_cast<const telegram_api::updateEditMessage *>(update_ptr.get());
+            if (MessagesManager::get_full_message_id(update->message_, false) == full_message_id) {
+              return update->pts_;
             }
             return 0;
           }
           case telegram_api::updateEditChannelMessage::ID: {
-            auto update_ptr = static_cast<const telegram_api::updateEditChannelMessage *>(update.get());
-            if (MessagesManager::get_full_message_id(update_ptr->message_, false) == full_message_id) {
-              return update_ptr->pts_;
+            auto update = static_cast<const telegram_api::updateEditChannelMessage *>(update_ptr.get());
+            if (MessagesManager::get_full_message_id(update->message_, false) == full_message_id) {
+              return update->pts_;
+            }
+            return 0;
+          }
+          case telegram_api::updateNewScheduledMessage::ID: {
+            auto update = static_cast<const telegram_api::updateNewScheduledMessage *>(update_ptr.get());
+            auto new_full_message_id = MessagesManager::get_full_message_id(update->message_, true);
+            if (new_full_message_id.get_dialog_id() == full_message_id.get_dialog_id()) {
+              auto new_message_id = new_full_message_id.get_message_id();
+              auto old_message_id = full_message_id.get_message_id();
+              if (new_message_id.is_valid_scheduled() && new_message_id.is_scheduled_server() &&
+                  old_message_id.is_valid_scheduled() && old_message_id.is_scheduled_server() &&
+                  old_message_id.get_scheduled_server_message_id() ==
+                      new_message_id.get_scheduled_server_message_id()) {
+                return -2;
+              }
             }
             return 0;
           }
@@ -2267,27 +2283,27 @@ void UpdatesManager::process_qts_update(tl_object_ptr<telegram_api::Update> &&up
     }
     case telegram_api::updateChatParticipant::ID: {
       auto update = move_tl_object_as<telegram_api::updateChatParticipant>(update_ptr);
-      td_->contacts_manager_->on_update_chat_participant(ChatId(update->chat_id_), UserId(update->actor_id_),
-                                                         update->date_, DialogInviteLink(std::move(update->invite_)),
-                                                         std::move(update->prev_participant_),
-                                                         std::move(update->new_participant_));
+      td_->contacts_manager_->on_update_chat_participant(
+          ChatId(update->chat_id_), UserId(update->actor_id_), update->date_,
+          DialogInviteLink(std::move(update->invite_), "updateChatParticipant"), std::move(update->prev_participant_),
+          std::move(update->new_participant_));
       add_qts(qts).set_value(Unit());
       break;
     }
     case telegram_api::updateChannelParticipant::ID: {
       auto update = move_tl_object_as<telegram_api::updateChannelParticipant>(update_ptr);
-      td_->contacts_manager_->on_update_channel_participant(ChannelId(update->channel_id_), UserId(update->actor_id_),
-                                                            update->date_, DialogInviteLink(std::move(update->invite_)),
-                                                            std::move(update->prev_participant_),
-                                                            std::move(update->new_participant_));
+      td_->contacts_manager_->on_update_channel_participant(
+          ChannelId(update->channel_id_), UserId(update->actor_id_), update->date_,
+          DialogInviteLink(std::move(update->invite_), "updateChannelParticipant"),
+          std::move(update->prev_participant_), std::move(update->new_participant_));
       add_qts(qts).set_value(Unit());
       break;
     }
     case telegram_api::updateBotChatInviteRequester::ID: {
       auto update = move_tl_object_as<telegram_api::updateBotChatInviteRequester>(update_ptr);
-      td_->contacts_manager_->on_update_chat_invite_requester(DialogId(update->peer_), UserId(update->user_id_),
-                                                              std::move(update->about_), update->date_,
-                                                              DialogInviteLink(std::move(update->invite_)));
+      td_->contacts_manager_->on_update_chat_invite_requester(
+          DialogId(update->peer_), UserId(update->user_id_), std::move(update->about_), update->date_,
+          DialogInviteLink(std::move(update->invite_), "updateBotChatInviteRequester"));
       add_qts(qts).set_value(Unit());
       break;
     }
@@ -3183,7 +3199,7 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateSavedGifs> upda
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateConfig> update, Promise<Unit> &&promise) {
-  send_closure(td_->config_manager_, &ConfigManager::request_config);
+  send_closure(td_->config_manager_, &ConfigManager::request_config, false);
   promise.set_value(Unit());
 }
 
@@ -3414,6 +3430,12 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updatePendingJoinRequ
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateSavedRingtones> update, Promise<Unit> &&promise) {
   td_->notification_settings_manager_->reload_saved_ringtones(std::move(promise));
+}
+
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateTranscribedAudio> update, Promise<Unit> &&promise) {
+  td_->voice_notes_manager_->on_update_transcribed_audio(std::move(update->text_), update->transcription_id_,
+                                                         !update->pending_);
+  promise.set_value(Unit());
 }
 
 // unsupported updates

@@ -14,6 +14,7 @@
 #include "td/telegram/CallDiscardReason.h"
 #include "td/telegram/ChannelId.h"
 #include "td/telegram/ChatId.h"
+#include "td/telegram/ConfigShared.h"
 #include "td/telegram/Contact.h"
 #include "td/telegram/ContactsManager.h"
 #include "td/telegram/Dependencies.h"
@@ -172,9 +173,10 @@ class MessagePhoto final : public MessageContent {
 class MessageSticker final : public MessageContent {
  public:
   FileId file_id;
+  bool is_premium = false;
 
   MessageSticker() = default;
-  explicit MessageSticker(FileId file_id) : file_id(file_id) {
+  MessageSticker(FileId file_id, bool is_premium) : file_id(file_id), is_premium(is_premium) {
   }
 
   MessageContentType get_type() const final {
@@ -500,9 +502,11 @@ class MessagePaymentSuccessful final : public MessageContent {
   MessageId invoice_message_id;
   string currency;
   int64 total_amount = 0;
+  string invoice_payload;  // or invoice_slug for users
+  bool is_recurring = false;
+  bool is_first_recurring = false;
 
   // bots only part
-  string invoice_payload;
   string shipping_option_id;
   unique_ptr<OrderInfo> order_info;
   string telegram_payment_charge_id;
@@ -510,11 +514,14 @@ class MessagePaymentSuccessful final : public MessageContent {
 
   MessagePaymentSuccessful() = default;
   MessagePaymentSuccessful(DialogId invoice_dialog_id, MessageId invoice_message_id, string &&currency,
-                           int64 total_amount)
+                           int64 total_amount, string &&invoice_payload, bool is_recurring, bool is_first_recurring)
       : invoice_dialog_id(invoice_dialog_id)
       , invoice_message_id(invoice_message_id)
       , currency(std::move(currency))
-      , total_amount(total_amount) {
+      , total_amount(total_amount)
+      , invoice_payload(std::move(invoice_payload))
+      , is_recurring(is_recurring || is_first_recurring)
+      , is_first_recurring(is_first_recurring) {
   }
 
   MessageContentType get_type() const final {
@@ -843,6 +850,9 @@ static void store(const MessageContent *content, StorerT &storer) {
     case MessageContentType::Sticker: {
       const auto *m = static_cast<const MessageSticker *>(content);
       td->stickers_manager_->store_sticker(m->file_id, false, storer, "MessageSticker");
+      BEGIN_STORE_FLAGS();
+      STORE_FLAG(m->is_premium);
+      END_STORE_FLAGS();
       break;
     }
     case MessageContentType::Text: {
@@ -980,6 +990,8 @@ static void store(const MessageContent *content, StorerT &storer) {
       STORE_FLAG(has_invoice_message_id);
       STORE_FLAG(is_correctly_stored);
       STORE_FLAG(has_invoice_dialog_id);
+      STORE_FLAG(m->is_recurring);
+      STORE_FLAG(m->is_first_recurring);
       END_STORE_FLAGS();
       store(m->currency, storer);
       store(m->total_amount, storer);
@@ -1203,6 +1215,11 @@ static void parse(unique_ptr<MessageContent> &content, ParserT &parser) {
     case MessageContentType::Sticker: {
       auto m = make_unique<MessageSticker>();
       m->file_id = td->stickers_manager_->parse_sticker(false, parser);
+      if (parser.version() >= static_cast<int32>(Version::AddMessageStickerFlags)) {
+        BEGIN_PARSE_FLAGS();
+        PARSE_FLAG(m->is_premium);
+        END_PARSE_FLAGS();
+      }
       is_bad = !m->file_id.is_valid();
       content = std::move(m);
       break;
@@ -1383,6 +1400,8 @@ static void parse(unique_ptr<MessageContent> &content, ParserT &parser) {
       PARSE_FLAG(has_invoice_message_id);
       PARSE_FLAG(is_correctly_stored);
       PARSE_FLAG(has_invoice_dialog_id);
+      PARSE_FLAG(m->is_recurring);
+      PARSE_FLAG(m->is_first_recurring);
       END_PARSE_FLAGS();
       parse(m->currency, parser);
       parse(m->total_amount, parser);
@@ -1645,7 +1664,7 @@ InlineMessageContent create_inline_message_content(Td *td, FileId file_id,
       } else if (allowed_media_content_id == td_api::inputMessagePhoto::ID) {
         result.message_content = make_unique<MessagePhoto>(std::move(*photo), std::move(caption));
       } else if (allowed_media_content_id == td_api::inputMessageSticker::ID) {
-        result.message_content = make_unique<MessageSticker>(file_id);
+        result.message_content = make_unique<MessageSticker>(file_id, false);
       } else if (allowed_media_content_id == td_api::inputMessageVideo::ID) {
         result.message_content = make_unique<MessageVideo>(file_id, std::move(caption));
       } else if (allowed_media_content_id == td_api::inputMessageVoiceNote::ID) {
@@ -1683,7 +1702,7 @@ unique_ptr<MessageContent> create_chat_set_ttl_message_content(int32 ttl) {
 
 static Result<InputMessageContent> create_input_message_content(
     DialogId dialog_id, tl_object_ptr<td_api::InputMessageContent> &&input_message_content, Td *td,
-    FormattedText caption, FileId file_id, PhotoSize thumbnail, vector<FileId> sticker_file_ids) {
+    FormattedText caption, FileId file_id, PhotoSize thumbnail, vector<FileId> sticker_file_ids, bool is_premium) {
   CHECK(input_message_content != nullptr);
   LOG(INFO) << "Create InputMessageContent with file " << file_id << " and thumbnail " << thumbnail.file_id;
 
@@ -1801,7 +1820,11 @@ static Result<InputMessageContent> create_input_message_content(
       PhotoSize s;
       s.type = type;
       s.dimensions = get_dimensions(input_photo->width_, input_photo->height_, nullptr);
-      s.size = static_cast<int32>(file_view.size());
+      auto size = file_view.size();
+      if (size < 0 || size >= 1000000000) {
+        return Status::Error(400, "Wrong photo size");
+      }
+      s.size = static_cast<int32>(size);
       s.file_id = file_id;
 
       if (thumbnail.file_id.is_valid()) {
@@ -1823,11 +1846,11 @@ static Result<InputMessageContent> create_input_message_content(
 
       emoji = std::move(input_sticker->emoji_);
 
-      td->stickers_manager_->create_sticker(file_id, string(), thumbnail,
+      td->stickers_manager_->create_sticker(file_id, FileId(), string(), thumbnail,
                                             get_dimensions(input_sticker->width_, input_sticker->height_, nullptr),
                                             nullptr, StickerFormat::Unknown, nullptr);
 
-      content = make_unique<MessageSticker>(file_id);
+      content = make_unique<MessageSticker>(file_id, is_premium);
       break;
     }
     case td_api::inputMessageVideo::ID: {
@@ -1990,7 +2013,7 @@ static Result<InputMessageContent> create_input_message_content(
 }
 
 Result<InputMessageContent> get_input_message_content(
-    DialogId dialog_id, tl_object_ptr<td_api::InputMessageContent> &&input_message_content, Td *td) {
+    DialogId dialog_id, tl_object_ptr<td_api::InputMessageContent> &&input_message_content, Td *td, bool is_premium) {
   bool is_secret = dialog_id.get_type() == DialogType::SecretChat;
 
   LOG(INFO) << "Get input message content from " << to_string(input_message_content);
@@ -2103,7 +2126,7 @@ Result<InputMessageContent> get_input_message_content(
   TRY_RESULT(caption, process_input_caption(td->contacts_manager_.get(), dialog_id,
                                             extract_input_caption(input_message_content), td->auth_manager_->is_bot()));
   return create_input_message_content(dialog_id, std::move(input_message_content), td, std::move(caption), file_id,
-                                      std::move(thumbnail), std::move(sticker_file_ids));
+                                      std::move(thumbnail), std::move(sticker_file_ids), is_premium);
 }
 
 bool can_have_input_media(const Td *td, const MessageContent *content, bool is_server) {
@@ -2167,17 +2190,17 @@ bool can_have_input_media(const Td *td, const MessageContent *content, bool is_s
 
 SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
                                         tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
-                                        BufferSlice thumbnail) {
+                                        BufferSlice thumbnail, int32 layer) {
   switch (content->get_type()) {
     case MessageContentType::Animation: {
       const auto *m = static_cast<const MessageAnimation *>(content);
       return td->animations_manager_->get_secret_input_media(m->file_id, std::move(input_file), m->caption.text,
-                                                             std::move(thumbnail));
+                                                             std::move(thumbnail), layer);
     }
     case MessageContentType::Audio: {
       const auto *m = static_cast<const MessageAudio *>(content);
       return td->audios_manager_->get_secret_input_media(m->file_id, std::move(input_file), m->caption.text,
-                                                         std::move(thumbnail));
+                                                         std::move(thumbnail), layer);
     }
     case MessageContentType::Contact: {
       const auto *m = static_cast<const MessageContact *>(content);
@@ -2186,7 +2209,7 @@ SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
     case MessageContentType::Document: {
       const auto *m = static_cast<const MessageDocument *>(content);
       return td->documents_manager_->get_secret_input_media(m->file_id, std::move(input_file), m->caption.text,
-                                                            std::move(thumbnail));
+                                                            std::move(thumbnail), layer);
     }
     case MessageContentType::Location: {
       const auto *m = static_cast<const MessageLocation *>(content);
@@ -2199,7 +2222,8 @@ SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
     }
     case MessageContentType::Sticker: {
       const auto *m = static_cast<const MessageSticker *>(content);
-      return td->stickers_manager_->get_secret_input_media(m->file_id, std::move(input_file), std::move(thumbnail));
+      return td->stickers_manager_->get_secret_input_media(m->file_id, std::move(input_file), std::move(thumbnail),
+                                                           layer);
     }
     case MessageContentType::Text: {
       CHECK(input_file == nullptr);
@@ -2214,15 +2238,17 @@ SecretInputMedia get_secret_input_media(const MessageContent *content, Td *td,
     case MessageContentType::Video: {
       const auto *m = static_cast<const MessageVideo *>(content);
       return td->videos_manager_->get_secret_input_media(m->file_id, std::move(input_file), m->caption.text,
-                                                         std::move(thumbnail));
+                                                         std::move(thumbnail), layer);
     }
     case MessageContentType::VideoNote: {
       const auto *m = static_cast<const MessageVideoNote *>(content);
-      return td->video_notes_manager_->get_secret_input_media(m->file_id, std::move(input_file), std::move(thumbnail));
+      return td->video_notes_manager_->get_secret_input_media(m->file_id, std::move(input_file), std::move(thumbnail),
+                                                              layer);
     }
     case MessageContentType::VoiceNote: {
       const auto *m = static_cast<const MessageVoiceNote *>(content);
-      return td->voice_notes_manager_->get_secret_input_media(m->file_id, std::move(input_file), m->caption.text);
+      return td->voice_notes_manager_->get_secret_input_media(m->file_id, std::move(input_file), m->caption.text,
+                                                              layer);
     }
     case MessageContentType::Call:
     case MessageContentType::Dice:
@@ -3078,7 +3104,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Animation: {
       const auto *old_ = static_cast<const MessageAnimation *>(old_content);
       const auto *new_ = static_cast<const MessageAnimation *>(new_content);
-      if (new_->file_id != old_->file_id) {
+      if (old_->file_id != new_->file_id) {
         if (need_merge_files) {
           td->animations_manager_->merge_animations(new_->file_id, old_->file_id, false);
         }
@@ -3092,7 +3118,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Audio: {
       const auto *old_ = static_cast<const MessageAudio *>(old_content);
       const auto *new_ = static_cast<const MessageAudio *>(new_content);
-      if (new_->file_id != old_->file_id) {
+      if (old_->file_id != new_->file_id) {
         if (need_merge_files) {
           td->audios_manager_->merge_audios(new_->file_id, old_->file_id, false);
         }
@@ -3114,7 +3140,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Document: {
       const auto *old_ = static_cast<const MessageDocument *>(old_content);
       const auto *new_ = static_cast<const MessageDocument *>(new_content);
-      if (new_->file_id != old_->file_id) {
+      if (old_->file_id != new_->file_id) {
         if (need_merge_files) {
           td->documents_manager_->merge_documents(new_->file_id, old_->file_id, false);
         }
@@ -3252,10 +3278,13 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Sticker: {
       const auto *old_ = static_cast<const MessageSticker *>(old_content);
       const auto *new_ = static_cast<const MessageSticker *>(new_content);
-      if (new_->file_id != old_->file_id) {
+      if (old_->file_id != new_->file_id) {
         if (need_merge_files) {
           td->stickers_manager_->merge_stickers(new_->file_id, old_->file_id, false);
         }
+        need_update = true;
+      }
+      if (old_->is_premium != new_->is_premium) {
         need_update = true;
       }
       break;
@@ -3275,7 +3304,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::Video: {
       const auto *old_ = static_cast<const MessageVideo *>(old_content);
       const auto *new_ = static_cast<const MessageVideo *>(new_content);
-      if (new_->file_id != old_->file_id) {
+      if (old_->file_id != new_->file_id) {
         if (need_merge_files) {
           td->videos_manager_->merge_videos(new_->file_id, old_->file_id, false);
         }
@@ -3289,7 +3318,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::VideoNote: {
       const auto *old_ = static_cast<const MessageVideoNote *>(old_content);
       const auto *new_ = static_cast<const MessageVideoNote *>(new_content);
-      if (new_->file_id != old_->file_id) {
+      if (old_->file_id != new_->file_id) {
         if (need_merge_files) {
           td->video_notes_manager_->merge_video_notes(new_->file_id, old_->file_id, false);
         }
@@ -3303,7 +3332,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
     case MessageContentType::VoiceNote: {
       const auto *old_ = static_cast<const MessageVoiceNote *>(old_content);
       const auto *new_ = static_cast<const MessageVoiceNote *>(new_content);
-      if (new_->file_id != old_->file_id) {
+      if (old_->file_id != new_->file_id) {
         if (need_merge_files) {
           td->voice_notes_manager_->merge_voice_notes(new_->file_id, old_->file_id, false);
         }
@@ -3438,7 +3467,8 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
           old_->telegram_payment_charge_id != new_->telegram_payment_charge_id ||
           old_->provider_payment_charge_id != new_->provider_payment_charge_id ||
           ((old_->order_info != nullptr || new_->order_info != nullptr) &&
-           (old_->order_info == nullptr || new_->order_info == nullptr || *old_->order_info != *new_->order_info))) {
+           (old_->order_info == nullptr || new_->order_info == nullptr || *old_->order_info != *new_->order_info ||
+            old_->is_recurring != new_->is_recurring || old_->is_first_recurring != new_->is_first_recurring))) {
         need_update = true;
       }
       break;
@@ -3716,6 +3746,9 @@ void register_message_content(Td *td, const MessageContent *content, FullMessage
       }
       return;
     }
+    case MessageContentType::VoiceNote:
+      return td->voice_notes_manager_->register_voice_note(static_cast<const MessageVoiceNote *>(content)->file_id,
+                                                           full_message_id, source);
     case MessageContentType::Poll:
       return td->poll_manager_->register_poll(static_cast<const MessagePoll *>(content)->poll_id, full_message_id,
                                               source);
@@ -3744,6 +3777,12 @@ void reregister_message_content(Td *td, const MessageContent *old_content, const
         }
         break;
       }
+      case MessageContentType::VoiceNote:
+        if (static_cast<const MessageVoiceNote *>(old_content)->file_id ==
+            static_cast<const MessageVoiceNote *>(new_content)->file_id) {
+          return;
+        }
+        break;
       case MessageContentType::Poll:
         if (static_cast<const MessagePoll *>(old_content)->poll_id ==
             static_cast<const MessagePoll *>(new_content)->poll_id) {
@@ -3778,6 +3817,9 @@ void unregister_message_content(Td *td, const MessageContent *content, FullMessa
       }
       return;
     }
+    case MessageContentType::VoiceNote:
+      return td->voice_notes_manager_->unregister_voice_note(static_cast<const MessageVoiceNote *>(content)->file_id,
+                                                             full_message_id, source);
     case MessageContentType::Poll:
       return td->poll_manager_->unregister_poll(static_cast<const MessagePoll *>(content)->poll_id, full_message_id,
                                                 source);
@@ -3952,7 +3994,7 @@ static tl_object_ptr<ToT> secret_to_telegram(FromT &from) {
 }
 
 static unique_ptr<MessageContent> get_document_message_content(Document &&parsed_document, FormattedText &&caption,
-                                                               bool is_opened) {
+                                                               bool is_opened, bool is_premium) {
   auto file_id = parsed_document.file_id;
   if (!parsed_document.empty()) {
     CHECK(file_id.is_valid());
@@ -3965,7 +4007,7 @@ static unique_ptr<MessageContent> get_document_message_content(Document &&parsed
     case Document::Type::General:
       return make_unique<MessageDocument>(file_id, std::move(caption));
     case Document::Type::Sticker:
-      return make_unique<MessageSticker>(file_id);
+      return make_unique<MessageSticker>(file_id, is_premium);
     case Document::Type::Unknown:
       return make_unique<MessageUnsupported>();
     case Document::Type::Video:
@@ -3982,18 +4024,18 @@ static unique_ptr<MessageContent> get_document_message_content(Document &&parsed
 
 static unique_ptr<MessageContent> get_document_message_content(Td *td, tl_object_ptr<telegram_api::document> &&document,
                                                                DialogId owner_dialog_id, FormattedText &&caption,
-                                                               bool is_opened,
+                                                               bool is_opened, bool is_premium,
                                                                MultiPromiseActor *load_data_multipromise_ptr) {
   return get_document_message_content(
       td->documents_manager_->on_get_document(std::move(document), owner_dialog_id, load_data_multipromise_ptr),
-      std::move(caption), is_opened);
+      std::move(caption), is_opened, is_premium);
 }
 
 unique_ptr<MessageContent> get_secret_message_content(
     Td *td, string message_text, unique_ptr<EncryptedFile> file,
     tl_object_ptr<secret_api::DecryptedMessageMedia> &&media,
     vector<tl_object_ptr<secret_api::MessageEntity>> &&secret_entities, DialogId owner_dialog_id,
-    MultiPromiseActor &load_data_multipromise) {
+    MultiPromiseActor &load_data_multipromise, bool is_premium) {
   int32 constructor_id = media == nullptr ? secret_api::decryptedMessageMediaEmpty::ID : media->get_id();
   auto caption = [&] {
     switch (constructor_id) {
@@ -4004,6 +4046,10 @@ unique_ptr<MessageContent> get_secret_message_content(
       case secret_api::decryptedMessageMediaPhoto::ID: {
         auto photo = static_cast<secret_api::decryptedMessageMediaPhoto *>(media.get());
         return std::move(photo->caption_);
+      }
+      case secret_api::decryptedMessageMediaDocument46::ID: {
+        auto document = static_cast<secret_api::decryptedMessageMediaDocument46 *>(media.get());
+        return std::move(document->caption_);
       }
       case secret_api::decryptedMessageMediaDocument::ID: {
         auto document = static_cast<secret_api::decryptedMessageMediaDocument *>(media.get());
@@ -4036,9 +4082,18 @@ unique_ptr<MessageContent> get_secret_message_content(
 
   // support of old layer and old constructions
   switch (constructor_id) {
+    case secret_api::decryptedMessageMediaDocument46::ID: {
+      auto document = move_tl_object_as<secret_api::decryptedMessageMediaDocument46>(media);
+      media = make_tl_object<secret_api::decryptedMessageMediaDocument>(
+          std::move(document->thumb_), document->thumb_w_, document->thumb_h_, document->mime_type_, document->size_,
+          std::move(document->key_), std::move(document->iv_), std::move(document->attributes_), string());
+
+      constructor_id = secret_api::decryptedMessageMediaDocument::ID;
+      break;
+    }
     case secret_api::decryptedMessageMediaVideo::ID: {
       auto video = move_tl_object_as<secret_api::decryptedMessageMediaVideo>(media);
-      std::vector<tl_object_ptr<secret_api::DocumentAttribute>> attributes;
+      vector<tl_object_ptr<secret_api::DocumentAttribute>> attributes;
       attributes.emplace_back(
           make_tl_object<secret_api::documentAttributeVideo>(video->duration_, video->w_, video->h_));
       media = make_tl_object<secret_api::decryptedMessageMediaDocument>(
@@ -4142,7 +4197,7 @@ unique_ptr<MessageContent> get_secret_message_content(
       auto document = secret_to_telegram_document(*external_document);
       return get_document_message_content(td, std::move(document), owner_dialog_id,
                                           FormattedText{std::move(message_text), std::move(entities)}, false,
-                                          &load_data_multipromise);
+                                          is_premium, &load_data_multipromise);
     }
     default:
       break;
@@ -4181,7 +4236,8 @@ unique_ptr<MessageContent> get_secret_message_content(
       message_document->attributes_.clear();
       auto document = td->documents_manager_->on_get_document(
           {std::move(file), std::move(message_document), std::move(attributes)}, owner_dialog_id);
-      return get_document_message_content(std::move(document), {std::move(message_text), std::move(entities)}, false);
+      return get_document_message_content(std::move(document), {std::move(message_text), std::move(entities)}, false,
+                                          false);
     }
     default:
       LOG(ERROR) << "Unsupported: " << to_string(media);
@@ -4315,7 +4371,7 @@ unique_ptr<MessageContent> get_message_content(Td *td, FormattedText message,
         *ttl = message_document->ttl_seconds_;
       }
       return get_document_message_content(td, move_tl_object_as<telegram_api::document>(document_ptr), owner_dialog_id,
-                                          std::move(message), is_content_read, nullptr);
+                                          std::move(message), is_content_read, !message_document->nopremium_, nullptr);
     }
     case telegram_api::messageMediaGame::ID: {
       auto message_game = move_tl_object_as<telegram_api::messageMediaGame>(media);
@@ -4527,6 +4583,7 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
       }
     case MessageContentType::Sticker: {
       auto result = make_unique<MessageSticker>(*static_cast<const MessageSticker *>(content));
+      result->is_premium = G()->shared_config().get_option_boolean("is_premium");
       if (td->stickers_manager_->has_input_media(result->file_id, to_secret)) {
         return std::move(result);
       }
@@ -4754,13 +4811,17 @@ unique_ptr<MessageContent> get_action_message_content(Td *td, tl_object_ptr<tele
         LOG(ERROR) << "Receive MessageActionPaymentSent in " << owner_dialog_id;
         break;
       }
+      auto payment_sent = move_tl_object_as<telegram_api::messageActionPaymentSent>(action);
       if (!reply_to_message_id.is_valid()) {
-        LOG(ERROR) << "Receive succesful payment message with " << reply_to_message_id << " in " << owner_dialog_id;
+        if (reply_to_message_id != MessageId()) {
+          LOG(ERROR) << "Receive succesful payment message with " << reply_to_message_id << " in " << owner_dialog_id;
+        }
+        reply_in_dialog_id = DialogId();
         reply_to_message_id = MessageId();
       }
-      auto payment_sent = move_tl_object_as<telegram_api::messageActionPaymentSent>(action);
-      return td::make_unique<MessagePaymentSuccessful>(reply_in_dialog_id, reply_to_message_id,
-                                                       std::move(payment_sent->currency_), payment_sent->total_amount_);
+      return td::make_unique<MessagePaymentSuccessful>(
+          reply_in_dialog_id, reply_to_message_id, std::move(payment_sent->currency_), payment_sent->total_amount_,
+          std::move(payment_sent->invoice_slug_), payment_sent->recurring_used_, payment_sent->recurring_init_);
     }
     case telegram_api::messageActionPaymentSentMe::ID: {
       if (!td->auth_manager_->is_bot()) {
@@ -4769,8 +4830,8 @@ unique_ptr<MessageContent> get_action_message_content(Td *td, tl_object_ptr<tele
       }
       auto payment_sent = move_tl_object_as<telegram_api::messageActionPaymentSentMe>(action);
       auto result = td::make_unique<MessagePaymentSuccessful>(
-          DialogId(), MessageId(), std::move(payment_sent->currency_), payment_sent->total_amount_);
-      result->invoice_payload = payment_sent->payload_.as_slice().str();
+          DialogId(), MessageId(), std::move(payment_sent->currency_), payment_sent->total_amount_,
+          payment_sent->payload_.as_slice().str(), payment_sent->recurring_used_, payment_sent->recurring_init_);
       result->shipping_option_id = std::move(payment_sent->shipping_option_id_);
       result->order_info = get_order_info(std::move(payment_sent->info_));
       result->telegram_payment_charge_id = std::move(payment_sent->charge_->id_);
@@ -4952,7 +5013,10 @@ tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageCo
     }
     case MessageContentType::Sticker: {
       const auto *m = static_cast<const MessageSticker *>(content);
-      return make_tl_object<td_api::messageSticker>(td->stickers_manager_->get_sticker_object(m->file_id));
+      auto sticker = td->stickers_manager_->get_sticker_object(m->file_id);
+      CHECK(sticker != nullptr);
+      auto is_premium = m->is_premium && sticker->premium_animation_ != nullptr;
+      return make_tl_object<td_api::messageSticker>(std::move(sticker), is_premium);
     }
     case MessageContentType::Text: {
       const auto *m = static_cast<const MessageText *>(content);
@@ -5066,12 +5130,14 @@ tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageCo
       const auto *m = static_cast<const MessagePaymentSuccessful *>(content);
       if (td->auth_manager_->is_bot()) {
         return make_tl_object<td_api::messagePaymentSuccessfulBot>(
-            m->currency, m->total_amount, m->invoice_payload, m->shipping_option_id,
-            get_order_info_object(m->order_info), m->telegram_payment_charge_id, m->provider_payment_charge_id);
+            m->currency, m->total_amount, m->is_recurring, m->is_first_recurring, m->invoice_payload,
+            m->shipping_option_id, get_order_info_object(m->order_info), m->telegram_payment_charge_id,
+            m->provider_payment_charge_id);
       } else {
         auto invoice_dialog_id = m->invoice_dialog_id.is_valid() ? m->invoice_dialog_id : dialog_id;
         return make_tl_object<td_api::messagePaymentSuccessful>(invoice_dialog_id.get(), m->invoice_message_id.get(),
-                                                                m->currency, m->total_amount);
+                                                                m->currency, m->total_amount, m->is_recurring,
+                                                                m->is_first_recurring, m->invoice_payload);
       }
     }
     case MessageContentType::ContactRegistered:

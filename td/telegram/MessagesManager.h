@@ -8,6 +8,7 @@
 
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/AffectedHistory.h"
+#include "td/telegram/AvailableReaction.h"
 #include "td/telegram/ChannelId.h"
 #include "td/telegram/DialogAction.h"
 #include "td/telegram/DialogDate.h"
@@ -431,6 +432,8 @@ class MessagesManager final : public Actor {
 
   bool get_dialog_silent_send_message(DialogId dialog_id) const;
 
+  DialogId get_dialog_default_send_message_as_dialog_id(DialogId dialog_id) const;
+
   Result<td_api::object_ptr<td_api::message>> send_message(
       DialogId dialog_id, MessageId top_thread_message_id, MessageId reply_to_message_id,
       tl_object_ptr<td_api::messageSendOptions> &&options, tl_object_ptr<td_api::ReplyMarkup> &&reply_markup,
@@ -535,7 +538,7 @@ class MessagesManager final : public Actor {
 
   void set_dialog_description(DialogId dialog_id, const string &description, Promise<Unit> &&promise);
 
-  void set_active_reactions(vector<string> active_reactions);
+  void set_active_reactions(vector<AvailableReaction> active_reactions);
 
   void set_dialog_available_reactions(DialogId dialog_id, vector<string> available_reactions, Promise<Unit> &&promise);
 
@@ -660,7 +663,8 @@ class MessagesManager final : public Actor {
 
   void delete_dialog_filter(DialogFilterId dialog_filter_id, Promise<Unit> &&promise);
 
-  void reorder_dialog_filters(vector<DialogFilterId> dialog_filter_ids, Promise<Unit> &&promise);
+  void reorder_dialog_filters(vector<DialogFilterId> dialog_filter_ids, int32 main_dialog_list_position,
+                              Promise<Unit> &&promise);
 
   Status delete_dialog_reply_markup(DialogId dialog_id, MessageId message_id) TD_WARN_UNUSED_RESULT;
 
@@ -800,7 +804,7 @@ class MessagesManager final : public Actor {
   vector<MessageId> get_dialog_scheduled_messages(DialogId dialog_id, bool force, bool ignore_result,
                                                   Promise<Unit> &&promise);
 
-  Result<vector<string>> get_message_available_reactions(FullMessageId full_message_id);
+  Result<vector<AvailableReaction>> get_message_available_reactions(FullMessageId full_message_id);
 
   void set_message_reaction(FullMessageId full_message_id, string reaction, bool is_big, Promise<Unit> &&promise);
 
@@ -1756,7 +1760,6 @@ class MessagesManager final : public Actor {
   static constexpr size_t MAX_DESCRIPTION_LENGTH = 255;         // server side limit for chat description
   static constexpr size_t MAX_DIALOG_FILTER_TITLE_LENGTH = 12;  // server side limit for dialog filter title
   static constexpr int32 MAX_PRIVATE_MESSAGE_TTL = 60;          // server side limit
-  static constexpr int32 MAX_DIALOG_FILTERS = 10;               // server side limit
   static constexpr int32 DIALOG_FILTERS_CACHE_TIME = 86400;
 
   static constexpr int64 SPONSORED_DIALOG_ORDER = static_cast<int64>(2147483647) << 32;
@@ -2086,7 +2089,7 @@ class MessagesManager final : public Actor {
 
   void erase_delete_messages_log_event(uint64 log_event_id);
 
-  void delete_sent_message_on_server(DialogId dialog_id, MessageId message_id);
+  void delete_sent_message_on_server(DialogId dialog_id, MessageId message_id, MessageId old_message_id);
 
   void delete_messages_on_server(DialogId dialog_id, vector<MessageId> message_ids, bool revoke, uint64 log_event_id,
                                  Promise<Unit> &&promise);
@@ -2328,7 +2331,8 @@ class MessagesManager final : public Actor {
 
   void delete_message_from_database(Dialog *d, MessageId message_id, const Message *m, bool is_permanently_deleted);
 
-  void update_reply_to_message_id(DialogId dialog_id, MessageId old_message_id, MessageId new_message_id);
+  void update_reply_to_message_id(DialogId dialog_id, MessageId old_message_id, MessageId new_message_id,
+                                  bool have_new_message, const char *source);
 
   void delete_message_files(DialogId dialog_id, const Message *m) const;
 
@@ -2380,6 +2384,10 @@ class MessagesManager final : public Actor {
   void unregister_message_reply(DialogId dialog_id, const Message *m);
 
   void send_update_new_message(const Dialog *d, const Message *m);
+
+  bool get_dialog_show_preview(const Dialog *d) const;
+
+  bool is_message_preview_enabled(const Dialog *d, const Message *m, bool from_mentions);
 
   static bool is_from_mention_notification_group(const Message *m);
 
@@ -2645,7 +2653,7 @@ class MessagesManager final : public Actor {
 
   bool update_dialog_silent_send_message(Dialog *d, bool silent_send_message);
 
-  vector<string> get_message_available_reactions(const Dialog *d, const Message *m);
+  vector<AvailableReaction> get_message_available_reactions(const Dialog *d, const Message *m);
 
   void on_set_message_reaction(FullMessageId full_message_id, Result<Unit> result, Promise<Unit> promise);
 
@@ -2656,9 +2664,6 @@ class MessagesManager final : public Actor {
   void hide_dialog_message_reactions(Dialog *d);
 
   vector<string> get_active_reactions(const vector<string> &available_reactions) const;
-
-  static vector<string> get_active_reactions(const vector<string> &available_reactions,
-                                             const vector<string> &active_reactions);
 
   vector<string> get_dialog_active_reactions(const Dialog *d) const;
 
@@ -2739,7 +2744,7 @@ class MessagesManager final : public Actor {
 
   void reload_dialog_filters();
 
-  void on_get_dialog_filters(Result<vector<tl_object_ptr<telegram_api::dialogFilter>>> r_filters, bool dummy);
+  void on_get_dialog_filters(Result<vector<tl_object_ptr<telegram_api::DialogFilter>>> r_filters, bool dummy);
 
   bool need_synchronize_dialog_filters() const;
 
@@ -2773,9 +2778,10 @@ class MessagesManager final : public Actor {
 
   void on_delete_dialog_filter(DialogFilterId dialog_filter_id, Status result);
 
-  void reorder_dialog_filters_on_server(vector<DialogFilterId> dialog_filter_ids);
+  void reorder_dialog_filters_on_server(vector<DialogFilterId> dialog_filter_ids, int32 main_dialog_list_position);
 
-  void on_reorder_dialog_filters(vector<DialogFilterId> dialog_filter_ids, Status result);
+  void on_reorder_dialog_filters(vector<DialogFilterId> dialog_filter_ids, int32 main_dialog_list_position,
+                                 Status result);
 
   void save_dialog_filters();
 
@@ -2792,6 +2798,8 @@ class MessagesManager final : public Actor {
 
   DialogFilter *get_dialog_filter(DialogFilterId dialog_filter_id);
   const DialogFilter *get_dialog_filter(DialogFilterId dialog_filter_id) const;
+
+  int32 get_server_main_dialog_list_position() const;
 
   static vector<DialogFilterId> get_dialog_filter_ids(const vector<unique_ptr<DialogFilter>> &dialog_filters);
 
@@ -3539,6 +3547,8 @@ class MessagesManager final : public Actor {
   vector<unique_ptr<DialogFilter>> dialog_filters_;
   vector<RecommendedDialogFilter> recommended_dialog_filters_;
   vector<Promise<Unit>> dialog_filter_reload_queries_;
+  int32 server_main_dialog_list_position_ = 0;  // position of the main dialog list stored on the server
+  int32 main_dialog_list_position_ = 0;         // local position of the main dialog list stored on the server
 
   FlatHashMap<DialogId, string, DialogIdHash> active_get_channel_differencies_;
   FlatHashMap<DialogId, uint64, DialogIdHash> get_channel_difference_to_log_event_id_;
@@ -3680,7 +3690,7 @@ class MessagesManager final : public Actor {
   };
   FlatHashMap<FullMessageId, PendingReaction, FullMessageIdHash> pending_reactions_;
 
-  vector<string> active_reactions_;
+  vector<AvailableReaction> active_reactions_;
   FlatHashMap<string, size_t> active_reaction_pos_;
 
   uint32 scheduled_messages_sync_generation_ = 1;

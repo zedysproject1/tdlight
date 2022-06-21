@@ -259,6 +259,10 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
   if (source.get_type("get_photo_size") == PhotoSizeSource::Type::Thumbnail) {
     source.thumbnail().thumbnail_type = res.type;
   }
+  if (res.size < 0 || res.size > 1000000000) {
+    LOG(ERROR) << "Receive photo of size " << res.size;
+    res.size = 0;
+  }
 
   res.file_id = register_photo_size(file_manager, source, id, access_hash, std::move(file_reference), owner_dialog_id,
                                     res.size, dc_id, format);
@@ -275,8 +279,8 @@ AnimationSize get_animation_size(FileManager *file_manager, PhotoSizeSource sour
                                  tl_object_ptr<telegram_api::videoSize> &&size) {
   CHECK(size != nullptr);
   AnimationSize res;
-  if (size->type_ != "v" && size->type_ != "u") {
-    LOG(ERROR) << "Wrong videoSize \"" << size->type_ << "\" in " << to_string(size);
+  if (size->type_ != "p" && size->type_ != "u" && size->type_ != "v") {
+    LOG(ERROR) << "Unsupported videoSize \"" << size->type_ << "\" in " << to_string(size);
   }
   res.type = static_cast<uint8>(size->type_[0]);
   if (res.type >= 128) {
@@ -291,6 +295,10 @@ AnimationSize get_animation_size(FileManager *file_manager, PhotoSizeSource sour
 
   if (source.get_type("get_animation_size") == PhotoSizeSource::Type::Thumbnail) {
     source.thumbnail().thumbnail_type = res.type;
+  }
+  if (res.size < 0 || res.size > 1000000000) {
+    LOG(ERROR) << "Receive animation of size " << res.size;
+    res.size = 0;
   }
 
   res.file_id = register_photo_size(file_manager, source, id, access_hash, std::move(file_reference), owner_dialog_id,
@@ -318,9 +326,9 @@ PhotoSize get_web_document_photo_size(FileManager *file_manager, FileType file_t
       }
       auto http_url = r_http_url.move_as_ok();
       auto url = http_url.get_url();
-      file_id = file_manager->register_remote(FullRemoteFileLocation(file_type, url, web_document->access_hash_),
-                                              FileLocationSource::FromServer, owner_dialog_id, 0, web_document->size_,
-                                              get_url_query_file_name(http_url.query_));
+      file_id = file_manager->register_remote(
+          FullRemoteFileLocation(file_type, url, web_document->access_hash_), FileLocationSource::FromServer,
+          owner_dialog_id, 0, static_cast<uint32>(web_document->size_), get_url_query_file_name(http_url.query_));
       size = web_document->size_;
       mime_type = std::move(web_document->mime_type_);
       attributes = std::move(web_document->attributes_);
@@ -379,6 +387,11 @@ PhotoSize get_web_document_photo_size(FileManager *file_manager, FileType file_t
   s.dimensions = dimensions;
   s.size = size;
   s.file_id = file_id;
+
+  if (s.size < 0 || s.size > 1000000000) {
+    LOG(ERROR) << "Receive web photo of size " << s.size;
+    s.size = 0;
+  }
   return s;
 }
 

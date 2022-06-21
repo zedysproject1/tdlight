@@ -16,7 +16,6 @@
 
 #include "td/telegram/ConfigShared.h"
 #include "td/utils/logging.h"
-#include "td/utils/misc.h"
 #include "td/utils/Status.h"
 
 namespace td {
@@ -158,7 +157,7 @@ void VideoNotesManager::create_video_note(FileId file_id, string minithumbnail, 
 
 SecretInputMedia VideoNotesManager::get_secret_input_media(FileId video_note_file_id,
                                                            tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
-                                                           BufferSlice thumbnail) const {
+                                                           BufferSlice thumbnail, int32 layer) const {
   const VideoNote *video_note = get_video_note(video_note_file_id);
   CHECK(video_note != nullptr);
   auto file_view = td_->file_manager_->get_file_view(video_note_file_id);
@@ -185,7 +184,8 @@ SecretInputMedia VideoNotesManager::get_secret_input_media(FileId video_note_fil
           "video/mp4",
           file_view,
           std::move(attributes),
-          string()};
+          string(),
+          layer};
 }
 
 tl_object_ptr<telegram_api::InputMedia> VideoNotesManager::get_input_media(

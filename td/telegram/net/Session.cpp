@@ -31,6 +31,7 @@
 #include "td/utils/format.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
+#include "td/utils/port/thread_local.h"
 #include "td/utils/Random.h"
 #include "td/utils/Slice.h"
 #include "td/utils/SliceBuilder.h"
@@ -41,6 +42,7 @@
 #include "td/utils/utf8.h"
 #include "td/utils/VectorQueue.h"
 
+#include <memory>
 #include <tuple>
 #include <utility>
 
@@ -65,6 +67,11 @@ class SemaphoreActor final : public Actor {
   size_t capacity_;
   VectorQueue<Promise<Promise<Unit>>> pending_;
 
+  void start_up() final {
+    set_context(std::make_shared<ActorContext>());
+    set_tag(string());
+  }
+
   void finish(Result<Unit>) {
     capacity_++;
     if (!pending_.empty()) {
@@ -80,9 +87,8 @@ class SemaphoreActor final : public Actor {
 };
 
 struct Semaphore {
- public:
   explicit Semaphore(size_t capacity) {
-    semaphore_ = create_actor<SemaphoreActor>("semaphore", capacity).release();
+    semaphore_ = create_actor<SemaphoreActor>("Semaphore", capacity).release();
   }
 
   void execute(Promise<Promise<Unit>> promise) {
@@ -221,6 +227,9 @@ Session::Session(unique_ptr<Callback> callback, std::shared_ptr<AuthDataShared> 
   auth_data_.set_future_salts(shared_auth_data_->get_future_salts(), Time::now());
   if (use_pfs && !tmp_auth_key.empty()) {
     auth_data_.set_tmp_auth_key(tmp_auth_key);
+    if (is_main_) {
+      registered_temp_auth_key_ = TempAuthKeyWatchdog::register_auth_key_id(auth_data_.get_tmp_auth_key().id());
+    }
     auth_data_.set_future_salts(server_salts, Time::now());
   }
   uint64 session_id = 0;
@@ -575,10 +584,10 @@ void Session::on_closed(Status status) {
   raw_connection->close();
 
   if (status.is_error()) {
-    LOG(WARNING) << "Session with " << sent_queries_.size() << " pending requests was closed: " << status << " "
-                 << current_info_->connection_->get_name();
+    LOG(WARNING) << "Session connection with " << sent_queries_.size() << " pending requests was closed: " << status
+                 << ' ' << current_info_->connection_->get_name();
   } else {
-    LOG(INFO) << "Session with " << sent_queries_.size() << " pending requests was closed: " << status << " "
+    LOG(INFO) << "Session connection with " << sent_queries_.size() << " pending requests was closed: " << status << ' '
               << current_info_->connection_->get_name();
   }
 

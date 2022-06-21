@@ -96,11 +96,13 @@ class LinkManager final : public Actor {
   class InternalLinkDialogInvite;
   class InternalLinkFilterSettings;
   class InternalLinkGame;
+  class InternalLinkInvoice;
   class InternalLinkLanguage;
   class InternalLinkLanguageSettings;
   class InternalLinkMessage;
   class InternalLinkMessageDraft;
   class InternalLinkPassportDataRequest;
+  class InternalLinkPremiumFeatures;
   class InternalLinkPrivacyAndSecuritySettings;
   class InternalLinkProxy;
   class InternalLinkPublicDialog;

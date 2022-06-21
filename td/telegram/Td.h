@@ -109,7 +109,7 @@ class Td final : public Actor {
   Td &operator=(Td &&) = delete;
   ~Td() final;
 
-  static constexpr const char *TDLIB_VERSION = "1.8.3";
+  static constexpr const char *TDLIB_VERSION = "1.8.4";
 
   struct Options {
     std::shared_ptr<NetQueryStats> net_query_stats;
@@ -144,7 +144,6 @@ class Td final : public Actor {
   unique_ptr<DocumentsManager> documents_manager_;
   unique_ptr<VideoNotesManager> video_notes_manager_;
   unique_ptr<VideosManager> videos_manager_;
-  unique_ptr<VoiceNotesManager> voice_notes_manager_;
 
   unique_ptr<AnimationsManager> animations_manager_;
   ActorOwn<AnimationsManager> animations_manager_actor_;
@@ -192,6 +191,8 @@ class Td final : public Actor {
   ActorOwn<TopDialogManager> top_dialog_manager_actor_;
   unique_ptr<UpdatesManager> updates_manager_;
   ActorOwn<UpdatesManager> updates_manager_actor_;
+  unique_ptr<VoiceNotesManager> voice_notes_manager_;
+  ActorOwn<VoiceNotesManager> voice_notes_manager_actor_;
   unique_ptr<MemoryManager> memory_manager_;
   ActorOwn<MemoryManager> memory_manager_actor_;
   unique_ptr<WebPagesManager> web_pages_manager_;
@@ -304,6 +305,7 @@ class Td final : public Actor {
 
   enum class State : int32 { WaitParameters, Decrypt, Run, Close } state_ = State::WaitParameters;
   uint64 init_request_id_ = 0;
+  uint64 set_parameters_request_id_ = 0;
   bool is_database_encrypted_ = false;
 
   FlatHashMap<uint64, std::shared_ptr<ResultHandler>> result_handlers_;
@@ -321,14 +323,15 @@ class Td final : public Actor {
   TermsOfService pending_terms_of_service_;
 
   struct DownloadInfo {
-    int32 offset = -1;
-    int32 limit = -1;
+    int64 offset = -1;
+    int64 limit = -1;
     vector<uint64> request_ids;
   };
   FlatHashMap<FileId, DownloadInfo, FileIdHash> pending_file_downloads_;
 
   vector<std::pair<uint64, td_api::object_ptr<td_api::Function>>> pending_preauthentication_requests_;
 
+  vector<std::pair<uint64, td_api::object_ptr<td_api::Function>>> pending_set_parameters_requests_;
   vector<std::pair<uint64, td_api::object_ptr<td_api::Function>>> pending_init_requests_;
 
   template <class T>
@@ -540,6 +543,10 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::getMessageLinkInfo &request);
 
   void on_request(uint64 id, td_api::translateText &request);
+
+  void on_request(uint64 id, const td_api::recognizeSpeech &request);
+
+  void on_request(uint64 id, const td_api::rateSpeechRecognition &request);
 
   void on_request(uint64 id, const td_api::getFile &request);
 
@@ -1043,6 +1050,10 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::toggleSupergroupSignMessages &request);
 
+  void on_request(uint64 id, const td_api::toggleSupergroupJoinToSendMessages &request);
+
+  void on_request(uint64 id, const td_api::toggleSupergroupJoinByRequest &request);
+
   void on_request(uint64 id, const td_api::toggleSupergroupIsAllHistoryAvailable &request);
 
   void on_request(uint64 id, const td_api::toggleSupergroupIsBroadcastGroup &request);
@@ -1114,6 +1125,8 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::searchEmojis &request);
 
   void on_request(uint64 id, td_api::getAnimatedEmoji &request);
+
+  void on_request(uint64 id, const td_api::getAllAnimatedEmojis &request);
 
   void on_request(uint64 id, td_api::getEmojiSuggestionsUrl &request);
 
@@ -1213,7 +1226,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::getBankCardInfo &request);
 
-  void on_request(uint64 id, const td_api::getPaymentForm &request);
+  void on_request(uint64 id, td_api::getPaymentForm &request);
 
   void on_request(uint64 id, td_api::validateOrderInfo &request);
 
@@ -1226,6 +1239,8 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::deleteSavedOrderInfo &request);
 
   void on_request(uint64 id, const td_api::deleteSavedCredentials &request);
+
+  void on_request(uint64 id, td_api::createInvoiceLink &request);
 
   void on_request(uint64 id, td_api::getPassportElement &request);
 
@@ -1290,6 +1305,18 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::searchHashtags &request);
 
   void on_request(uint64 id, td_api::removeRecentHashtag &request);
+
+  void on_request(uint64 id, const td_api::getPremiumLimit &request);
+
+  void on_request(uint64 id, const td_api::getPremiumFeatures &request);
+
+  void on_request(uint64 id, const td_api::getPremiumStickers &request);
+
+  void on_request(uint64 id, const td_api::viewPremiumFeature &request);
+
+  void on_request(uint64 id, const td_api::clickPremiumSubscriptionButton &request);
+
+  void on_request(uint64 id, const td_api::getPremiumState &request);
 
   void on_request(uint64 id, td_api::acceptTermsOfService &request);
 
@@ -1411,6 +1438,12 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::testReturnError &request);
 
   static DbKey as_db_key(string key, bool custom_db);
+
+  static int32 get_database_scheduler_id();
+
+  void on_parameters_checked(Result<TdDb::CheckedParameters> r_checked_parameters);
+
+  void finish_set_parameters();
 
   void start_init(uint64 id, string &&key);
 
