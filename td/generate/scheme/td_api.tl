@@ -989,7 +989,7 @@ chatTypeSecret secret_chat_id:int32 user_id:int53 = ChatType;
 
 //@description Represents a filter of user chats
 //@title The title of the filter; 1-12 characters without line feeds
-//@icon_name The chosen icon name for short filter representation. If non-empty, must be one of "All", "Unread", "Unmuted", "Bots", "Channels", "Groups", "Private", "Custom", "Setup", "Cat", "Crown", "Favorite", "Flower", "Game", "Home", "Love", "Mask", "Party", "Sport", "Study", "Trade", "Travel", "Work".
+//@icon_name The chosen icon name for short filter representation. If non-empty, must be one of "All", "Unread", "Unmuted", "Bots", "Channels", "Groups", "Private", "Custom", "Setup", "Cat", "Crown", "Favorite", "Flower", "Game", "Home", "Love", "Mask", "Party", "Sport", "Study", "Trade", "Travel", "Work", "Airplane", "Book", "Light", "Like", "Money", "Note", "Palette".
 //-If empty, use getChatFilterDefaultIconName to get default icon name for the filter
 //@pinned_chat_ids The chat identifiers of pinned chats in the filtered chat list. There can be up to GetOption("chat_filter_chosen_chat_count_max") pinned and always included non-secret chats and the same number of secret chats, but the limit can be increased with Telegram Premium
 //@included_chat_ids The chat identifiers of always included chats in the filtered chat list. There can be up to GetOption("chat_filter_chosen_chat_count_max") pinned and always included non-secret chats and the same number of secret chats, but the limit can be increased with Telegram Premium
@@ -1007,7 +1007,7 @@ chatFilter title:string icon_name:string pinned_chat_ids:vector<int53> included_
 //@description Contains basic information about a chat filter
 //@id Unique chat filter identifier
 //@title The title of the filter; 1-12 characters without line feeds
-//@icon_name The chosen or default icon name for short filter representation. One of "All", "Unread", "Unmuted", "Bots", "Channels", "Groups", "Private", "Custom", "Setup", "Cat", "Crown", "Favorite", "Flower", "Game", "Home", "Love", "Mask", "Party", "Sport", "Study", "Trade", "Travel", "Work"
+//@icon_name The chosen or default icon name for short filter representation. One of "All", "Unread", "Unmuted", "Bots", "Channels", "Groups", "Private", "Custom", "Setup", "Cat", "Crown", "Favorite", "Flower", "Game", "Home", "Love", "Mask", "Party", "Sport", "Study", "Trade", "Travel", "Work", "Airplane", "Book", "Light", "Like", "Money", "Note", "Palette"
 chatFilterInfo id:int32 title:string icon_name:string = ChatFilterInfo;
 
 //@description Describes a recommended chat filter @filter The chat filter @param_description Chat filter description
@@ -6427,6 +6427,15 @@ clickPremiumSubscriptionButton = Ok;
 
 //@description Returns state of Telegram Premium subscription and promotion videos for Premium features
 getPremiumState = PremiumState;
+
+//@description Checks whether Telegram Premium purchase is possible. Must be called before in-store Premium purchase
+canPurchasePremium = Ok;
+
+//@description Informs server about a Telegram Premium purchase through App Store. For official applications only @receipt App Store receipt @is_restore Pass true if this is a restore of a Telegram Premium purchase
+assignAppStoreTransaction receipt:bytes is_restore:Bool = Ok;
+
+//@description Informs server about a Telegram Premium purchase through Google Play. For official applications only @purchase_token Google Play purchase token
+assignGooglePlayTransaction purchase_token:string = Ok;
 
 
 //@description Accepts Telegram terms of services @terms_of_service_id Terms of service identifier

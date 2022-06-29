@@ -196,7 +196,7 @@ class StopPollQuery final : public Td::ResultHandler {
     }
 
     int32 flags = telegram_api::messages_editMessage::MEDIA_MASK;
-    auto input_reply_markup = get_input_reply_markup(reply_markup);
+    auto input_reply_markup = get_input_reply_markup(td_->contacts_manager_.get(), reply_markup);
     if (input_reply_markup != nullptr) {
       flags |= telegram_api::messages_editMessage::REPLY_MARKUP_MASK;
     }
@@ -1787,7 +1787,7 @@ void PollManager::on_get_poll_vote(PollId poll_id, UserId user_id, vector<Buffer
   for (auto &option : options) {
     auto slice = option.as_slice();
     if (slice.size() != 1 || slice[0] < '0' || slice[0] > '9') {
-      LOG(ERROR) << "Receive updateMessagePollVote with unexpected option \"" << format::escaped(slice) << '"';
+      LOG(INFO) << "Receive updateMessagePollVote with unexpected option \"" << format::escaped(slice) << '"';
       return;
     }
     option_ids.push_back(static_cast<int32>(slice[0] - '0'));

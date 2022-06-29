@@ -28,12 +28,11 @@
 #include "td/telegram/TopDialogManager.h"
 #include "td/telegram/UpdatesManager.h"
 
-#include "td/actor/PromiseFuture.h"
-
 #include "td/utils/base64.h"
 #include "td/utils/format.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
+#include "td/utils/Promise.h"
 #include "td/utils/ScopeGuard.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Time.h"
@@ -77,8 +76,11 @@ void AuthManager::start_up() {
   if (state_ == State::LoggingOut) {
     send_log_out_query();
   } else if (state_ == State::DestroyingKeys) {
-    G()->net_query_dispatcher().destroy_auth_keys(
-        PromiseCreator::lambda([](Unit) { send_closure_later(G()->td(), &Td::destroy); }, PromiseCreator::Ignore()));
+    G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda([](Result<Unit> result) {
+      if (result.is_ok()) {
+        send_closure_later(G()->td(), &Td::destroy);
+      }
+    }));
   }
 }
 void AuthManager::tear_down() {
@@ -706,12 +708,15 @@ void AuthManager::destroy_auth_keys() {
     return;
   }
   update_state(State::DestroyingKeys);
-  auto promise = PromiseCreator::lambda(
-      [](Unit) {
-        G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda(
-            [](Unit) { send_closure_later(G()->td(), &Td::destroy); }, PromiseCreator::Ignore()));
-      },
-      PromiseCreator::Ignore());
+  auto promise = PromiseCreator::lambda([](Result<Unit> result) {
+    if (result.is_ok()) {
+      G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda([](Result<Unit> result) {
+        if (result.is_ok()) {
+          send_closure_later(G()->td(), &Td::destroy);
+        }
+      }));
+    }
+  });
   G()->td_db()->get_binlog_pmc()->set("auth", "destroy");
   G()->td_db()->get_binlog_pmc()->force_sync(std::move(promise));
 }

@@ -21,7 +21,6 @@
 #include "td/db/DbKey.h"
 
 #include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
 #include "td/actor/Timeout.h"
 
 #include "td/utils/buffer.h"
@@ -29,6 +28,7 @@
 #include "td/utils/Container.h"
 #include "td/utils/FlatHashMap.h"
 #include "td/utils/logging.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 
@@ -1317,6 +1317,12 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::clickPremiumSubscriptionButton &request);
 
   void on_request(uint64 id, const td_api::getPremiumState &request);
+
+  void on_request(uint64 id, const td_api::canPurchasePremium &request);
+
+  void on_request(uint64 id, const td_api::assignAppStoreTransaction &request);
+
+  void on_request(uint64 id, td_api::assignGooglePlayTransaction &request);
 
   void on_request(uint64 id, td_api::acceptTermsOfService &request);
 

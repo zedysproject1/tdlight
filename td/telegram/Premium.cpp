@@ -17,6 +17,7 @@
 #include "td/telegram/MessageEntity.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/telegram_api.h"
+#include "td/telegram/UpdatesManager.h"
 
 #include "td/utils/algorithm.h"
 #include "td/utils/buffer.h"
@@ -131,6 +132,94 @@ class GetPremiumPromoQuery final : public Td::ResultHandler {
     promise_.set_value(td_api::make_object<td_api::premiumState>(get_formatted_text_object(state, true, 0),
                                                                  std::move(promo->currency_), promo->monthly_amount_,
                                                                  std::move(animations)));
+  }
+
+  void on_error(Status status) final {
+    promise_.set_error(std::move(status));
+  }
+};
+
+class CanPurchasePremiumQuery final : public Td::ResultHandler {
+  Promise<Unit> promise_;
+
+ public:
+  explicit CanPurchasePremiumQuery(Promise<Unit> &&promise) : promise_(std::move(promise)) {
+  }
+
+  void send() {
+    send_query(G()->net_query_creator().create(telegram_api::payments_canPurchasePremium()));
+  }
+
+  void on_result(BufferSlice packet) final {
+    auto result_ptr = fetch_result<telegram_api::payments_canPurchasePremium>(packet);
+    if (result_ptr.is_error()) {
+      return on_error(result_ptr.move_as_error());
+    }
+
+    bool result = result_ptr.ok();
+    if (result) {
+      return promise_.set_value(Unit());
+    }
+    on_error(Status::Error(400, "Premium can't be purchased"));
+  }
+
+  void on_error(Status status) final {
+    promise_.set_error(std::move(status));
+  }
+};
+
+class AssignAppStoreTransactionQuery final : public Td::ResultHandler {
+  Promise<Unit> promise_;
+
+ public:
+  explicit AssignAppStoreTransactionQuery(Promise<Unit> &&promise) : promise_(std::move(promise)) {
+  }
+
+  void send(const string &receipt, bool is_restore) {
+    int32 flags = 0;
+    if (is_restore) {
+      flags |= telegram_api::payments_assignAppStoreTransaction::RESTORE_MASK;
+    }
+    send_query(G()->net_query_creator().create(
+        telegram_api::payments_assignAppStoreTransaction(flags, false /*ignored*/, BufferSlice(receipt))));
+  }
+
+  void on_result(BufferSlice packet) final {
+    auto result_ptr = fetch_result<telegram_api::payments_assignAppStoreTransaction>(packet);
+    if (result_ptr.is_error()) {
+      return on_error(result_ptr.move_as_error());
+    }
+
+    auto ptr = result_ptr.move_as_ok();
+    LOG(INFO) << "Receive result for AssignAppStoreTransactionQuery: " << to_string(ptr);
+    td_->updates_manager_->on_get_updates(std::move(ptr), std::move(promise_));
+  }
+
+  void on_error(Status status) final {
+    promise_.set_error(std::move(status));
+  }
+};
+
+class AssignPlayMarketTransactionQuery final : public Td::ResultHandler {
+  Promise<Unit> promise_;
+
+ public:
+  explicit AssignPlayMarketTransactionQuery(Promise<Unit> &&promise) : promise_(std::move(promise)) {
+  }
+
+  void send(const string &purchase_token) {
+    send_query(G()->net_query_creator().create(telegram_api::payments_assignPlayMarketTransaction(purchase_token)));
+  }
+
+  void on_result(BufferSlice packet) final {
+    auto result_ptr = fetch_result<telegram_api::payments_assignPlayMarketTransaction>(packet);
+    if (result_ptr.is_error()) {
+      return on_error(result_ptr.move_as_error());
+    }
+
+    auto ptr = result_ptr.move_as_ok();
+    LOG(INFO) << "Receive result for AssignPlayMarketTransactionQuery: " << to_string(ptr);
+    td_->updates_manager_->on_get_updates(std::move(ptr), std::move(promise_));
   }
 
   void on_error(Status status) final {
@@ -375,6 +464,18 @@ void click_premium_subscription_button(Td *td, Promise<Unit> &&promise) {
 
 void get_premium_state(Td *td, Promise<td_api::object_ptr<td_api::premiumState>> &&promise) {
   td->create_handler<GetPremiumPromoQuery>(std::move(promise))->send();
+}
+
+void can_purchase_premium(Td *td, Promise<Unit> &&promise) {
+  td->create_handler<CanPurchasePremiumQuery>(std::move(promise))->send();
+}
+
+void assign_app_store_transaction(Td *td, const string &receipt, bool is_restore, Promise<Unit> &&promise) {
+  td->create_handler<AssignAppStoreTransactionQuery>(std::move(promise))->send(receipt, is_restore);
+}
+
+void assign_play_market_transaction(Td *td, const string &purchase_token, Promise<Unit> &&promise) {
+  td->create_handler<AssignPlayMarketTransactionQuery>(std::move(promise))->send(purchase_token);
 }
 
 }  // namespace td

@@ -61,7 +61,6 @@
 
 #include "td/actor/actor.h"
 #include "td/actor/MultiPromise.h"
-#include "td/actor/PromiseFuture.h"
 #include "td/actor/SignalSlot.h"
 #include "td/actor/Timeout.h"
 
@@ -73,6 +72,7 @@
 #include "td/utils/Heap.h"
 #include "td/utils/Hints.h"
 #include "td/utils/logging.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 #include "td/utils/StringBuilder.h"
@@ -289,8 +289,6 @@ class MessagesManager final : public Actor {
                              int32 total_count);
 
   bool on_update_message_id(int64 random_id, MessageId new_message_id, const string &source);
-
-  bool on_update_scheduled_message_id(int64 random_id, ScheduledServerMessageId new_message_id, const string &source);
 
   void on_update_dialog_draft_message(DialogId dialog_id, tl_object_ptr<telegram_api::DraftMessage> &&draft_message);
 

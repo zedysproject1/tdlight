@@ -17,12 +17,12 @@
 #include "td/telegram/UserId.h"
 
 #include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
 #include "td/actor/Timeout.h"
 
 #include "td/utils/common.h"
 #include "td/utils/FlatHashSet.h"
 #include "td/utils/logging.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Status.h"
 #include "td/utils/tl_storers.h"
 #include "td/utils/TlStorerToString.h"
@@ -356,6 +356,8 @@ class UpdatesManager final : public Actor {
   static bool is_qts_update(const telegram_api::Update *update);
 
   static int32 get_update_qts(const telegram_api::Update *update);
+
+  static bool is_channel_pts_update(const telegram_api::Update *update);
 
   static const vector<tl_object_ptr<telegram_api::Update>> *get_updates(const telegram_api::Updates *updates_ptr);
 

@@ -135,7 +135,6 @@
 #include "td/mtproto/TransportType.h"
 
 #include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
 
 #include "td/utils/algorithm.h"
 #include "td/utils/buffer.h"
@@ -7929,6 +7928,25 @@ void Td::on_request(uint64 id, const td_api::getPremiumState &request) {
   CHECK_IS_USER();
   CREATE_REQUEST_PROMISE();
   get_premium_state(this, std::move(promise));
+}
+
+void Td::on_request(uint64 id, const td_api::canPurchasePremium &request) {
+  CHECK_IS_USER();
+  CREATE_OK_REQUEST_PROMISE();
+  can_purchase_premium(this, std::move(promise));
+}
+
+void Td::on_request(uint64 id, const td_api::assignAppStoreTransaction &request) {
+  CHECK_IS_USER();
+  CREATE_OK_REQUEST_PROMISE();
+  assign_app_store_transaction(this, request.receipt_, request.is_restore_, std::move(promise));
+}
+
+void Td::on_request(uint64 id, td_api::assignGooglePlayTransaction &request) {
+  CHECK_IS_USER();
+  CLEAN_INPUT_STRING(request.purchase_token_);
+  CREATE_OK_REQUEST_PROMISE();
+  assign_play_market_transaction(this, request.purchase_token_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::acceptTermsOfService &request) {
