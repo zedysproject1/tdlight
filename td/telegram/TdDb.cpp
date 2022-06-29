@@ -273,7 +273,7 @@ void TdDb::do_close(Promise<> on_finished, bool destroy_flag) {
   lock.set_value(Unit());
 }
 
-Status TdDb::init_sqlite(int32 scheduler_id, const TdParameters &parameters, const DbKey &key, const DbKey &old_key,
+Status TdDb::init_sqlite(const TdParameters &parameters, const DbKey &key, const DbKey &old_key,
                          BinlogKeyValue<Binlog> &binlog_pmc) {
   CHECK(!parameters.use_message_db || parameters.use_chat_info_db);
   CHECK(!parameters.use_chat_info_db || parameters.use_file_db);
@@ -366,37 +366,31 @@ Status TdDb::init_sqlite(int32 scheduler_id, const TdParameters &parameters, con
 
   TRY_STATUS(db.exec("COMMIT TRANSACTION"));
 
-  file_db_ = create_file_db(sql_connection_, scheduler_id);
+  file_db_ = create_file_db(sql_connection_);
 
   common_kv_safe_ = std::make_shared<SqliteKeyValueSafe>("common", sql_connection_);
-  common_kv_async_ = create_sqlite_key_value_async(common_kv_safe_, scheduler_id);
+  common_kv_async_ = create_sqlite_key_value_async(common_kv_safe_);
 
   if (use_dialog_db) {
     dialog_db_sync_safe_ = create_dialog_db_sync(sql_connection_);
-    dialog_db_async_ = create_dialog_db_async(dialog_db_sync_safe_, scheduler_id);
+    dialog_db_async_ = create_dialog_db_async(dialog_db_sync_safe_);
   }
 
   if (use_downloads_db) {
     messages_db_sync_safe_ = create_messages_db_sync(sql_connection_);
-    messages_db_async_ = create_messages_db_async(messages_db_sync_safe_, scheduler_id);
+    messages_db_async_ = create_messages_db_async(messages_db_sync_safe_);
   }
 
   return Status::OK();
 }
 
 void TdDb::open(int32 scheduler_id, TdParameters parameters, DbKey key, Promise<OpenedDatabase> &&promise) {
-  if (scheduler_id >= 0 && Scheduler::instance()->sched_id() != scheduler_id) {
-    class Worker final : public Actor {
-     public:
-      void open(TdParameters &&parameters, DbKey &&key, Promise<OpenedDatabase> &&promise) {
-        TdDb::open(-1, std::move(parameters), std::move(key), std::move(promise));
-        stop();
-      }
-    };
-    send_closure(create_actor_on_scheduler<Worker>("Worker", scheduler_id), &Worker::open, std::move(parameters),
-                 std::move(key), std::move(promise));
-    return;
-  }
+  Scheduler::instance()->run_on_scheduler(
+      scheduler_id, [parameters = std::move(parameters), key = std::move(key), promise = std::move(promise)](
+                        Unit) mutable { TdDb::open_impl(std::move(parameters), std::move(key), std::move(promise)); });
+}
+
+void TdDb::open_impl(TdParameters parameters, DbKey key, Promise<OpenedDatabase> &&promise) {
   OpenedDatabase result;
 
   // Init pmc
@@ -440,7 +434,7 @@ void TdDb::open(int32 scheduler_id, TdParameters parameters, DbKey key, Promise<
   }
   VLOG(td_init) << "Start to init database";
   auto db = make_unique<TdDb>();
-  auto init_sqlite_status = db->init_sqlite(scheduler_id, parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc);
+  auto init_sqlite_status = db->init_sqlite(parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc);
   VLOG(td_init) << "Finish to init database";
   if (init_sqlite_status.is_error()) {
     LOG(ERROR) << "Destroy bad SQLite database because of " << init_sqlite_status;
@@ -448,7 +442,7 @@ void TdDb::open(int32 scheduler_id, TdParameters parameters, DbKey key, Promise<
       db->sql_connection_->get().close();
     }
     SqliteDb::destroy(get_sqlite_path(parameters)).ignore();
-    TRY_STATUS_PROMISE(promise, db->init_sqlite(scheduler_id, parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc));
+    TRY_STATUS_PROMISE(promise, db->init_sqlite(parameters, new_sqlite_key, old_sqlite_key, *binlog_pmc));
   }
   if (drop_sqlite_key) {
     binlog_pmc->erase("sqlite_key");
@@ -471,7 +465,7 @@ void TdDb::open(int32 scheduler_id, TdParameters parameters, DbKey key, Promise<
 
   CHECK(binlog_ptr != nullptr);
   VLOG(td_init) << "Create concurrent_binlog";
-  auto concurrent_binlog = std::make_shared<ConcurrentBinlog>(unique_ptr<Binlog>(binlog_ptr), scheduler_id);
+  auto concurrent_binlog = std::make_shared<ConcurrentBinlog>(unique_ptr<Binlog>(binlog_ptr));
 
   VLOG(td_init) << "Init concurrent_binlog_pmc";
   concurrent_binlog_pmc->external_init_finish(concurrent_binlog);
@@ -491,18 +485,13 @@ TdDb::TdDb() = default;
 TdDb::~TdDb() = default;
 
 void TdDb::check_parameters(int32 scheduler_id, TdParameters parameters, Promise<CheckedParameters> promise) {
-  if (scheduler_id >= 0 && Scheduler::instance()->sched_id() != scheduler_id) {
-    class Worker final : public Actor {
-     public:
-      void run(TdParameters parameters, Promise<CheckedParameters> promise) {
-        TdDb::check_parameters(-1, std::move(parameters), std::move(promise));
-        stop();
-      }
-    };
-    send_closure(create_actor_on_scheduler<Worker>("Worker", scheduler_id), &Worker::run, std::move(parameters),
-                 std::move(promise));
-    return;
-  }
+  Scheduler::instance()->run_on_scheduler(
+      scheduler_id, [parameters = std::move(parameters), promise = std::move(promise)](Unit) mutable {
+        TdDb::check_parameters_impl(std::move(parameters), std::move(promise));
+      });
+}
+
+void TdDb::check_parameters_impl(TdParameters parameters, Promise<CheckedParameters> promise) {
   CheckedParameters result;
 
   auto prepare_dir = [](string dir) -> Result<string> {
