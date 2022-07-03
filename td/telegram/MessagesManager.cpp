@@ -20783,7 +20783,7 @@ Status MessagesManager::view_messages(DialogId dialog_id, MessageId top_thread_m
         for (auto file_id : get_message_file_ids(m)) {
           auto file_view = td_->file_manager_->get_file_view(file_id);
           CHECK(!file_view.empty());
-          td_->download_manager_->update_file_viewed(file_view.file_id(), file_source_id);
+          td_->download_manager_->update_file_viewed(file_view.get_main_file_id(), file_source_id);
         }
       }
 
@@ -22951,8 +22951,8 @@ void MessagesManager::remove_message_file_sources(DialogId dialog_id, const Mess
   if (file_source_id.is_valid()) {
     for (auto file_id : file_ids) {
       auto file_view = td_->file_manager_->get_file_view(file_id);
-      send_closure(td_->download_manager_actor_, &DownloadManager::remove_file, file_view.file_id(), file_source_id,
-                   false);
+      send_closure(td_->download_manager_actor_, &DownloadManager::remove_file, file_view.get_main_file_id(),
+                   file_source_id, false);
       td_->file_manager_->remove_file_source(file_id, file_source_id);
     }
   }
@@ -22978,8 +22978,8 @@ void MessagesManager::change_message_files(DialogId dialog_id, const Message *m,
       }
       if (file_source_id.is_valid()) {
         auto file_view = td_->file_manager_->get_file_view(file_id);
-        send_closure(td_->download_manager_actor_, &DownloadManager::remove_file, file_view.file_id(), file_source_id,
-                     false);
+        send_closure(td_->download_manager_actor_, &DownloadManager::remove_file, file_view.get_main_file_id(),
+                     file_source_id, false);
       }
     }
   }
@@ -33071,6 +33071,7 @@ void MessagesManager::send_dialog_action(DialogId dialog_id, MessageId top_threa
     }
 
     if (is_dialog_action_unneeded(dialog_id)) {
+      LOG(INFO) << "Skip unneeded " << action << " in " << dialog_id;
       return promise.set_value(Unit());
     }
 
@@ -35341,7 +35342,7 @@ bool MessagesManager::need_delete_file(FullMessageId full_message_id, FileId fil
     return false;
   }
 
-  auto main_file_id = td_->file_manager_->get_file_view(file_id).file_id();
+  auto main_file_id = td_->file_manager_->get_file_view(file_id).get_main_file_id();
   auto full_message_ids = td_->file_reference_manager_->get_some_message_file_sources(main_file_id);
   LOG(INFO) << "Receive " << full_message_ids << " as sources for file " << main_file_id << "/" << file_id << " from "
             << full_message_id;
@@ -36108,7 +36109,7 @@ bool MessagesManager::update_message_content(DialogId dialog_id, Message *old_me
         auto search_text = get_message_search_text(old_message);
         for (auto file_id : file_ids) {
           auto file_view = td_->file_manager_->get_file_view(file_id);
-          send_closure(td_->download_manager_actor_, &DownloadManager::change_search_text, file_view.file_id(),
+          send_closure(td_->download_manager_actor_, &DownloadManager::change_search_text, file_view.get_main_file_id(),
                        file_source_id, search_text);
         }
       }
@@ -40199,12 +40200,12 @@ void MessagesManager::add_message_file_to_downloads(FullMessageId full_message_i
   if (file_view.empty()) {
     return promise.set_error(Status::Error(400, "File not found"));
   }
-  file_id = file_view.file_id();
+  file_id = file_view.get_main_file_id();
   bool is_found = false;
   for (auto message_file_id : get_message_file_ids(m)) {
     auto message_file_view = td_->file_manager_->get_file_view(message_file_id);
     CHECK(!message_file_view.empty());
-    if (message_file_view.file_id() == file_id) {
+    if (message_file_view.get_main_file_id() == file_id) {
       is_found = true;
     }
   }
