@@ -24,6 +24,11 @@ class Td;
 class VideoNotesManager {
  public:
   explicit VideoNotesManager(Td *td);
+  VideoNotesManager(const VideoNotesManager &) = delete;
+  VideoNotesManager &operator=(const VideoNotesManager &) = delete;
+  VideoNotesManager(VideoNotesManager &&) = delete;
+  VideoNotesManager &operator=(VideoNotesManager &&) = delete;
+  ~VideoNotesManager();
 
   void memory_stats(vector<string> &output);
 

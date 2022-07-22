@@ -23,6 +23,11 @@ class Td;
 class AudiosManager {
  public:
   explicit AudiosManager(Td *td);
+  AudiosManager(const AudiosManager &) = delete;
+  AudiosManager &operator=(const AudiosManager &) = delete;
+  AudiosManager(AudiosManager &&) = delete;
+  AudiosManager &operator=(AudiosManager &&) = delete;
+  ~AudiosManager();
 
   void memory_stats(vector<string> &output);
 

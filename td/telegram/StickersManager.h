@@ -52,6 +52,11 @@ class StickersManager final : public Actor {
   static vector<int64> convert_sticker_set_ids(const vector<StickerSetId> &sticker_set_ids);
 
   StickersManager(Td *td, ActorShared<> parent);
+  StickersManager(const StickersManager &) = delete;
+  StickersManager &operator=(const StickersManager &) = delete;
+  StickersManager(StickersManager &&) = delete;
+  StickersManager &operator=(StickersManager &&) = delete;
+  ~StickersManager() final;
 
   void init();
 
@@ -499,6 +504,8 @@ class StickersManager final : public Actor {
   static double get_sticker_set_minithumbnail_zoom(const StickerSet *sticker_set);
 
   static tl_object_ptr<td_api::MaskPoint> get_mask_point_object(int32 point);
+
+  td_api::object_ptr<td_api::thumbnail> get_sticker_set_thumbnail_object(const StickerSet *sticker_set) const;
 
   tl_object_ptr<td_api::stickerSetInfo> get_sticker_set_info_object(StickerSetId sticker_set_id, size_t covers_limit,
                                                                     bool prefer_premium) const;

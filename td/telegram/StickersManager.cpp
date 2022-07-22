@@ -1304,6 +1304,21 @@ StickersManager::StickersManager(Td *td, ActorShared<> parent) : td_(td), parent
   next_update_animated_emoji_clicked_time_ = Time::now();
 }
 
+StickersManager::~StickersManager() {
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), stickers_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), sticker_sets_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), short_name_to_sticker_set_id_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), attached_sticker_sets_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), found_stickers_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), found_sticker_sets_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), emoji_language_codes_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), emoji_language_code_versions_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), emoji_language_code_last_difference_times_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), reloaded_emoji_keywords_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dice_messages_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), emoji_messages_);
+}
+
 void StickersManager::start_up() {
   init();
 }
@@ -1998,6 +2013,13 @@ double StickersManager::get_sticker_set_minithumbnail_zoom(const StickerSet *sti
   return 1.0;
 }
 
+td_api::object_ptr<td_api::thumbnail> StickersManager::get_sticker_set_thumbnail_object(
+    const StickerSet *sticker_set) const {
+  CHECK(sticker_set != nullptr);
+  auto thumbnail_format = get_sticker_set_thumbnail_format(sticker_set->sticker_format);
+  return get_thumbnail_object(td_->file_manager_.get(), sticker_set->thumbnail, thumbnail_format);
+}
+
 tl_object_ptr<td_api::stickerSet> StickersManager::get_sticker_set_object(StickerSetId sticker_set_id) const {
   const StickerSet *sticker_set = get_sticker_set(sticker_set_id);
   CHECK(sticker_set != nullptr);
@@ -2016,10 +2038,8 @@ tl_object_ptr<td_api::stickerSet> StickersManager::get_sticker_set_object(Sticke
     }
     emojis.push_back(make_tl_object<td_api::emojis>(std::move(sticker_emojis)));
   }
-  auto thumbnail_format = get_sticker_set_thumbnail_format(sticker_set->sticker_format);
-  auto thumbnail = get_thumbnail_object(td_->file_manager_.get(), sticker_set->thumbnail, thumbnail_format);
   return make_tl_object<td_api::stickerSet>(
-      sticker_set->id.get(), sticker_set->title, sticker_set->short_name, std::move(thumbnail),
+      sticker_set->id.get(), sticker_set->title, sticker_set->short_name, get_sticker_set_thumbnail_object(sticker_set),
       get_sticker_minithumbnail(sticker_set->minithumbnail, sticker_set->id, -2,
                                 get_sticker_set_minithumbnail_zoom(sticker_set)),
       sticker_set->is_installed && !sticker_set->is_archived, sticker_set->is_archived, sticker_set->is_official,
@@ -2091,11 +2111,9 @@ tl_object_ptr<td_api::stickerSetInfo> StickersManager::get_sticker_set_info_obje
     }
   }
 
-  auto thumbnail_format = get_sticker_set_thumbnail_format(sticker_set->sticker_format);
-  auto thumbnail = get_thumbnail_object(td_->file_manager_.get(), sticker_set->thumbnail, thumbnail_format);
   auto actual_count = narrow_cast<int32>(sticker_set->sticker_ids.size());
   return make_tl_object<td_api::stickerSetInfo>(
-      sticker_set->id.get(), sticker_set->title, sticker_set->short_name, std::move(thumbnail),
+      sticker_set->id.get(), sticker_set->title, sticker_set->short_name, get_sticker_set_thumbnail_object(sticker_set),
       get_sticker_minithumbnail(sticker_set->minithumbnail, sticker_set->id, -3,
                                 get_sticker_set_minithumbnail_zoom(sticker_set)),
       sticker_set->is_installed && !sticker_set->is_archived, sticker_set->is_archived, sticker_set->is_official,
@@ -5794,19 +5812,7 @@ Result<std::tuple<FileId, bool, bool, StickerFormat>> StickersManager::prepare_i
     return Status::Error(400, "Sticker type must be non-empty");
   }
 
-  switch (sticker->type_->get_id()) {
-    case td_api::stickerTypeStatic::ID:
-      return prepare_input_file(sticker->sticker_, StickerFormat::Webp, false);
-    case td_api::stickerTypeAnimated::ID:
-      return prepare_input_file(sticker->sticker_, StickerFormat::Tgs, false);
-    case td_api::stickerTypeVideo::ID:
-      return prepare_input_file(sticker->sticker_, StickerFormat::Webm, false);
-    case td_api::stickerTypeMask::ID:
-      return prepare_input_file(sticker->sticker_, StickerFormat::Webp, false);
-    default:
-      UNREACHABLE();
-      return {};
-  }
+  return prepare_input_file(sticker->sticker_, get_sticker_format(sticker->type_), false);
 }
 
 Result<std::tuple<FileId, bool, bool, StickerFormat>> StickersManager::prepare_input_file(

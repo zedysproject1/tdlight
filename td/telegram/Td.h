@@ -109,8 +109,6 @@ class Td final : public Actor {
   Td &operator=(Td &&) = delete;
   ~Td() final;
 
-  static constexpr const char *TDLIB_VERSION = "1.8.4";
-
   struct Options {
     std::shared_ptr<NetQueryStats> net_query_stats;
   };
@@ -339,6 +337,8 @@ class Td final : public Actor {
 
   td_api::object_ptr<td_api::AuthorizationState> get_fake_authorization_state_object() const;
 
+  vector<td_api::object_ptr<td_api::Update>> get_fake_current_state() const;
+
   static void on_alarm_timeout_callback(void *td_ptr, int64 alarm_id);
   void on_alarm_timeout(int64 alarm_id);
 
@@ -389,7 +389,7 @@ class Td final : public Actor {
 
   static bool is_authentication_request(int32 id);
 
-  static bool is_synchronous_request(int32 id);
+  static bool is_synchronous_request(const td_api::Function *function);
 
   static bool is_preinitialization_request(int32 id);
 
@@ -1419,6 +1419,7 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> do_static_request(const T &request) {
     return td_api::make_object<td_api::error>(400, "The method can't be executed synchronously");
   }
+  static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getOption &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getTextEntities &request);
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::parseTextEntities &request);
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::parseMarkdown &request);

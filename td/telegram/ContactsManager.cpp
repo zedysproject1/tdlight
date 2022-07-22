@@ -3398,7 +3398,45 @@ ContactsManager::ContactsManager(Td *td, ActorShared<> parent) : td_(td), parent
   channel_participant_cache_timeout_.set_callback_data(static_cast<void *>(this));
 }
 
-ContactsManager::~ContactsManager() = default;
+ContactsManager::~ContactsManager() {
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), users_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), users_full_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), user_photos_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_users_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), pending_user_photos_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), user_profile_photo_file_source_ids_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), my_photo_file_id_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), chats_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), chats_full_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_chats_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), chat_full_file_source_ids_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), min_channels_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channels_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channels_full_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_channels_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), invalidated_channels_full_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channel_full_file_source_ids_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), secret_chats_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_secret_chats_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), secret_chats_with_user_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), invite_link_infos_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialog_access_by_invite_link_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_users_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unavailable_user_fulls_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_chats_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unavailable_chat_fulls_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_channels_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unavailable_channel_fulls_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_secret_chats_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialog_administrators_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), cached_channel_participants_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), resolved_phone_numbers_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channel_participants_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), all_imported_contacts_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), linked_channel_ids_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), restricted_user_ids_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), restricted_channel_ids_);
+}
 
 void ContactsManager::tear_down() {
   parent_.reset();
@@ -5414,7 +5452,7 @@ std::pair<vector<UserId>, vector<int32>> ContactsManager::import_contacts(const 
 
   do {
     random_id = Random::secure_int64();
-  } while (random_id == 0 || imported_contacts_.count(random_id) > 0);
+  } while (random_id == 0 || random_id == 1 || imported_contacts_.count(random_id) > 0);
   imported_contacts_[random_id];  // reserve place for result
 
   do_import_contacts(contacts, random_id, std::move(promise));
@@ -5759,7 +5797,7 @@ void ContactsManager::on_clear_imported_contacts(vector<Contact> &&contacts, vec
   imported_contacts_unique_id_ = std::move(contacts_unique_id);
   imported_contacts_pos_ = std::move(to_add.first);
 
-  do_import_contacts(std::move(to_add.second), 0, std::move(promise));
+  do_import_contacts(std::move(to_add.second), 1, std::move(promise));
 }
 
 void ContactsManager::clear_imported_contacts(Promise<Unit> &&promise) {
@@ -8250,7 +8288,7 @@ void ContactsManager::on_import_contacts_finished(int64 random_id, vector<UserId
                                                   vector<int32> unimported_contact_invites) {
   LOG(INFO) << "Contacts import with random_id " << random_id
             << " has finished: " << format::as_array(imported_contact_user_ids);
-  if (random_id == 0) {
+  if (random_id == 1) {
     // import from change_imported_contacts
     all_imported_contacts_ = std::move(next_all_imported_contacts_);
     next_all_imported_contacts_.clear();
@@ -16735,7 +16773,19 @@ tl_object_ptr<td_api::userFullInfo> ContactsManager::get_user_full_info_object(U
   } else {
     FormattedText bio;
     bio.text = user_full->about;
-    bio.entities = find_entities(bio.text, true, true, !is_user_premium(user_id));
+    bio.entities = find_entities(bio.text, true, true);
+    if (!is_user_premium(user_id)) {
+      td::remove_if(bio.entities, [&](const MessageEntity &entity) {
+        if (entity.type == MessageEntity::Type::EmailAddress) {
+          return true;
+        }
+        if (entity.type == MessageEntity::Type::Url &&
+            !LinkManager::is_internal_link(utf8_utf16_substr(Slice(bio.text), entity.offset, entity.length))) {
+          return true;
+        }
+        return false;
+      });
+    }
     bio_object = get_formatted_text_object(bio, true, 0);
   }
   return make_tl_object<td_api::userFullInfo>(

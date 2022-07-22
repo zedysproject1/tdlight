@@ -841,6 +841,14 @@ void FileManager::init_actor() {
 }
 
 FileManager::~FileManager() {
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), remote_location_info_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), file_hash_to_file_id_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), local_location_to_file_id_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), generate_location_to_file_id_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), pmc_id_to_file_node_id_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), file_id_info_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), empty_file_ids_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), file_nodes_);
 }
 
 string FileManager::fix_file_extension(Slice file_name, Slice file_type, Slice file_extension) {
@@ -1009,6 +1017,13 @@ static Status check_partial_local_location(const PartialLocalFileLocation &locat
   return Status::OK();
 }
 
+void FileManager::check_local_location(FileId file_id) {
+  auto node = get_sync_file_node(file_id);
+  if (node) {
+    check_local_location(node).ignore();
+  }
+}
+
 Status FileManager::check_local_location(FileNodePtr node) {
   Status status;
   if (node->local_.type() == LocalFileLocation::Type::Full) {
@@ -1100,7 +1115,6 @@ FileId FileManager::register_empty(FileType type) {
 }
 
 void FileManager::on_file_unlink(const FullLocalFileLocation &location) {
-  // TODO: remove file from the database too
   auto it = local_location_to_file_id_.find(location);
   if (it == local_location_to_file_id_.end()) {
     return;
@@ -1108,6 +1122,7 @@ void FileManager::on_file_unlink(const FullLocalFileLocation &location) {
   auto file_id = it->second;
   auto file_node = get_sync_file_node(file_id);
   CHECK(file_node);
+  clear_from_pmc(file_node);
   send_closure(G()->download_manager(), &DownloadManager::remove_file_if_finished, file_node->main_file_id_);
   file_node->drop_local_location();
   try_flush_node_info(file_node, "on_file_unlink");

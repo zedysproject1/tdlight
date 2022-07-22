@@ -29,6 +29,11 @@ class Td;
 class AnimationsManager final : public Actor {
  public:
   AnimationsManager(Td *td, ActorShared<> parent);
+  AnimationsManager(const AnimationsManager &) = delete;
+  AnimationsManager &operator=(const AnimationsManager &) = delete;
+  AnimationsManager(AnimationsManager &&) = delete;
+  AnimationsManager &operator=(AnimationsManager &&) = delete;
+  ~AnimationsManager() final;
 
   void memory_stats(vector<string> &output);
 

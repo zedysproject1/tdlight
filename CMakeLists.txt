@@ -152,6 +152,12 @@ if (CLANG OR GCC)
   endif()
 endif()
 
+include(GetGitRevisionDescription)
+get_git_head_revision(TD_GIT_REFSPEC TD_GIT_COMMIT_HASH)
+message(STATUS "Git state: ${TD_GIT_COMMIT_HASH}")
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/td/telegram/GitCommitHash.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/td/telegram/GitCommitHash.cpp" @ONLY)
+
 add_subdirectory(tdtl)
 
 add_subdirectory(tdutils)
@@ -567,6 +573,7 @@ set(TDLIB_SOURCE
   td/telegram/FullMessageId.h
   td/telegram/Game.h
   td/telegram/GameManager.h
+  td/telegram/GitCommitHash.h
   td/telegram/Global.h
   td/telegram/GroupCallId.h
   td/telegram/GroupCallManager.h
@@ -738,6 +745,8 @@ set(TDLIB_SOURCE
   td/telegram/VoiceNotesManager.hpp
 
   ${TL_TD_SCHEME_SOURCE}
+
+  ${CMAKE_CURRENT_BINARY_DIR}/td/telegram/GitCommitHash.cpp
 )
 
 set(MEMPROF_SOURCE
@@ -748,22 +757,6 @@ set(MEMPROF_SOURCE
 set(MEMPROF_STAT_SOURCE
   memprof/memprof_stat.cpp
   memprof/memprof_stat.h
-)
-
-#RULES
-
-file(MAKE_DIRECTORY auto)
-
-if (CMAKE_HOST_WIN32)
-  set(GIT_COMMIT_CMD powershell -ExecutionPolicy ByPass ./gen_git_commit_h.ps1)
-else()
-  set(GIT_COMMIT_CMD ./gen_git_commit_h.sh)
-endif()
-
-add_custom_target(git_commit ALL
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMAND ${GIT_COMMIT_CMD}
-  COMMENT "Generate git_commit.h"
 )
 
 #LIBRARIES

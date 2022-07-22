@@ -453,7 +453,7 @@ class MessageChatSetTtl final : public MessageContent {
 
 class MessageUnsupported final : public MessageContent {
  public:
-  static constexpr int32 CURRENT_VERSION = 11;
+  static constexpr int32 CURRENT_VERSION = 12;
   int32 version = CURRENT_VERSION;
 
   MessageUnsupported() = default;
@@ -3466,8 +3466,8 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
           old_->telegram_payment_charge_id != new_->telegram_payment_charge_id ||
           old_->provider_payment_charge_id != new_->provider_payment_charge_id ||
           ((old_->order_info != nullptr || new_->order_info != nullptr) &&
-           (old_->order_info == nullptr || new_->order_info == nullptr || *old_->order_info != *new_->order_info ||
-            old_->is_recurring != new_->is_recurring || old_->is_first_recurring != new_->is_first_recurring))) {
+           (old_->order_info == nullptr || new_->order_info == nullptr || *old_->order_info != *new_->order_info)) ||
+          old_->is_recurring != new_->is_recurring || old_->is_first_recurring != new_->is_first_recurring) {
         need_update = true;
       }
       break;

@@ -133,7 +133,7 @@ Or you could install `TDLib` and then reference it in your CMakeLists.txt like t
 find_package(Td 1.8.4 REQUIRED)
 target_link_libraries(YourTarget PRIVATE Td::TdStatic)
 ```
-See [example/cpp/CMakeLists.txt](https://github.com/tdlight-team/tdlight/tree/master/example/cpp/CMakeLists.txt).
+See [example/cpp/CMakeLists.txt](https://github.com/tdlight-team/tdlight/blob/master/example/cpp/CMakeLists.txt).
 
 <a name="using-java"></a>
 ## Using in Java projects
