@@ -4003,6 +4003,10 @@ void Td::init_file_manager() {
     explicit FileManagerContext(Td *td) : td_(td) {
     }
 
+    bool need_notify_on_new_files() final {
+      return !td_->auth_manager_->is_bot();
+    }
+
     void on_new_file(int64 size, int64 real_size, int32 cnt) final {
       send_closure(G()->storage_manager(), &StorageManager::on_new_file, size, real_size, cnt);
     }
@@ -4894,6 +4898,7 @@ void Td::on_request(uint64 id, td_api::getStorageStatistics &request) {
 }
 
 void Td::on_request(uint64 id, td_api::getStorageStatisticsFast &request) {
+  CHECK_IS_USER();
   CREATE_REQUEST_PROMISE();
   auto query_promise = PromiseCreator::lambda([promise = std::move(promise)](Result<FileStatsFast> result) mutable {
     if (result.is_error()) {
@@ -6691,23 +6696,26 @@ void Td::on_request(uint64 id, const td_api::addFileToDownloads &request) {
 
 void Td::on_request(uint64 id, const td_api::toggleDownloadIsPaused &request) {
   CREATE_OK_REQUEST_PROMISE();
-  promise.set_result(download_manager_->toggle_is_paused(FileId(request.file_id_, 0), request.is_paused_));
+  send_closure(download_manager_actor_, &DownloadManager::toggle_is_paused, FileId(request.file_id_, 0),
+               request.is_paused_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::toggleAllDownloadsArePaused &request) {
   CREATE_OK_REQUEST_PROMISE();
-  promise.set_result(download_manager_->toggle_all_is_paused(request.are_paused_));
+  send_closure(download_manager_actor_, &DownloadManager::toggle_all_is_paused, request.are_paused_,
+               std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::removeFileFromDownloads &request) {
   CREATE_OK_REQUEST_PROMISE();
-  promise.set_result(download_manager_->remove_file(FileId(request.file_id_, 0), {}, request.delete_from_cache_));
+  send_closure(download_manager_actor_, &DownloadManager::remove_file, FileId(request.file_id_, 0), FileSourceId(),
+               request.delete_from_cache_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::removeAllFilesFromDownloads &request) {
   CREATE_OK_REQUEST_PROMISE();
-  promise.set_result(
-      download_manager_->remove_all_files(request.only_active_, request.only_completed_, request.delete_from_cache_));
+  send_closure(download_manager_actor_, &DownloadManager::remove_all_files, request.only_active_,
+               request.only_completed_, request.delete_from_cache_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::searchFileDownloads &request) {

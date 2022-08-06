@@ -841,14 +841,9 @@ void FileManager::init_actor() {
 }
 
 FileManager::~FileManager() {
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), remote_location_info_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), file_hash_to_file_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), local_location_to_file_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), generate_location_to_file_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), pmc_id_to_file_node_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), file_id_info_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), empty_file_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), file_nodes_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), remote_location_info_, file_hash_to_file_id_,
+                                              local_location_to_file_id_, generate_location_to_file_id_,
+                                              pmc_id_to_file_node_id_, file_id_info_, empty_file_ids_, file_nodes_);
 }
 
 string FileManager::fix_file_extension(Slice file_name, Slice file_type, Slice file_extension) {
@@ -2163,7 +2158,9 @@ void FileManager::delete_file(FileId file_id, Promise<Unit> promise, const char 
   if (file_view.has_local_location()) {
     if (begins_with(file_view.local_location().path_, get_files_dir(file_view.get_type()))) {
       clear_from_pmc(node);
-      context_->on_new_file(-file_view.size(), -file_view.get_allocated_local_size(), -1);
+      if (context_->need_notify_on_new_files()) {
+        context_->on_new_file(-file_view.size(), -file_view.get_allocated_local_size(), -1);
+      }
       path = std::move(node->local_.full().path_);
     }
   } else {
@@ -3517,7 +3514,7 @@ void FileManager::on_download_ok(QueryId query_id, FullLocalFileLocation local, 
   if (r_new_file_id.is_error()) {
     status = Status::Error(PSLICE() << "Can't register local file after download: " << r_new_file_id.error().message());
   } else {
-    if (is_new) {
+    if (is_new && context_->need_notify_on_new_files()) {
       context_->on_new_file(size, get_file_view(r_new_file_id.ok()).get_allocated_local_size(), 1);
     }
     auto r_file_id = merge(r_new_file_id.ok(), file_id);
@@ -3690,8 +3687,10 @@ void FileManager::on_generate_ok(QueryId query_id, FullLocalFileLocation local) 
   CHECK(file_node);
 
   FileView file_view(file_node);
-  if (!file_view.has_generate_location() || !begins_with(file_view.generate_location().conversion_, "#file_id#")) {
-    context_->on_new_file(file_view.size(), file_view.get_allocated_local_size(), 1);
+  if (context_->need_notify_on_new_files()) {
+    if (!file_view.has_generate_location() || !begins_with(file_view.generate_location().conversion_, "#file_id#")) {
+      context_->on_new_file(file_view.size(), file_view.get_allocated_local_size(), 1);
+    }
   }
 
   run_upload(file_node, {});

@@ -171,12 +171,19 @@ inline void Scheduler::send_to_scheduler(int32 sched_id, const ActorId<Actor> &a
 }
 
 template <class T>
-inline void Scheduler::destroy_on_scheduler(int32 sched_id, T &value) {
+void Scheduler::destroy_on_scheduler(int32 sched_id, T &value) {
   if (!value.empty()) {
     destroy_on_scheduler_impl(sched_id, PromiseCreator::lambda([value = std::move(value)](Unit) {
                                 // destroy value
                               }));
   }
+}
+
+template <class... ArgsT>
+void Scheduler::destroy_on_scheduler(int32 sched_id, ArgsT &...values) {
+  destroy_on_scheduler_impl(sched_id, PromiseCreator::lambda([values = std::make_tuple(std::move(values)...)](Unit) {
+                              // destroy values
+                            }));
 }
 
 inline void Scheduler::before_tail_send(const ActorId<> &actor_id) {

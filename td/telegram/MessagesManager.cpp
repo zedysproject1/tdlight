@@ -51,6 +51,7 @@
 #include "td/telegram/NotificationSettingsManager.h"
 #include "td/telegram/NotificationSound.h"
 #include "td/telegram/NotificationType.h"
+#include "td/telegram/PollId.h"
 #include "td/telegram/PublicDialogType.h"
 #include "td/telegram/ReplyMarkup.h"
 #include "td/telegram/ReplyMarkup.hpp"
@@ -5810,34 +5811,16 @@ MessagesManager::MessagesManager(Td *td, ActorShared<> parent)
 }
 
 MessagesManager::~MessagesManager() {
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), ttl_nodes_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), ttl_heap_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), being_sent_messages_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), update_message_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), update_scheduled_message_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), message_id_to_dialog_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), last_clear_history_message_id_to_dialog_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialogs_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), postponed_chat_read_inbox_updates_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), found_public_dialogs_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), found_on_server_dialogs_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), found_common_dialogs_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), message_embedding_codes_[0]);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), message_embedding_codes_[1]);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), replied_by_media_timestamp_messages_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), notification_group_id_to_dialog_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), active_get_channel_differencies_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), get_channel_difference_to_log_event_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channel_get_difference_retry_timeouts_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), is_channel_difference_finished_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), resolved_usernames_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), inaccessible_resolved_usernames_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialog_bot_command_message_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), full_message_id_to_file_source_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), last_outgoing_forwarded_message_date_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialog_viewed_messages_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialog_online_member_counts_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), previous_repaired_read_inbox_max_message_id_);
+  Scheduler::instance()->destroy_on_scheduler(
+      G()->get_gc_scheduler_id(), ttl_nodes_, ttl_heap_, being_sent_messages_, update_message_ids_,
+      update_scheduled_message_ids_, message_id_to_dialog_id_, last_clear_history_message_id_to_dialog_id_, dialogs_,
+      postponed_chat_read_inbox_updates_, found_public_dialogs_, found_on_server_dialogs_, found_common_dialogs_,
+      message_embedding_codes_[0], message_embedding_codes_[1], replied_by_media_timestamp_messages_,
+      notification_group_id_to_dialog_id_, active_get_channel_differencies_, get_channel_difference_to_log_event_id_,
+      channel_get_difference_retry_timeouts_, is_channel_difference_finished_, resolved_usernames_,
+      inaccessible_resolved_usernames_, dialog_bot_command_message_ids_, full_message_id_to_file_source_id_,
+      last_outgoing_forwarded_message_date_, dialog_viewed_messages_, dialog_online_member_counts_,
+      previous_repaired_read_inbox_max_message_id_);
 }
 
 void MessagesManager::on_channel_get_difference_timeout_callback(void *messages_manager_ptr, int64 dialog_id_int) {
@@ -20806,7 +20789,8 @@ Status MessagesManager::view_messages(DialogId dialog_id, MessageId top_thread_m
         for (auto file_id : get_message_file_ids(m)) {
           auto file_view = td_->file_manager_->get_file_view(file_id);
           CHECK(!file_view.empty());
-          td_->download_manager_->update_file_viewed(file_view.get_main_file_id(), file_source_id);
+          send_closure(td_->download_manager_actor_, &DownloadManager::update_file_viewed, file_view.get_main_file_id(),
+                       file_source_id);
         }
       }
 
@@ -22975,7 +22959,7 @@ void MessagesManager::remove_message_file_sources(DialogId dialog_id, const Mess
     for (auto file_id : file_ids) {
       auto file_view = td_->file_manager_->get_file_view(file_id);
       send_closure(td_->download_manager_actor_, &DownloadManager::remove_file, file_view.get_main_file_id(),
-                   file_source_id, false);
+                   file_source_id, false, Promise<Unit>());
       td_->file_manager_->remove_file_source(file_id, file_source_id);
     }
   }
@@ -23002,7 +22986,7 @@ void MessagesManager::change_message_files(DialogId dialog_id, const Message *m,
       if (file_source_id.is_valid()) {
         auto file_view = td_->file_manager_->get_file_view(file_id);
         send_closure(td_->download_manager_actor_, &DownloadManager::remove_file, file_view.get_main_file_id(),
-                     file_source_id, false);
+                     file_source_id, false, Promise<Unit>());
       }
     }
   }
@@ -28032,8 +28016,8 @@ class MessagesManager::ForwardMessagesLogEvent {
   DialogId from_dialog_id;
   vector<MessageId> message_ids;
   vector<Message *> messages_in;
-  bool drop_author = false;
-  bool drop_media_captions = false;
+  bool drop_author;
+  bool drop_media_captions;
   vector<unique_ptr<Message>> messages_out;
 
   template <class StorerT>
@@ -28055,6 +28039,9 @@ class MessagesManager::ForwardMessagesLogEvent {
       PARSE_FLAG(drop_author);
       PARSE_FLAG(drop_media_captions);
       END_PARSE_FLAGS();
+    } else {
+      drop_author = false;
+      drop_media_captions = false;
     }
     td::parse(to_dialog_id, parser);
     td::parse(from_dialog_id, parser);
@@ -28190,6 +28177,9 @@ unique_ptr<MessagesManager::MessageForwardInfo> MessagesManager::create_message_
 
 void MessagesManager::fix_forwarded_message(Message *m, DialogId to_dialog_id, const Message *forwarded_message,
                                             int64 media_album_id, bool drop_author) const {
+  if (m->content->get_type() == MessageContentType::Audio) {
+    drop_author = true;
+  }
   bool is_game = m->content->get_type() == MessageContentType::Game;
   if (!drop_author || is_game) {
     m->via_bot_user_id = forwarded_message->via_bot_user_id;
@@ -28346,9 +28336,20 @@ Result<MessagesManager::ForwardedMessages> MessagesManager::get_forwarded_messag
       continue;
     }
 
+    bool is_broken_server_copy = [&] {
+      switch (forwarded_message->content->get_type()) {
+        case MessageContentType::Poll:
+          return get_message_content_poll_is_closed(td_, forwarded_message->content.get()) ||
+                 td_->auth_manager_->is_bot();
+        case MessageContentType::Dice:
+          return true;
+        default:
+          return false;
+      }
+    }();
+
     bool need_copy = !message_id.is_server() || to_secret || copy_options[i].send_copy;
-    bool is_local_copy = need_copy && !(message_id.is_server() && can_use_server_forward &&
-                                        forwarded_message->content->get_type() != MessageContentType::Dice);
+    bool is_local_copy = need_copy && !(message_id.is_server() && can_use_server_forward && !is_broken_server_copy);
     if (!(need_copy && td_->auth_manager_->is_bot()) && !can_save_message(from_dialog_id, forwarded_message)) {
       LOG(INFO) << "Forward of " << message_id << " is restricted";
       continue;
@@ -31044,8 +31045,29 @@ void MessagesManager::check_send_message_result(int64 random_id, DialogId dialog
   CHECK(source != nullptr);
   auto sent_messages = UpdatesManager::get_new_messages(updates_ptr);
   auto sent_messages_random_ids = UpdatesManager::get_sent_messages_random_ids(updates_ptr);
+
+  auto is_invalid_poll_message = [](const telegram_api::Message *message) {
+    CHECK(message != nullptr);
+    auto constructor_id = message->get_id();
+    if (constructor_id == telegram_api::messageEmpty::ID) {
+      return true;
+    }
+    if (constructor_id != telegram_api::message::ID) {
+      return false;
+    }
+
+    auto media = static_cast<const telegram_api::message *>(message)->media_.get();
+    if (media == nullptr || media->get_id() != telegram_api::messageMediaPoll::ID) {
+      return false;
+    }
+
+    auto poll = static_cast<const telegram_api::messageMediaPoll *>(media)->poll_.get();
+    return !PollId(poll->id_).is_valid();
+  };
+
   if (sent_messages.size() != 1u || sent_messages_random_ids.size() != 1u ||
-      *sent_messages_random_ids.begin() != random_id || get_message_dialog_id(*sent_messages[0]) != dialog_id) {
+      *sent_messages_random_ids.begin() != random_id || get_message_dialog_id(*sent_messages[0]) != dialog_id ||
+      is_invalid_poll_message(sent_messages[0]->get())) {
     LOG(ERROR) << "Receive wrong result for sending message with random_id " << random_id << " from " << source
                << " to " << dialog_id << ": " << oneline(to_string(*updates_ptr));
     Dialog *d = get_dialog(dialog_id);
@@ -40250,9 +40272,8 @@ void MessagesManager::add_message_file_to_downloads(FullMessageId full_message_i
   auto search_text = get_message_search_text(m);
   auto file_source_id = get_message_file_source_id(full_message_id, true);
   CHECK(file_source_id.is_valid());
-  TRY_STATUS_PROMISE(promise, td_->download_manager_->add_file(file_id, file_source_id, std::move(search_text),
-                                                               static_cast<int8>(priority)));
-  promise.set_value(td_->file_manager_->get_file_object(file_id));
+  send_closure(td_->download_manager_actor_, &DownloadManager::add_file, file_id, file_source_id,
+               std::move(search_text), static_cast<int8>(priority), std::move(promise));
 }
 
 void MessagesManager::get_message_file_search_text(FullMessageId full_message_id, string unique_file_id,

@@ -3399,43 +3399,16 @@ ContactsManager::ContactsManager(Td *td, ActorShared<> parent) : td_(td), parent
 }
 
 ContactsManager::~ContactsManager() {
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), users_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), users_full_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), user_photos_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_users_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), pending_user_photos_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), user_profile_photo_file_source_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), my_photo_file_id_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), chats_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), chats_full_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_chats_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), chat_full_file_source_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), min_channels_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channels_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channels_full_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_channels_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), invalidated_channels_full_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channel_full_file_source_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), secret_chats_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unknown_secret_chats_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), secret_chats_with_user_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), invite_link_infos_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialog_access_by_invite_link_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_users_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unavailable_user_fulls_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_chats_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unavailable_chat_fulls_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_channels_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), unavailable_channel_fulls_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_secret_chats_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), dialog_administrators_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), cached_channel_participants_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), resolved_phone_numbers_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), channel_participants_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), all_imported_contacts_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), linked_channel_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), restricted_user_ids_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), restricted_channel_ids_);
+  Scheduler::instance()->destroy_on_scheduler(
+      G()->get_gc_scheduler_id(), users_, users_full_, user_photos_, unknown_users_, pending_user_photos_,
+      user_profile_photo_file_source_ids_, my_photo_file_id_, chats_, chats_full_, unknown_chats_,
+      chat_full_file_source_ids_, min_channels_, channels_, channels_full_, unknown_channels_,
+      invalidated_channels_full_, channel_full_file_source_ids_, secret_chats_, unknown_secret_chats_,
+      secret_chats_with_user_, invite_link_infos_, dialog_access_by_invite_link_, loaded_from_database_users_,
+      unavailable_user_fulls_, loaded_from_database_chats_, unavailable_chat_fulls_, loaded_from_database_channels_,
+      unavailable_channel_fulls_, loaded_from_database_secret_chats_, dialog_administrators_,
+      cached_channel_participants_, resolved_phone_numbers_, channel_participants_, all_imported_contacts_,
+      linked_channel_ids_, restricted_user_ids_, restricted_channel_ids_);
 }
 
 void ContactsManager::tear_down() {
@@ -8795,23 +8768,24 @@ void ContactsManager::on_get_user(tl_object_ptr<telegram_api::User> &&user_ptr, 
 class ContactsManager::UserLogEvent {
  public:
   UserId user_id;
-  User u;
+  const User *u_in = nullptr;
+  unique_ptr<User> u_out;
 
   UserLogEvent() = default;
 
-  UserLogEvent(UserId user_id, const User &u) : user_id(user_id), u(u) {
+  UserLogEvent(UserId user_id, const User *u) : user_id(user_id), u_in(u) {
   }
 
   template <class StorerT>
   void store(StorerT &storer) const {
     td::store(user_id, storer);
-    td::store(u, storer);
+    td::store(*u_in, storer);
   }
 
   template <class ParserT>
   void parse(ParserT &parser) {
     td::parse(user_id, parser);
-    td::parse(u, parser);
+    td::parse(u_out, parser);
   }
 };
 
@@ -8830,7 +8804,7 @@ void ContactsManager::save_user(User *u, UserId user_id, bool from_binlog) {
                    make_tl_object<td_api::updateAccessHash>(get_user_access_hash_object(user_id, u)));
     }
     if (!from_binlog) {
-      auto log_event = UserLogEvent(user_id, *u);
+      auto log_event = UserLogEvent(user_id, u);
       auto storer = get_log_event_storer(log_event);
       if (u->log_event_id == 0) {
         u->log_event_id = binlog_add(G()->td_db()->get_binlog(), LogEvent::HandlerType::Users, storer);
@@ -8860,8 +8834,8 @@ void ContactsManager::on_binlog_user_event(BinlogEvent &&event) {
   }
 
   LOG(INFO) << "Add " << user_id << " from binlog";
-  User *u = add_user(user_id, "on_binlog_user_event");
-  *u = std::move(log_event.u);  // users come from binlog before all other events, so just add them
+  User *u = users_.emplace(user_id, std::move(log_event.u_out)).first->second.get();
+  CHECK(u != nullptr);
 
   u->log_event_id = event.id_;
 
@@ -9109,23 +9083,24 @@ ContactsManager::User *ContactsManager::get_user_force_impl(UserId user_id) {
 class ContactsManager::ChatLogEvent {
  public:
   ChatId chat_id;
-  Chat c;
+  const Chat *c_in = nullptr;
+  unique_ptr<Chat> c_out;
 
   ChatLogEvent() = default;
 
-  ChatLogEvent(ChatId chat_id, const Chat &c) : chat_id(chat_id), c(c) {
+  ChatLogEvent(ChatId chat_id, const Chat *c) : chat_id(chat_id), c_in(c) {
   }
 
   template <class StorerT>
   void store(StorerT &storer) const {
     td::store(chat_id, storer);
-    td::store(c, storer);
+    td::store(*c_in, storer);
   }
 
   template <class ParserT>
   void parse(ParserT &parser) {
     td::parse(chat_id, parser);
-    td::parse(c, parser);
+    td::parse(c_out, parser);
   }
 };
 
@@ -9136,7 +9111,7 @@ void ContactsManager::save_chat(Chat *c, ChatId chat_id, bool from_binlog) {
   CHECK(c != nullptr);
   if (!c->is_saved) {
     if (!from_binlog) {
-      auto log_event = ChatLogEvent(chat_id, *c);
+      auto log_event = ChatLogEvent(chat_id, c);
       auto storer = get_log_event_storer(log_event);
       if (c->log_event_id == 0) {
         c->log_event_id = binlog_add(G()->td_db()->get_binlog(), LogEvent::HandlerType::Chats, storer);
@@ -9167,8 +9142,8 @@ void ContactsManager::on_binlog_chat_event(BinlogEvent &&event) {
   }
 
   LOG(INFO) << "Add " << chat_id << " from binlog";
-  Chat *c = add_chat(chat_id);
-  *c = std::move(log_event.c);  // chats come from binlog before all other events, so just add them
+  Chat *c = chats_.emplace(chat_id, std::move(log_event.c_out)).first->second.get();
+  CHECK(c != nullptr);
 
   c->log_event_id = event.id_;
 
@@ -9346,23 +9321,24 @@ ContactsManager::Chat *ContactsManager::get_chat_force(ChatId chat_id) {
 class ContactsManager::ChannelLogEvent {
  public:
   ChannelId channel_id;
-  Channel c;
+  const Channel *c_in = nullptr;
+  unique_ptr<Channel> c_out;
 
   ChannelLogEvent() = default;
 
-  ChannelLogEvent(ChannelId channel_id, const Channel &c) : channel_id(channel_id), c(c) {
+  ChannelLogEvent(ChannelId channel_id, const Channel *c) : channel_id(channel_id), c_in(c) {
   }
 
   template <class StorerT>
   void store(StorerT &storer) const {
     td::store(channel_id, storer);
-    td::store(c, storer);
+    td::store(*c_in, storer);
   }
 
   template <class ParserT>
   void parse(ParserT &parser) {
     td::parse(channel_id, parser);
-    td::parse(c, parser);
+    td::parse(c_out, parser);
   }
 };
 
@@ -9381,7 +9357,7 @@ void ContactsManager::save_channel(Channel *c, ChannelId channel_id, bool from_b
                    make_tl_object<td_api::updateAccessHash>(get_channel_access_hash_object(channel_id, c)));
     }
     if (!from_binlog) {
-      auto log_event = ChannelLogEvent(channel_id, *c);
+      auto log_event = ChannelLogEvent(channel_id, c);
       auto storer = get_log_event_storer(log_event);
       if (c->log_event_id == 0) {
         c->log_event_id = binlog_add(G()->td_db()->get_binlog(), LogEvent::HandlerType::Channels, storer);
@@ -9412,8 +9388,8 @@ void ContactsManager::on_binlog_channel_event(BinlogEvent &&event) {
   }
 
   LOG(INFO) << "Add " << channel_id << " from binlog";
-  Channel *c = add_channel(channel_id, "on_binlog_channel_event");
-  *c = std::move(log_event.c);  // channels come from binlog before all other events, so just add them
+  Channel *c = channels_.emplace(channel_id, std::move(log_event.c_out)).first->second.get();
+  CHECK(c != nullptr);
 
   c->log_event_id = event.id_;
 
@@ -9607,23 +9583,24 @@ ContactsManager::Channel *ContactsManager::get_channel_force(ChannelId channel_i
 class ContactsManager::SecretChatLogEvent {
  public:
   SecretChatId secret_chat_id;
-  SecretChat c;
+  const SecretChat *c_in = nullptr;
+  unique_ptr<SecretChat> c_out;
 
   SecretChatLogEvent() = default;
 
-  SecretChatLogEvent(SecretChatId secret_chat_id, const SecretChat &c) : secret_chat_id(secret_chat_id), c(c) {
+  SecretChatLogEvent(SecretChatId secret_chat_id, const SecretChat *c) : secret_chat_id(secret_chat_id), c_in(c) {
   }
 
   template <class StorerT>
   void store(StorerT &storer) const {
     td::store(secret_chat_id, storer);
-    td::store(c, storer);
+    td::store(*c_in, storer);
   }
 
   template <class ParserT>
   void parse(ParserT &parser) {
     td::parse(secret_chat_id, parser);
-    td::parse(c, parser);
+    td::parse(c_out, parser);
   }
 };
 
@@ -9634,7 +9611,7 @@ void ContactsManager::save_secret_chat(SecretChat *c, SecretChatId secret_chat_i
   CHECK(c != nullptr);
   if (!c->is_saved) {
     if (!from_binlog) {
-      auto log_event = SecretChatLogEvent(secret_chat_id, *c);
+      auto log_event = SecretChatLogEvent(secret_chat_id, c);
       auto storer = get_log_event_storer(log_event);
       if (c->log_event_id == 0) {
         c->log_event_id = binlog_add(G()->td_db()->get_binlog(), LogEvent::HandlerType::SecretChatInfos, storer);
@@ -9665,8 +9642,8 @@ void ContactsManager::on_binlog_secret_chat_event(BinlogEvent &&event) {
   }
 
   LOG(INFO) << "Add " << secret_chat_id << " from binlog";
-  SecretChat *c = add_secret_chat(secret_chat_id);
-  *c = std::move(log_event.c);  // secret chats come from binlog before all other events, so just add them
+  SecretChat *c = secret_chats_.emplace(secret_chat_id, std::move(log_event.c_out)).first->second.get();
+  CHECK(c != nullptr);
 
   c->log_event_id = event.id_;
 

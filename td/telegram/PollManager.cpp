@@ -267,11 +267,8 @@ void PollManager::tear_down() {
 }
 
 PollManager::~PollManager() {
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), polls_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), server_poll_messages_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), other_poll_messages_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), poll_voters_);
-  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), loaded_from_database_polls_);
+  Scheduler::instance()->destroy_on_scheduler(G()->get_gc_scheduler_id(), polls_, server_poll_messages_,
+                                              other_poll_messages_, poll_voters_, loaded_from_database_polls_);
 }
 
 void PollManager::on_update_poll_timeout_callback(void *poll_manager_ptr, int64 poll_id_int) {
@@ -1218,9 +1215,24 @@ void PollManager::do_stop_poll(PollId poll_id, FullMessageId full_message_id, un
 
   bool is_inserted = being_closed_polls_.insert(poll_id).second;
   CHECK(is_inserted);
-  auto new_promise = get_erase_log_event_promise(log_event_id, std::move(promise));
+  auto new_promise = PromiseCreator::lambda(
+      [actor_id = actor_id(this), poll_id, log_event_id, promise = std::move(promise)](Result<Unit> result) mutable {
+        send_closure(actor_id, &PollManager::on_stop_poll_finished, poll_id, log_event_id, std::move(result),
+                     std::move(promise));
+      });
 
   td_->create_handler<StopPollQuery>(std::move(new_promise))->send(full_message_id, std::move(reply_markup), poll_id);
+}
+
+void PollManager::on_stop_poll_finished(PollId poll_id, uint64 log_event_id, Result<Unit> &&result,
+                                        Promise<Unit> &&promise) {
+  being_closed_polls_.erase(poll_id);
+
+  if (log_event_id != 0 && !G()->close_flag()) {
+    binlog_erase(G()->td_db()->get_binlog(), log_event_id);
+  }
+
+  promise.set_result(std::move(result));
 }
 
 void PollManager::stop_local_poll(PollId poll_id) {
