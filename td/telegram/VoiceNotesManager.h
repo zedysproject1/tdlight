@@ -20,6 +20,7 @@
 #include "td/utils/FlatHashSet.h"
 #include "td/utils/Promise.h"
 #include "td/utils/Status.h"
+#include "td/utils/WaitFreeHashMap.h"
 
 namespace td {
 
@@ -63,7 +64,7 @@ class VoiceNotesManager final : public Actor {
 
   FileId dup_voice_note(FileId new_id, FileId old_id);
 
-  void merge_voice_notes(FileId new_id, FileId old_id, bool can_delete_old);
+  void merge_voice_notes(FileId new_id, FileId old_id);
 
   template <class StorerT>
   void store_voice_note(FileId file_id, StorerT &storer) const;
@@ -82,6 +83,7 @@ class VoiceNotesManager final : public Actor {
     string waveform;
     int64 transcription_id = 0;
     string text;
+    Status last_transcription_error;
 
     FileId file_id;
   };
@@ -103,7 +105,7 @@ class VoiceNotesManager final : public Actor {
   Td *td_;
   ActorShared<> parent_;
 
-  FlatHashMap<FileId, unique_ptr<VoiceNote>, FileIdHash> voice_notes_;
+  WaitFreeHashMap<FileId, unique_ptr<VoiceNote>, FileIdHash> voice_notes_;
 
   FlatHashMap<FileId, vector<Promise<Unit>>, FileIdHash> speech_recognition_queries_;
   FlatHashMap<int64, FileId> pending_voice_note_transcription_queries_;

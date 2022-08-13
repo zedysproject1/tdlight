@@ -20,6 +20,7 @@
 #include "td/telegram/ReplyMarkup.h"
 #include "td/telegram/secret_api.h"
 #include "td/telegram/SecretInputMedia.h"
+#include "td/telegram/StickerType.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
 #include "td/telegram/TopDialogCategory.h"
@@ -38,10 +39,9 @@ namespace td {
 class Dependencies;
 class DialogAction;
 class Game;
+class MultiPromiseActor;
 struct Photo;
 class Td;
-
-class MultiPromiseActor;
 
 // Do not forget to update merge_message_contents when one of the inheritors of this class changes
 class MessageContent {
@@ -131,6 +131,8 @@ bool update_opened_message_content(MessageContent *content);
 
 int32 get_message_content_index_mask(const MessageContent *content, const Td *td, bool is_outgoing);
 
+StickerType get_message_content_sticker_type(const Td *td, const MessageContent *content);
+
 MessageId get_message_content_pinned_message_id(const MessageContent *content);
 
 string get_message_content_theme_name(const MessageContent *content);
@@ -188,7 +190,7 @@ unique_ptr<MessageContent> get_secret_message_content(
 unique_ptr<MessageContent> get_message_content(Td *td, FormattedText message_text,
                                                tl_object_ptr<telegram_api::MessageMedia> &&media_ptr,
                                                DialogId owner_dialog_id, bool is_content_read, UserId via_bot_user_id,
-                                               int32 *ttl, bool *disable_web_page_preview);
+                                               int32 *ttl, bool *disable_web_page_preview, const char *source);
 
 enum class MessageContentDupType : int32 { Send, SendViaBot, Forward, Copy, ServerCopy };
 

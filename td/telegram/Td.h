@@ -958,9 +958,9 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getSuggestedFileName &request);
 
-  void on_request(uint64 id, td_api::uploadFile &request);
+  void on_request(uint64 id, td_api::preliminaryUploadFile &request);
 
-  void on_request(uint64 id, const td_api::cancelUploadFile &request);
+  void on_request(uint64 id, const td_api::cancelPreliminaryUploadFile &request);
 
   void on_request(uint64 id, td_api::writeGeneratedFilePart &request);
 
@@ -1068,6 +1068,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::searchStickers &request);
 
+  void on_request(uint64 id, const td_api::getPremiumStickers &request);
+
   void on_request(uint64 id, const td_api::getInstalledStickerSets &request);
 
   void on_request(uint64 id, const td_api::getArchivedStickerSets &request);
@@ -1126,9 +1128,9 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::getAnimatedEmoji &request);
 
-  void on_request(uint64 id, const td_api::getAllAnimatedEmojis &request);
-
   void on_request(uint64 id, td_api::getEmojiSuggestionsUrl &request);
+
+  void on_request(uint64 id, td_api::getCustomEmojiStickers &request);
 
   void on_request(uint64 id, const td_api::getFavoriteStickers &request);
 
@@ -1310,7 +1312,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getPremiumFeatures &request);
 
-  void on_request(uint64 id, const td_api::getPremiumStickers &request);
+  void on_request(uint64 id, const td_api::getPremiumStickerExamples &request);
 
   void on_request(uint64 id, const td_api::viewPremiumFeature &request);
 
@@ -1318,9 +1320,9 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getPremiumState &request);
 
-  void on_request(uint64 id, const td_api::canPurchasePremium &request);
+  void on_request(uint64 id, td_api::canPurchasePremium &request);
 
-  void on_request(uint64 id, const td_api::assignAppStoreTransaction &request);
+  void on_request(uint64 id, td_api::assignAppStoreTransaction &request);
 
   void on_request(uint64 id, td_api::assignGooglePlayTransaction &request);
 

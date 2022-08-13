@@ -6,7 +6,7 @@ if (POLICY CMP0065)
   cmake_policy(SET CMP0065 NEW)
 endif()
 
-project(TDLib VERSION 1.8.4 LANGUAGES CXX C)
+project(TDLib VERSION 1.8.5 LANGUAGES CXX C)
 
 if (NOT DEFINED CMAKE_MODULE_PATH)
   set(CMAKE_MODULE_PATH "")
@@ -418,6 +418,7 @@ set(TDLIB_SOURCE
   td/telegram/PhotoSizeSource.cpp
   td/telegram/PollManager.cpp
   td/telegram/Premium.cpp
+  td/telegram/PremiumGiftOption.cpp
   td/telegram/QueryCombiner.cpp
   td/telegram/RecentDialogList.cpp
   td/telegram/ReplyMarkup.cpp
@@ -437,6 +438,7 @@ set(TDLIB_SOURCE
   td/telegram/StateManager.cpp
   td/telegram/StickerFormat.cpp
   td/telegram/StickersManager.cpp
+  td/telegram/StickerType.cpp
   td/telegram/StorageManager.cpp
   td/telegram/MemoryManager.cpp
   td/telegram/SuggestedAction.cpp
@@ -655,6 +657,7 @@ set(TDLIB_SOURCE
   td/telegram/PollId.h
   td/telegram/PollManager.h
   td/telegram/Premium.h
+  td/telegram/PremiumGiftOption.h
   td/telegram/PrivacyManager.h
   td/telegram/PtsManager.h
   td/telegram/PublicDialogType.h
@@ -684,6 +687,7 @@ set(TDLIB_SOURCE
   td/telegram/StickerFormat.h
   td/telegram/StickerSetId.h
   td/telegram/StickersManager.h
+  td/telegram/StickerType.h
   td/telegram/StorageManager.h
   td/telegram/MemoryManager.h
   td/telegram/SuggestedAction.h
@@ -735,6 +739,7 @@ set(TDLIB_SOURCE
   td/telegram/PhotoSizeSource.hpp
   td/telegram/PollId.hpp
   td/telegram/PollManager.hpp
+  td/telegram/PremiumGiftOption.hpp
   td/telegram/ReplyMarkup.hpp
   td/telegram/SecureValue.hpp
   td/telegram/SendCodeHelper.hpp

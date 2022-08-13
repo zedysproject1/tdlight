@@ -108,6 +108,7 @@
 #include "td/telegram/StateManager.h"
 #include "td/telegram/StickerSetId.h"
 #include "td/telegram/StickersManager.h"
+#include "td/telegram/StickerType.h"
 #include "td/telegram/StorageManager.h"
 #include "td/telegram/MemoryManager.h"
 #include "td/telegram/SuggestedAction.h"
@@ -1983,13 +1984,16 @@ class GetScopeNotificationSettingsRequest final : public RequestActor<> {
 };
 
 class GetStickersRequest final : public RequestActor<> {
+  StickerType sticker_type_;
   string emoji_;
   int32 limit_;
+  DialogId dialog_id_;
 
   vector<FileId> sticker_ids_;
 
   void do_run(Promise<Unit> &&promise) final {
-    sticker_ids_ = td_->stickers_manager_->get_stickers(emoji_, limit_, get_tries() < 2, std::move(promise));
+    sticker_ids_ = td_->stickers_manager_->get_stickers(sticker_type_, emoji_, limit_, dialog_id_, get_tries() < 2,
+                                                        std::move(promise));
   }
 
   void do_send_result() final {
@@ -1997,39 +2001,24 @@ class GetStickersRequest final : public RequestActor<> {
   }
 
  public:
-  GetStickersRequest(ActorShared<Td> td, uint64 request_id, string &&emoji, int32 limit)
-      : RequestActor(std::move(td), request_id), emoji_(std::move(emoji)), limit_(limit) {
-    set_tries(5);
-  }
-};
-
-class SearchStickersRequest final : public RequestActor<> {
-  string emoji_;
-  int32 limit_;
-
-  vector<FileId> sticker_ids_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    sticker_ids_ = td_->stickers_manager_->search_stickers(emoji_, limit_, std::move(promise));
-  }
-
-  void do_send_result() final {
-    send_result(td_->stickers_manager_->get_stickers_object(sticker_ids_));
-  }
-
- public:
-  SearchStickersRequest(ActorShared<Td> td, uint64 request_id, string &&emoji, int32 limit)
-      : RequestActor(std::move(td), request_id), emoji_(std::move(emoji)), limit_(limit) {
+  GetStickersRequest(ActorShared<Td> td, uint64 request_id, StickerType sticker_type, string &&emoji, int32 limit,
+                     int64 dialog_id)
+      : RequestActor(std::move(td), request_id)
+      , sticker_type_(sticker_type)
+      , emoji_(std::move(emoji))
+      , limit_(limit)
+      , dialog_id_(dialog_id) {
+    set_tries(4);
   }
 };
 
 class GetInstalledStickerSetsRequest final : public RequestActor<> {
-  bool is_masks_;
+  StickerType sticker_type_;
 
   vector<StickerSetId> sticker_set_ids_;
 
   void do_run(Promise<Unit> &&promise) final {
-    sticker_set_ids_ = td_->stickers_manager_->get_installed_sticker_sets(is_masks_, std::move(promise));
+    sticker_set_ids_ = td_->stickers_manager_->get_installed_sticker_sets(sticker_type_, std::move(promise));
   }
 
   void do_send_result() final {
@@ -2037,13 +2026,13 @@ class GetInstalledStickerSetsRequest final : public RequestActor<> {
   }
 
  public:
-  GetInstalledStickerSetsRequest(ActorShared<Td> td, uint64 request_id, bool is_masks)
-      : RequestActor(std::move(td), request_id), is_masks_(is_masks) {
+  GetInstalledStickerSetsRequest(ActorShared<Td> td, uint64 request_id, StickerType sticker_type)
+      : RequestActor(std::move(td), request_id), sticker_type_(sticker_type) {
   }
 };
 
 class GetArchivedStickerSetsRequest final : public RequestActor<> {
-  bool is_masks_;
+  StickerType sticker_type_;
   StickerSetId offset_sticker_set_id_;
   int32 limit_;
 
@@ -2052,7 +2041,7 @@ class GetArchivedStickerSetsRequest final : public RequestActor<> {
 
   void do_run(Promise<Unit> &&promise) final {
     std::tie(total_count_, sticker_set_ids_) = td_->stickers_manager_->get_archived_sticker_sets(
-        is_masks_, offset_sticker_set_id_, limit_, get_tries() < 2, std::move(promise));
+        sticker_type_, offset_sticker_set_id_, limit_, get_tries() < 2, std::move(promise));
   }
 
   void do_send_result() final {
@@ -2060,10 +2049,10 @@ class GetArchivedStickerSetsRequest final : public RequestActor<> {
   }
 
  public:
-  GetArchivedStickerSetsRequest(ActorShared<Td> td, uint64 request_id, bool is_masks, int64 offset_sticker_set_id,
-                                int32 limit)
+  GetArchivedStickerSetsRequest(ActorShared<Td> td, uint64 request_id, StickerType sticker_type,
+                                int64 offset_sticker_set_id, int32 limit)
       : RequestActor(std::move(td), request_id)
-      , is_masks_(is_masks)
+      , sticker_type_(sticker_type)
       , offset_sticker_set_id_(offset_sticker_set_id)
       , limit_(limit) {
   }
@@ -2071,11 +2060,12 @@ class GetArchivedStickerSetsRequest final : public RequestActor<> {
 
 class GetTrendingStickerSetsRequest final : public RequestActor<> {
   td_api::object_ptr<td_api::trendingStickerSets> result_;
+  StickerType sticker_type_;
   int32 offset_;
   int32 limit_;
 
   void do_run(Promise<Unit> &&promise) final {
-    result_ = td_->stickers_manager_->get_featured_sticker_sets(offset_, limit_, std::move(promise));
+    result_ = td_->stickers_manager_->get_featured_sticker_sets(sticker_type_, offset_, limit_, std::move(promise));
   }
 
   void do_send_result() final {
@@ -2083,8 +2073,9 @@ class GetTrendingStickerSetsRequest final : public RequestActor<> {
   }
 
  public:
-  GetTrendingStickerSetsRequest(ActorShared<Td> td, uint64 request_id, int32 offset, int32 limit)
-      : RequestActor(std::move(td), request_id), offset_(offset), limit_(limit) {
+  GetTrendingStickerSetsRequest(ActorShared<Td> td, uint64 request_id, StickerType sticker_type, int32 offset,
+                                int32 limit)
+      : RequestActor(std::move(td), request_id), sticker_type_(sticker_type), offset_(offset), limit_(limit) {
     set_tries(3);
   }
 };
@@ -2149,7 +2140,7 @@ class SearchStickerSetRequest final : public RequestActor<> {
 };
 
 class SearchInstalledStickerSetsRequest final : public RequestActor<> {
-  bool is_masks_;
+  StickerType sticker_type_;
   string query_;
   int32 limit_;
 
@@ -2157,7 +2148,7 @@ class SearchInstalledStickerSetsRequest final : public RequestActor<> {
 
   void do_run(Promise<Unit> &&promise) final {
     sticker_set_ids_ =
-        td_->stickers_manager_->search_installed_sticker_sets(is_masks_, query_, limit_, std::move(promise));
+        td_->stickers_manager_->search_installed_sticker_sets(sticker_type_, query_, limit_, std::move(promise));
   }
 
   void do_send_result() final {
@@ -2165,8 +2156,9 @@ class SearchInstalledStickerSetsRequest final : public RequestActor<> {
   }
 
  public:
-  SearchInstalledStickerSetsRequest(ActorShared<Td> td, uint64 request_id, bool is_masks, string &&query, int32 limit)
-      : RequestActor(std::move(td), request_id), is_masks_(is_masks), query_(std::move(query)), limit_(limit) {
+  SearchInstalledStickerSetsRequest(ActorShared<Td> td, uint64 request_id, StickerType sticker_type, string &&query,
+                                    int32 limit)
+      : RequestActor(std::move(td), request_id), sticker_type_(sticker_type), query_(std::move(query)), limit_(limit) {
   }
 };
 
@@ -2226,92 +2218,6 @@ class UploadStickerFileRequest final : public RequestOnceActor {
   UploadStickerFileRequest(ActorShared<Td> td, uint64 request_id, int64 user_id,
                            tl_object_ptr<td_api::inputSticker> &&sticker)
       : RequestOnceActor(std::move(td), request_id), user_id_(user_id), sticker_(std::move(sticker)) {
-  }
-};
-
-class CreateNewStickerSetRequest final : public RequestOnceActor {
-  UserId user_id_;
-  string title_;
-  string name_;
-  vector<tl_object_ptr<td_api::inputSticker>> stickers_;
-  string software_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    td_->stickers_manager_->create_new_sticker_set(user_id_, title_, name_, std::move(stickers_), std::move(software_),
-                                                   std::move(promise));
-  }
-
-  void do_send_result() final {
-    auto set_id = td_->stickers_manager_->search_sticker_set(name_, Auto());
-    if (!set_id.is_valid()) {
-      return send_error(Status::Error(500, "Created sticker set not found"));
-    }
-    send_result(td_->stickers_manager_->get_sticker_set_object(set_id));
-  }
-
- public:
-  CreateNewStickerSetRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, string &&title, string &&name,
-                             vector<tl_object_ptr<td_api::inputSticker>> &&stickers, string &&software)
-      : RequestOnceActor(std::move(td), request_id)
-      , user_id_(user_id)
-      , title_(std::move(title))
-      , name_(std::move(name))
-      , stickers_(std::move(stickers))
-      , software_(std::move(software)) {
-  }
-};
-
-class AddStickerToSetRequest final : public RequestOnceActor {
-  UserId user_id_;
-  string name_;
-  tl_object_ptr<td_api::inputSticker> sticker_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    td_->stickers_manager_->add_sticker_to_set(user_id_, name_, std::move(sticker_), std::move(promise));
-  }
-
-  void do_send_result() final {
-    auto set_id = td_->stickers_manager_->search_sticker_set(name_, Auto());
-    if (!set_id.is_valid()) {
-      return send_error(Status::Error(500, "Sticker set not found"));
-    }
-    send_result(td_->stickers_manager_->get_sticker_set_object(set_id));
-  }
-
- public:
-  AddStickerToSetRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, string &&name,
-                         tl_object_ptr<td_api::inputSticker> &&sticker)
-      : RequestOnceActor(std::move(td), request_id)
-      , user_id_(user_id)
-      , name_(std::move(name))
-      , sticker_(std::move(sticker)) {
-  }
-};
-
-class SetStickerSetThumbnailRequest final : public RequestOnceActor {
-  UserId user_id_;
-  string name_;
-  tl_object_ptr<td_api::InputFile> thumbnail_;
-
-  void do_run(Promise<Unit> &&promise) final {
-    td_->stickers_manager_->set_sticker_set_thumbnail(user_id_, name_, std::move(thumbnail_), std::move(promise));
-  }
-
-  void do_send_result() final {
-    auto set_id = td_->stickers_manager_->search_sticker_set(name_, Auto());
-    if (!set_id.is_valid()) {
-      return send_error(Status::Error(500, "Sticker set not found"));
-    }
-    send_result(td_->stickers_manager_->get_sticker_set_object(set_id));
-  }
-
- public:
-  SetStickerSetThumbnailRequest(ActorShared<Td> td, uint64 request_id, int64 user_id, string &&name,
-                                tl_object_ptr<td_api::InputFile> &&thumbnail)
-      : RequestOnceActor(std::move(td), request_id)
-      , user_id_(user_id)
-      , name_(std::move(name))
-      , thumbnail_(std::move(thumbnail)) {
   }
 };
 
@@ -3253,11 +3159,11 @@ void Td::on_result(NetQueryPtr query) {
 }
 
 void Td::on_connection_state_changed(ConnectionState new_state) {
-  if (new_state == connection_state_) {
-    LOG(ERROR) << "State manager sends update about unchanged state " << static_cast<int32>(new_state);
+  if (G()->close_flag()) {
     return;
   }
-  if (G()->close_flag()) {
+  if (new_state == connection_state_) {
+    LOG(ERROR) << "State manager sends update about unchanged state " << static_cast<int32>(new_state);
     return;
   }
   connection_state_ = new_state;
@@ -4054,7 +3960,7 @@ void Td::init_file_manager() {
   file_manager_->init_actor();
   G()->set_file_manager(file_manager_actor_.get());
 
-  file_reference_manager_ = make_unique<FileReferenceManager>();
+  file_reference_manager_ = make_unique<FileReferenceManager>(create_reference());
   file_reference_manager_actor_ = register_actor("FileReferenceManager", file_reference_manager_.get());
   G()->set_file_reference_manager(file_reference_manager_actor_.get());
 }
@@ -4072,6 +3978,7 @@ void Td::init_managers() {
   G()->set_animations_manager(animations_manager_actor_.get());
   attach_menu_manager_ = make_unique<AttachMenuManager>(this, create_reference());
   attach_menu_manager_actor_ = register_actor("AttachMenuManager", attach_menu_manager_.get());
+  G()->set_attach_menu_manager(attach_menu_manager_actor_.get());
   background_manager_ = make_unique<BackgroundManager>(this, create_reference());
   background_manager_actor_ = register_actor("BackgroundManager", background_manager_.get());
   G()->set_background_manager(background_manager_actor_.get());
@@ -4169,8 +4076,10 @@ void Td::send_update(tl_object_ptr<td_api::Update> &&object) {
       VLOG(td_requests) << "Sending update: " << oneline(to_string(object));
       break;
     case td_api::updateTrendingStickerSets::ID: {
-      auto sticker_sets = static_cast<const td_api::updateTrendingStickerSets *>(object.get())->sticker_sets_.get();
-      VLOG(td_requests) << "Sending update: updateTrendingStickerSets { total_count = " << sticker_sets->total_count_
+      auto update = static_cast<const td_api::updateTrendingStickerSets *>(object.get());
+      auto sticker_sets = update->sticker_sets_.get();
+      VLOG(td_requests) << "Sending update: updateTrendingStickerSets { " << oneline(to_string(update->sticker_type_))
+                        << ", total_count = " << sticker_sets->total_count_
                         << ", count = " << sticker_sets->sets_.size() << " }";
       break;
     }
@@ -4666,7 +4575,7 @@ void Td::on_request(uint64 id, const td_api::setAccountTtl &request) {
 void Td::on_request(uint64 id, td_api::deleteAccount &request) {
   CHECK_IS_USER();
   CLEAN_INPUT_STRING(request.reason_);
-  send_closure(auth_manager_actor_, &AuthManager::delete_account, id, request.reason_);
+  send_closure(auth_manager_actor_, &AuthManager::delete_account, id, request.reason_, request.password_);
 }
 
 void Td::on_request(uint64 id, td_api::changePhoneNumber &request) {
@@ -5235,7 +5144,7 @@ void Td::on_request(uint64 id, const td_api::clickAnimatedEmojiMessage &request)
 }
 
 void Td::on_request(uint64 id, const td_api::getInternalLinkType &request) {
-  auto type = link_manager_->parse_internal_link(request.link_);
+  auto type = LinkManager::parse_internal_link(request.link_);
   send_closure(actor_id(this), &Td::send_result, id, type == nullptr ? nullptr : type->get_internal_link_type_object());
 }
 
@@ -6621,7 +6530,7 @@ void Td::on_request(uint64 id, const td_api::getSuggestedFileName &request) {
   send_closure(actor_id(this), &Td::send_result, id, td_api::make_object<td_api::text>(r_file_name.ok()));
 }
 
-void Td::on_request(uint64 id, td_api::uploadFile &request) {
+void Td::on_request(uint64 id, td_api::preliminaryUploadFile &request) {
   auto priority = request.priority_;
   if (!(1 <= priority && priority <= 32)) {
     return send_error_raw(id, 400, "Upload priority must be between 1 and 32");
@@ -6643,7 +6552,7 @@ void Td::on_request(uint64 id, td_api::uploadFile &request) {
   send_closure(actor_id(this), &Td::send_result, id, file_manager_->get_file_object(upload_file_id, false));
 }
 
-void Td::on_request(uint64 id, const td_api::cancelUploadFile &request) {
+void Td::on_request(uint64 id, const td_api::cancelPreliminaryUploadFile &request) {
   file_manager_->cancel_upload(FileId(request.file_id_, 0));
 
   send_closure(actor_id(this), &Td::send_result, id, make_tl_object<td_api::ok>());
@@ -7017,28 +6926,38 @@ void Td::on_request(uint64 id, td_api::closeSecretChat &request) {
 void Td::on_request(uint64 id, td_api::getStickers &request) {
   CHECK_IS_USER();
   CLEAN_INPUT_STRING(request.emoji_);
-  CREATE_REQUEST(GetStickersRequest, std::move(request.emoji_), request.limit_);
+  CREATE_REQUEST(GetStickersRequest, get_sticker_type(request.sticker_type_), std::move(request.emoji_), request.limit_,
+                 request.chat_id_);
 }
 
 void Td::on_request(uint64 id, td_api::searchStickers &request) {
   CHECK_IS_USER();
   CLEAN_INPUT_STRING(request.emoji_);
-  CREATE_REQUEST(SearchStickersRequest, std::move(request.emoji_), request.limit_);
+  CREATE_REQUEST_PROMISE();
+  stickers_manager_->search_stickers(std::move(request.emoji_), request.limit_, std::move(promise));
+}
+
+void Td::on_request(uint64 id, const td_api::getPremiumStickers &request) {
+  CHECK_IS_USER();
+  CREATE_REQUEST_PROMISE();
+  stickers_manager_->get_premium_stickers(request.limit_, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::getInstalledStickerSets &request) {
   CHECK_IS_USER();
-  CREATE_REQUEST(GetInstalledStickerSetsRequest, request.is_masks_);
+  CREATE_REQUEST(GetInstalledStickerSetsRequest, get_sticker_type(request.sticker_type_));
 }
 
 void Td::on_request(uint64 id, const td_api::getArchivedStickerSets &request) {
   CHECK_IS_USER();
-  CREATE_REQUEST(GetArchivedStickerSetsRequest, request.is_masks_, request.offset_sticker_set_id_, request.limit_);
+  CREATE_REQUEST(GetArchivedStickerSetsRequest, get_sticker_type(request.sticker_type_), request.offset_sticker_set_id_,
+                 request.limit_);
 }
 
 void Td::on_request(uint64 id, const td_api::getTrendingStickerSets &request) {
   CHECK_IS_USER();
-  CREATE_REQUEST(GetTrendingStickerSetsRequest, request.offset_, request.limit_);
+  CREATE_REQUEST(GetTrendingStickerSetsRequest, get_sticker_type(request.sticker_type_), request.offset_,
+                 request.limit_);
 }
 
 void Td::on_request(uint64 id, const td_api::getAttachedStickerSets &request) {
@@ -7057,7 +6976,8 @@ void Td::on_request(uint64 id, td_api::searchStickerSet &request) {
 
 void Td::on_request(uint64 id, td_api::searchInstalledStickerSets &request) {
   CLEAN_INPUT_STRING(request.query_);
-  CREATE_REQUEST(SearchInstalledStickerSetsRequest, request.is_masks_, std::move(request.query_), request.limit_);
+  CREATE_REQUEST(SearchInstalledStickerSetsRequest, get_sticker_type(request.sticker_type_), std::move(request.query_),
+                 request.limit_);
 }
 
 void Td::on_request(uint64 id, td_api::searchStickerSets &request) {
@@ -7079,8 +6999,9 @@ void Td::on_request(uint64 id, const td_api::viewTrendingStickerSets &request) {
 void Td::on_request(uint64 id, td_api::reorderInstalledStickerSets &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  stickers_manager_->reorder_installed_sticker_sets(
-      request.is_masks_, StickersManager::convert_sticker_set_ids(request.sticker_set_ids_), std::move(promise));
+  stickers_manager_->reorder_installed_sticker_sets(get_sticker_type(request.sticker_type_),
+                                                    StickersManager::convert_sticker_set_ids(request.sticker_set_ids_),
+                                                    std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::uploadStickerFile &request) {
@@ -7118,21 +7039,27 @@ void Td::on_request(uint64 id, td_api::createNewStickerSet &request) {
   CLEAN_INPUT_STRING(request.title_);
   CLEAN_INPUT_STRING(request.name_);
   CLEAN_INPUT_STRING(request.source_);
-  CREATE_REQUEST(CreateNewStickerSetRequest, request.user_id_, std::move(request.title_), std::move(request.name_),
-                 std::move(request.stickers_), std::move(request.source_));
+  CREATE_REQUEST_PROMISE();
+  stickers_manager_->create_new_sticker_set(UserId(request.user_id_), std::move(request.title_),
+                                            std::move(request.name_), get_sticker_type(request.sticker_type_),
+                                            std::move(request.stickers_), std::move(request.source_),
+                                            std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::addStickerToSet &request) {
   CHECK_IS_BOT();
   CLEAN_INPUT_STRING(request.name_);
-  CREATE_REQUEST(AddStickerToSetRequest, request.user_id_, std::move(request.name_), std::move(request.sticker_));
+  CREATE_REQUEST_PROMISE();
+  stickers_manager_->add_sticker_to_set(UserId(request.user_id_), std::move(request.name_), std::move(request.sticker_),
+                                        std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::setStickerSetThumbnail &request) {
   CHECK_IS_BOT();
   CLEAN_INPUT_STRING(request.name_);
-  CREATE_REQUEST(SetStickerSetThumbnailRequest, request.user_id_, std::move(request.name_),
-                 std::move(request.thumbnail_));
+  CREATE_REQUEST_PROMISE();
+  stickers_manager_->set_sticker_set_thumbnail(UserId(request.user_id_), std::move(request.name_),
+                                               std::move(request.thumbnail_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::setStickerPositionInSet &request) {
@@ -7204,16 +7131,15 @@ void Td::on_request(uint64 id, td_api::getAnimatedEmoji &request) {
   stickers_manager_->get_animated_emoji(std::move(request.emoji_), false, std::move(promise));
 }
 
-void Td::on_request(uint64 id, const td_api::getAllAnimatedEmojis &request) {
-  CHECK_IS_USER();
-  CREATE_REQUEST_PROMISE();
-  stickers_manager_->get_all_animated_emojis(false, std::move(promise));
-}
-
 void Td::on_request(uint64 id, td_api::getEmojiSuggestionsUrl &request) {
   CHECK_IS_USER();
   CLEAN_INPUT_STRING(request.language_code_);
   CREATE_REQUEST(GetEmojiSuggestionsUrlRequest, std::move(request.language_code_));
+}
+
+void Td::on_request(uint64 id, td_api::getCustomEmojiStickers &request) {
+  CREATE_REQUEST_PROMISE();
+  stickers_manager_->get_custom_emoji_stickers(std::move(request.custom_emoji_ids_), true, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::getSavedAnimations &request) {
@@ -7928,9 +7854,10 @@ void Td::on_request(uint64 id, const td_api::getPremiumFeatures &request) {
   get_premium_features(this, request.source_, std::move(promise));
 }
 
-void Td::on_request(uint64 id, const td_api::getPremiumStickers &request) {
+void Td::on_request(uint64 id, const td_api::getPremiumStickerExamples &request) {
   CHECK_IS_USER();
-  CREATE_REQUEST(SearchStickersRequest, "⭐️⭐️", 100);
+  CREATE_REQUEST_PROMISE();
+  stickers_manager_->search_stickers("⭐️⭐️", 100, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::viewPremiumFeature &request) {
@@ -7951,23 +7878,26 @@ void Td::on_request(uint64 id, const td_api::getPremiumState &request) {
   get_premium_state(this, std::move(promise));
 }
 
-void Td::on_request(uint64 id, const td_api::canPurchasePremium &request) {
+void Td::on_request(uint64 id, td_api::canPurchasePremium &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  can_purchase_premium(this, std::move(promise));
+  can_purchase_premium(this, std::move(request.purpose_), std::move(promise));
 }
 
-void Td::on_request(uint64 id, const td_api::assignAppStoreTransaction &request) {
+void Td::on_request(uint64 id, td_api::assignAppStoreTransaction &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  assign_app_store_transaction(this, request.receipt_, request.is_restore_, std::move(promise));
+  assign_app_store_transaction(this, request.receipt_, std::move(request.purpose_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::assignGooglePlayTransaction &request) {
   CHECK_IS_USER();
+  CLEAN_INPUT_STRING(request.package_name_);
+  CLEAN_INPUT_STRING(request.store_product_id_);
   CLEAN_INPUT_STRING(request.purchase_token_);
   CREATE_OK_REQUEST_PROMISE();
-  assign_play_market_transaction(this, request.purchase_token_, std::move(promise));
+  assign_play_market_transaction(this, request.package_name_, request.store_product_id_, request.purchase_token_,
+                                 std::move(request.purpose_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, td_api::acceptTermsOfService &request) {

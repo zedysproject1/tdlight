@@ -201,6 +201,9 @@ TEST(Link, parse_internal_link) {
   auto qr_code_authentication = [] {
     return td::td_api::make_object<td::td_api::internalLinkTypeQrCodeAuthentication>();
   };
+  auto restore_purchases = [] {
+    return td::td_api::make_object<td::td_api::internalLinkTypeRestorePurchases>();
+  };
   auto settings = [] {
     return td::td_api::make_object<td::td_api::internalLinkTypeSettings>();
   };
@@ -510,6 +513,14 @@ TEST(Link, parse_internal_link) {
   parse_internal_link("tg:login?token=abacaba", qr_code_authentication());
   parse_internal_link("tg:login?token=", unknown_deep_link("tg://login?token="));
 
+  parse_internal_link("tg:restore_purchases?token=abacaba", restore_purchases());
+  parse_internal_link("tg:restore_purchases?#", restore_purchases());
+  parse_internal_link("tg:restore_purchases/?#", restore_purchases());
+  parse_internal_link("tg:restore_purchases", restore_purchases());
+  parse_internal_link("tg:restore_purchase", unknown_deep_link("tg://restore_purchase"));
+  parse_internal_link("tg:restore_purchasess", unknown_deep_link("tg://restore_purchasess"));
+  parse_internal_link("tg:restore_purchases/test?#", unknown_deep_link("tg://restore_purchases/test?"));
+
   parse_internal_link("t.me/joinchat?invite=abcdef", nullptr);
   parse_internal_link("t.me/joinchat", nullptr);
   parse_internal_link("t.me/joinchat/", nullptr);
@@ -573,6 +584,24 @@ TEST(Link, parse_internal_link) {
   parse_internal_link("tg:addstickers?set=abcdef", sticker_set("abcdef"));
   parse_internal_link("tg:addstickers?set=abc%30ef", sticker_set("abc0ef"));
   parse_internal_link("tg://addstickers?set=", unknown_deep_link("tg://addstickers?set="));
+
+  parse_internal_link("t.me/addemoji?set=abcdef", nullptr);
+  parse_internal_link("t.me/addemoji", nullptr);
+  parse_internal_link("t.me/addemoji/", nullptr);
+  parse_internal_link("t.me/addemoji//abcdef", nullptr);
+  parse_internal_link("t.me/addemoji?/abcdef", nullptr);
+  parse_internal_link("t.me/addemoji/?abcdef", nullptr);
+  parse_internal_link("t.me/addemoji/#abcdef", nullptr);
+  parse_internal_link("t.me/addemoji/abacaba", sticker_set("abacaba"));
+  parse_internal_link("t.me/addemoji/aba%20aba", sticker_set("aba aba"));
+  parse_internal_link("t.me/addemoji/123456a", sticker_set("123456a"));
+  parse_internal_link("t.me/addemoji/12345678901", sticker_set("12345678901"));
+  parse_internal_link("t.me/addemoji/123456", sticker_set("123456"));
+  parse_internal_link("t.me/addemoji/123456/123123/12/31/a/s//21w/?asdas#test", sticker_set("123456"));
+
+  parse_internal_link("tg:addemoji?set=abcdef", sticker_set("abcdef"));
+  parse_internal_link("tg:addemoji?set=abc%30ef", sticker_set("abc0ef"));
+  parse_internal_link("tg://addemoji?set=", unknown_deep_link("tg://addemoji?set="));
 
   parse_internal_link("t.me/confirmphone?hash=abc%30ef&phone=", nullptr);
   parse_internal_link("t.me/confirmphone/123456/123123/12/31/a/s//21w/?hash=abc%30ef&phone=123456789",

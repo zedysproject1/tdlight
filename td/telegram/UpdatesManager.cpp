@@ -48,6 +48,7 @@
 #include "td/telegram/StateManager.h"
 #include "td/telegram/StickerSetId.h"
 #include "td/telegram/StickersManager.h"
+#include "td/telegram/StickerType.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/TdDb.h"
@@ -230,11 +231,11 @@ ActorShared<UpdatesManager> UpdatesManager::create_reference() {
 }
 
 void UpdatesManager::fill_pts_gap(void *td) {
-  CHECK(td != nullptr);
   if (G()->close_flag()) {
     return;
   }
 
+  CHECK(td != nullptr);
   auto updates_manager = static_cast<Td *>(td)->updates_manager_.get();
   auto min_pts = std::numeric_limits<int32>::max();
   auto max_pts = 0;
@@ -251,11 +252,11 @@ void UpdatesManager::fill_pts_gap(void *td) {
 }
 
 void UpdatesManager::fill_seq_gap(void *td) {
-  CHECK(td != nullptr);
   if (G()->close_flag()) {
     return;
   }
 
+  CHECK(td != nullptr);
   auto updates_manager = static_cast<Td *>(td)->updates_manager_.get();
   auto min_seq = std::numeric_limits<int32>::max();
   auto max_seq = 0;
@@ -268,11 +269,11 @@ void UpdatesManager::fill_seq_gap(void *td) {
 }
 
 void UpdatesManager::fill_qts_gap(void *td) {
-  CHECK(td != nullptr);
   if (G()->close_flag()) {
     return;
   }
 
+  CHECK(td != nullptr);
   auto updates_manager = static_cast<Td *>(td)->updates_manager_.get();
   auto min_qts = std::numeric_limits<int32>::max();
   auto max_qts = 0;
@@ -289,8 +290,11 @@ void UpdatesManager::fill_get_difference_gap(void *td) {
 }
 
 void UpdatesManager::fill_gap(void *td, const char *source) {
+  if (G()->close_flag()) {
+    return;
+  }
   CHECK(td != nullptr);
-  if (G()->close_flag() || !static_cast<Td *>(td)->auth_manager_->is_authorized()) {
+  if (!static_cast<Td *>(td)->auth_manager_->is_authorized()) {
     return;
   }
   auto updates_manager = static_cast<Td *>(td)->updates_manager_.get();
@@ -753,6 +757,7 @@ bool UpdatesManager::is_acceptable_message(const telegram_api::Message *message_
         case telegram_api::messageActionChatJoinedByRequest::ID:
         case telegram_api::messageActionWebViewDataSentMe::ID:
         case telegram_api::messageActionWebViewDataSent::ID:
+        case telegram_api::messageActionGiftPremium::ID:
           break;
         case telegram_api::messageActionChatCreate::ID: {
           auto chat_create = static_cast<const telegram_api::messageActionChatCreate *>(action);
@@ -867,14 +872,15 @@ bool UpdatesManager::is_acceptable_update(const telegram_api::Update *update) co
 }
 
 void UpdatesManager::on_get_updates(tl_object_ptr<telegram_api::Updates> &&updates_ptr, Promise<Unit> &&promise) {
-  promise = PromiseCreator::lambda([promise = std::move(promise)](Result<Unit> result) mutable {
-    if (!G()->close_flag() && result.is_error()) {
-      LOG(ERROR) << "Failed to process updates: " << result.error();
-    }
-    promise.set_value(Unit());
-  });
-
   CHECK(updates_ptr != nullptr);
+  promise = PromiseCreator::lambda(
+      [promise = std::move(promise), update_ids = get_update_ids(updates_ptr.get())](Result<Unit> result) mutable {
+        if (!G()->close_flag() && result.is_error()) {
+          LOG(ERROR) << "Failed to process updates " << update_ids << ": " << result.error();
+        }
+        promise.set_value(Unit());
+      });
+
   auto updates_type = updates_ptr->get_id();
   if (updates_type != telegram_api::updateShort::ID) {
     LOG(INFO) << "Receive " << to_string(updates_ptr);
@@ -1195,6 +1201,30 @@ vector<DialogId> UpdatesManager::get_update_notify_settings_dialog_ids(const tel
   return dialog_ids;
 }
 
+vector<int32> UpdatesManager::get_update_ids(const telegram_api::Updates *updates_ptr) {
+  const vector<tl_object_ptr<telegram_api::Update>> *updates = nullptr;
+  auto updates_type = updates_ptr->get_id();
+  switch (updates_type) {
+    case telegram_api::updatesTooLong::ID:
+    case telegram_api::updateShortMessage::ID:
+    case telegram_api::updateShortChatMessage::ID:
+    case telegram_api::updateShortSentMessage::ID:
+      return {updates_type};
+    case telegram_api::updateShort::ID:
+      return {static_cast<const telegram_api::updateShort *>(updates_ptr)->update_->get_id()};
+    case telegram_api::updatesCombined::ID:
+      updates = &static_cast<const telegram_api::updatesCombined *>(updates_ptr)->updates_;
+      break;
+    case telegram_api::updates::ID:
+      updates = &static_cast<const telegram_api::updates *>(updates_ptr)->updates_;
+      break;
+    default:
+      UNREACHABLE();
+  }
+
+  return transform(*updates, [](const tl_object_ptr<telegram_api::Update> &update) { return update->get_id(); });
+}
+
 vector<DialogId> UpdatesManager::get_chat_dialog_ids(const telegram_api::Updates *updates_ptr) {
   const vector<tl_object_ptr<telegram_api::Chat>> *chats = nullptr;
   switch (updates_ptr->get_id()) {
@@ -1205,14 +1235,12 @@ vector<DialogId> UpdatesManager::get_chat_dialog_ids(const telegram_api::Updates
     case telegram_api::updateShortSentMessage::ID:
       LOG(ERROR) << "Receive " << oneline(to_string(*updates_ptr)) << " instead of updates";
       break;
-    case telegram_api::updatesCombined::ID: {
+    case telegram_api::updatesCombined::ID:
       chats = &static_cast<const telegram_api::updatesCombined *>(updates_ptr)->chats_;
       break;
-    }
-    case telegram_api::updates::ID: {
+    case telegram_api::updates::ID:
       chats = &static_cast<const telegram_api::updates *>(updates_ptr)->chats_;
       break;
-    }
     default:
       UNREACHABLE();
   }
@@ -1525,7 +1553,9 @@ void UpdatesManager::on_get_difference(tl_object_ptr<telegram_api::updates_Diffe
       break;
     }
     case telegram_api::updates_differenceTooLong::ID: {
-      LOG(ERROR) << "Receive differenceTooLong";
+      if (G()->shared_config().get_option_integer("session_count") <= 1) {
+        LOG(ERROR) << "Receive differenceTooLong";
+      }
       // TODO
       auto difference = move_tl_object_as<telegram_api::updates_differenceTooLong>(difference_ptr);
       set_pts(difference->pts_, "differenceTooLong").set_value(Unit());
@@ -1604,7 +1634,7 @@ void UpdatesManager::after_get_difference() {
     for (auto &postponed_update : postponed_updates) {
       auto &update = postponed_update.second;
       add_pending_pts_update(std::move(update.update), update.pts, update.pts_count, update.receive_time,
-                             std::move(update.promise), "after get difference");
+                             std::move(update.promise), AFTER_GET_DIFFERENCE_SOURCE);
       CHECK(!running_get_difference_);
     }
     VLOG(get_difference) << "After applying postponed pts updates have pts = " << get_pts()
@@ -1640,11 +1670,11 @@ void UpdatesManager::schedule_data_reload() {
 }
 
 void UpdatesManager::try_reload_data_static(void *td) {
-  CHECK(td != nullptr);
   if (G()->close_flag()) {
     return;
   }
 
+  CHECK(td != nullptr);
   static_cast<Td *>(td)->updates_manager_->try_reload_data();
 }
 
@@ -1673,14 +1703,17 @@ void UpdatesManager::try_reload_data() {
   td_->notification_settings_manager_->send_get_scope_notification_settings_query(NotificationSettingsScope::Channel,
                                                                                   Auto());
   td_->stickers_manager_->reload_reactions();
-  td_->stickers_manager_->get_installed_sticker_sets(false, Auto());
-  td_->stickers_manager_->get_installed_sticker_sets(true, Auto());
-  td_->stickers_manager_->get_featured_sticker_sets(0, 1000, Auto());
+  for (int32 type = 0; type < MAX_STICKER_TYPE; type++) {
+    auto sticker_type = static_cast<StickerType>(type);
+    td_->stickers_manager_->get_installed_sticker_sets(sticker_type, Auto());
+    td_->stickers_manager_->get_featured_sticker_sets(sticker_type, 0, 1000, Auto());
+  }
   td_->stickers_manager_->get_recent_stickers(false, Auto());
   td_->stickers_manager_->get_recent_stickers(true, Auto());
   td_->stickers_manager_->get_favorite_stickers(Auto());
   td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::animated_emoji());
   td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::animated_emoji_click());
+  td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::premium_gifts());
 
   schedule_data_reload();
 }
@@ -2186,7 +2219,7 @@ void UpdatesManager::add_pending_pts_update(tl_object_ptr<telegram_api::Update> 
   }
 
   int32 old_pts = get_pts();
-  if (new_pts < old_pts - 99 && Slice(source) != "after get difference") {
+  if (new_pts < old_pts - 99 && source != AFTER_GET_DIFFERENCE_SOURCE) {
     bool need_restore_pts = new_pts < old_pts - 19999;
     auto now = Time::now();
     if (now > last_pts_jump_warning_time_ + 1 && (need_restore_pts || now < last_pts_jump_warning_time_ + 5)) {
@@ -2219,7 +2252,7 @@ void UpdatesManager::add_pending_pts_update(tl_object_ptr<telegram_api::Update> 
   }
 
   // is_acceptable_update check was skipped for postponed pts updates
-  if (Slice(source) == "after get difference" && !is_acceptable_update(update.get())) {
+  if (source == AFTER_GET_DIFFERENCE_SOURCE && !is_acceptable_update(update.get())) {
     LOG(INFO) << "Postpone again unacceptable pending update";
     postpone_pts_update(std::move(update), new_pts, pts_count, receive_time, std::move(promise));
     set_pts_gap_timeout(0.001);
@@ -3313,14 +3346,26 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateStickerSets> up
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateStickerSetsOrder> update, Promise<Unit> &&promise) {
-  td_->stickers_manager_->on_update_sticker_sets_order(update->masks_,
+  StickerType sticker_type = StickerType::Regular;
+  if (update->emojis_) {
+    sticker_type = StickerType::CustomEmoji;
+  } else if (update->masks_) {
+    sticker_type = StickerType::Mask;
+  }
+  td_->stickers_manager_->on_update_sticker_sets_order(sticker_type,
                                                        StickersManager::convert_sticker_set_ids(update->order_));
   promise.set_value(Unit());
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateReadFeaturedStickers> update,
                                Promise<Unit> &&promise) {
-  td_->stickers_manager_->reload_featured_sticker_sets(true);
+  td_->stickers_manager_->reload_featured_sticker_sets(StickerType::Regular, true);
+  promise.set_value(Unit());
+}
+
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateReadFeaturedEmojiStickers> update,
+                               Promise<Unit> &&promise) {
+  td_->stickers_manager_->reload_featured_sticker_sets(StickerType::CustomEmoji, true);
   promise.set_value(Unit());
 }
 
@@ -3351,6 +3396,8 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateBotPrecheckoutQ
   UserId user_id(update->user_id_);
   if (!user_id.is_valid()) {
     LOG(ERROR) << "Receive pre-checkout query from invalid " << user_id;
+  } else if (update->total_amount_ <= 0 || !check_currency_amount(update->total_amount_)) {
+    LOG(ERROR) << "Receive pre-checkout query with invalid total amount " << update->total_amount_;
   } else {
     send_closure(
         G()->td(), &Td::send_update,

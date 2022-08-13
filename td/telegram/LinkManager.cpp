@@ -487,6 +487,12 @@ class LinkManager::InternalLinkQrCodeAuthentication final : public InternalLink 
   }
 };
 
+class LinkManager::InternalLinkRestorePurchases final : public InternalLink {
+  td_api::object_ptr<td_api::InternalLinkType> get_internal_link_type_object() const final {
+    return td_api::make_object<td_api::internalLinkTypeRestorePurchases>();
+  }
+};
+
 class LinkManager::InternalLinkSettings final : public InternalLink {
   td_api::object_ptr<td_api::InternalLinkType> get_internal_link_type_object() const final {
     return td_api::make_object<td_api::internalLinkTypeSettings>();
@@ -1068,6 +1074,9 @@ unique_ptr<LinkManager::InternalLink> LinkManager::parse_tg_link_query(Slice que
     if (has_arg("token")) {
       return td::make_unique<InternalLinkQrCodeAuthentication>();
     }
+  } else if (path.size() == 1 && path[0] == "restore_purchases") {
+    // restore_purchases
+    return td::make_unique<InternalLinkRestorePurchases>();
   } else if (path.size() == 1 && path[0] == "passport") {
     // passport?bot_id=<bot_user_id>&scope=<scope>&public_key=<public_key>&nonce=<nonce>
     return get_internal_link_passport(query, url_query.args_);
@@ -1107,8 +1116,9 @@ unique_ptr<LinkManager::InternalLink> LinkManager::parse_tg_link_query(Slice que
       return td::make_unique<InternalLinkDialogInvite>(PSTRING() << "tg:join?invite="
                                                                  << url_encode(get_url_query_hash(true, url_query)));
     }
-  } else if (path.size() == 1 && path[0] == "addstickers") {
+  } else if (path.size() == 1 && (path[0] == "addstickers" || path[0] == "addemoji")) {
     // addstickers?set=<name>
+    // addemoji?set=<name>
     if (has_arg("set")) {
       return td::make_unique<InternalLinkStickerSet>(get_arg("set"));
     }
@@ -1246,9 +1256,10 @@ unique_ptr<LinkManager::InternalLink> LinkManager::parse_t_me_link_query(Slice q
                                                                    << url_encode(get_url_query_hash(false, url_query)));
       }
     }
-  } else if (path[0] == "addstickers") {
+  } else if (path[0] == "addstickers" || path[0] == "addemoji") {
     if (path.size() >= 2 && !path[1].empty()) {
       // /addstickers/<name>
+      // /addemoji/<name>
       return td::make_unique<InternalLinkStickerSet>(path[1]);
     }
   } else if (path[0] == "setlanguage") {
@@ -1577,7 +1588,7 @@ UserId LinkManager::get_link_user_id(Slice url) {
   }
 
   Slice host("user");
-  if (!begins_with(url, host)) {
+  if (!begins_with(url, host) || (url.size() > host.size() && Slice("/?#").find(url[host.size()]) == Slice::npos)) {
     return UserId();
   }
   url.remove_prefix(host.size());
@@ -1603,6 +1614,48 @@ UserId LinkManager::get_link_user_id(Slice url) {
     }
   }
   return UserId();
+}
+
+Result<int64> LinkManager::get_link_custom_emoji_document_id(Slice url) {
+  string lower_cased_url = to_lower(url);
+  url = lower_cased_url;
+
+  Slice link_scheme("tg:");
+  if (!begins_with(url, link_scheme)) {
+    return Status::Error(400, "Custom emoji URL must have scheme tg");
+  }
+  url.remove_prefix(link_scheme.size());
+  if (begins_with(url, "//")) {
+    url.remove_prefix(2);
+  }
+
+  Slice host("emoji");
+  if (!begins_with(url, host) || (url.size() > host.size() && Slice("/?#").find(url[host.size()]) == Slice::npos)) {
+    return Status::Error(400, PSLICE() << "Custom emoji URL must have host \"" << host << '"');
+  }
+  url.remove_prefix(host.size());
+  if (begins_with(url, "/")) {
+    url.remove_prefix(1);
+  }
+  if (!begins_with(url, "?")) {
+    return Status::Error(400, "Custom emoji URL must have an emoji identifier");
+  }
+  url.remove_prefix(1);
+  url.truncate(url.find('#'));
+
+  for (auto parameter : full_split(url, '&')) {
+    Slice key;
+    Slice value;
+    std::tie(key, value) = split(parameter, '=');
+    if (key == Slice("id")) {
+      auto r_document_id = to_integer_safe<int64>(value);
+      if (r_document_id.is_error() || r_document_id.ok() == 0) {
+        return Status::Error(400, "Invalid custom emoji identifier specified");
+      }
+      return r_document_id.ok();
+    }
+  }
+  return Status::Error(400, "Custom emoji URL must have an emoji identifier");
 }
 
 Result<MessageLinkInfo> LinkManager::get_message_link_info(Slice url) {

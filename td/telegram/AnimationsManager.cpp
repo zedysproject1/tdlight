@@ -149,9 +149,9 @@ void AnimationsManager::tear_down() {
 }
 
 int32 AnimationsManager::get_animation_duration(FileId file_id) const {
-  auto it = animations_.find(file_id);
-  CHECK(it != animations_.end());
-  return it->second->duration;
+  const auto *animation = get_animation(file_id);
+  CHECK(animation != nullptr);
+  return animation->duration;
 }
 
 tl_object_ptr<td_api::animation> AnimationsManager::get_animation_object(FileId file_id) const {
@@ -159,9 +159,7 @@ tl_object_ptr<td_api::animation> AnimationsManager::get_animation_object(FileId 
     return nullptr;
   }
 
-  auto it = animations_.find(file_id);
-  CHECK(it != animations_.end());
-  auto animation = it->second.get();
+  auto animation = get_animation(file_id);
   CHECK(animation != nullptr);
   auto thumbnail =
       animation->animated_thumbnail.file_id.is_valid()
@@ -234,13 +232,7 @@ FileId AnimationsManager::on_get_animation(unique_ptr<Animation> new_animation, 
 }
 
 const AnimationsManager::Animation *AnimationsManager::get_animation(FileId file_id) const {
-  auto animation = animations_.find(file_id);
-  if (animation == animations_.end()) {
-    return nullptr;
-  }
-
-  CHECK(animation->second->file_id == file_id);
-  return animation->second.get();
+  return animations_.get_pointer(file_id);
 }
 
 FileId AnimationsManager::get_animation_thumbnail_file_id(FileId file_id) const {
@@ -276,7 +268,7 @@ FileId AnimationsManager::dup_animation(FileId new_id, FileId old_id) {
   return new_id;
 }
 
-void AnimationsManager::merge_animations(FileId new_id, FileId old_id, bool can_delete_old) {
+void AnimationsManager::merge_animations(FileId new_id, FileId old_id) {
   CHECK(old_id.is_valid() && new_id.is_valid());
   CHECK(new_id != old_id);
 
@@ -285,19 +277,10 @@ void AnimationsManager::merge_animations(FileId new_id, FileId old_id, bool can_
   CHECK(old_ != nullptr);
 
   bool need_merge = true;
-  auto new_it = animations_.find(new_id);
-  if (new_it == animations_.end()) {
-    auto &old = animations_[old_id];
-    if (!can_delete_old) {
-      dup_animation(new_id, old_id);
-    } else {
-      old->file_id = new_id;
-      animations_.emplace(new_id, std::move(old));
-    }
+  const auto *new_ = get_animation(new_id);
+  if (new_ == nullptr) {
+    dup_animation(new_id, old_id);
   } else {
-    Animation *new_ = new_it->second.get();
-    CHECK(new_ != nullptr);
-
     if (old_->thumbnail != new_->thumbnail) {
       //    LOG_STATUS(td_->file_manager_->merge(new_->thumbnail.file_id, old_->thumbnail.file_id));
     }
@@ -307,9 +290,6 @@ void AnimationsManager::merge_animations(FileId new_id, FileId old_id, bool can_
   }
   if (need_merge) {
     LOG_STATUS(td_->file_manager_->merge(new_id, old_id));
-  }
-  if (can_delete_old) {
-    animations_.erase(old_id);
   }
 }
 
