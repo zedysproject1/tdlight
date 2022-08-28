@@ -8855,8 +8855,6 @@ void StickersManager::memory_stats(vector<string> &output) {
   output.push_back(",");
   output.push_back("\"favorite_sticker_ids_\":"); output.push_back(std::to_string(favorite_sticker_ids_.size()));
   output.push_back(",");
-  output.push_back("\"featured_sticker_set_ids_\":"); output.push_back(std::to_string(featured_sticker_set_ids_.size()));
-  output.push_back(",");
   output.push_back("\"installed_sticker_set_ids_\":"); output.push_back(std::to_string(installed_sticker_set_ids_->size()));
   output.push_back(",");
   output.push_back("\"recent_sticker_file_ids_\":"); output.push_back(std::to_string(recent_sticker_file_ids_->size()));

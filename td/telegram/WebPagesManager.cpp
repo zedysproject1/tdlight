@@ -1362,7 +1362,6 @@ void WebPagesManager::on_web_page_changed(WebPageId web_page_id, bool have_web_p
 const WebPagesManager::WebPage *WebPagesManager::get_web_page(WebPageId web_page_id) const {
   return web_pages_.get_pointer(web_page_id);
 }
-}
 
 const WebPagesManager::WebPageInstantView *WebPagesManager::get_web_page_instant_view(WebPageId web_page_id) const {
   const WebPage *web_page = get_web_page(web_page_id);
