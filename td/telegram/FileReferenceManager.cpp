@@ -17,7 +17,6 @@
 #include "td/telegram/NotificationSettingsManager.h"
 #include "td/telegram/StickerSetId.h"
 #include "td/telegram/StickersManager.h"
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/WebPageId.h"
 #include "td/telegram/WebPagesManager.h"

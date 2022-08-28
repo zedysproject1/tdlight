@@ -3265,7 +3265,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
       if (old_photo->id.get() != new_photo->id.get() || old_->caption != new_->caption) {
         need_update = true;
       }
-      if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+      if (!G()->get_option_boolean("disable_minithumbnails")) {
         if (old_photo->minithumbnail != new_photo->minithumbnail) {
           need_update = true;
         }
@@ -5498,7 +5498,7 @@ void update_message_content_file_id_remote(MessageContent *content, FileId file_
 }
 
 FileId get_message_content_thumbnail_file_id(const MessageContent *content, const Td *td) {
-  if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+  if (!G()->get_option_boolean("disable_minithumbnails")) {
     switch (content->get_type()) {
       case MessageContentType::Animation:
         return td->animations_manager_->get_animation_thumbnail_file_id(

@@ -5,7 +5,6 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 #include "td/telegram/PhotoSize.h"
-#include "td/telegram/ConfigShared.h"
 
 #include "td/telegram/files/FileLocation.h"
 #include "td/telegram/files/FileManager.h"
@@ -45,7 +44,7 @@ bool need_update_dialog_photo_minithumbnail(const string &from, const string &to
 }
 
 td_api::object_ptr<td_api::minithumbnail> get_minithumbnail_object(const string &packed) {
-  if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+  if (G()->get_option_boolean("disable_minithumbnails")) {
     return nullptr;
   }
   if (packed.size() < 3) {
@@ -197,19 +196,19 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
     case telegram_api::photoStrippedSize::ID: {
       auto size = move_tl_object_as<telegram_api::photoStrippedSize>(size_ptr);
       if (format != PhotoFormat::Jpeg) {
-        if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+        if (G()->get_option_boolean("disable_minithumbnails")) {
           LOG(DEBUG) << "Receive unexpected JPEG minithumbnail";
         } else {
           LOG(ERROR) << "Receive unexpected JPEG minithumbnail in photo " << id << " from " << source << " of format "
                      << format;
         }
-        if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+        if (G()->get_option_boolean("disable_minithumbnails")) {
           return std::string("");
         } else {
           return std::move(res);
         }
       }
-      if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+      if (G()->get_option_boolean("disable_minithumbnails")) {
         return std::string("");
       } else {
         return size->bytes_.as_slice().str();

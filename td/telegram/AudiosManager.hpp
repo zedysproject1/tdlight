@@ -15,7 +15,6 @@
 #include "td/utils/common.h"
 #include "td/utils/tl_helpers.h"
 
-#include "td/telegram/ConfigShared.h"
 
 namespace td {
 
@@ -103,7 +102,7 @@ FileId AudiosManager::parse_audio(ParserT &parser) {
   if (has_file_name) {
     string tmp_filename;
     parse(tmp_filename, parser);
-    if (G()->shared_config().get_option_boolean("disable_document_filenames")) {
+    if (G()->get_option_boolean("disable_document_filenames")) {
       audio->file_name = "0";
     } else {
       audio->file_name = tmp_filename;
@@ -124,7 +123,7 @@ FileId AudiosManager::parse_audio(ParserT &parser) {
   if (has_minithumbnail) {
     string tmp_minithumbnail;
     parse(tmp_minithumbnail, parser);
-    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    if (!G()->get_option_boolean("disable_minithumbnails")) {
       audio->minithumbnail = tmp_minithumbnail;
     }
   }

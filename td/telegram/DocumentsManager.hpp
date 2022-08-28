@@ -14,7 +14,7 @@
 
 #include "td/utils/tl_helpers.h"
 
-#include "td/telegram/ConfigShared.h"
+#include "td/telegram/ConfigManager.h"
 
 namespace td {
 
@@ -38,7 +38,7 @@ FileId DocumentsManager::parse_document(ParserT &parser) {
 
   parse(document->mime_type, parser);
 
-  if ( G()->shared_config().get_option_boolean("disable_document_filenames") && (
+  if ( G()->get_option_boolean("disable_document_filenames") && (
         document->mime_type.rfind("image/") == 0 ||
         document->mime_type.rfind("video/") == 0 ||
         document->mime_type.rfind("audio/") == 0)) {
@@ -50,7 +50,7 @@ FileId DocumentsManager::parse_document(ParserT &parser) {
   if (parser.version() >= static_cast<int32>(Version::SupportMinithumbnails)) {
       string tmp_minithumbnail;
       parse(tmp_minithumbnail, parser);
-      if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+      if (!G()->get_option_boolean("disable_minithumbnails")) {
           document->minithumbnail = tmp_minithumbnail;
       }
   }

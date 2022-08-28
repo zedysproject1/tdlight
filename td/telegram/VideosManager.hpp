@@ -57,7 +57,7 @@ FileId VideosManager::parse_video(ParserT &parser) {
 
   parse(video->mime_type, parser);
 
-  if ( G()->shared_config().get_option_boolean("disable_document_filenames") && (
+  if ( G()->get_option_boolean("disable_document_filenames") && (
       video->mime_type.rfind("image/") == 0 ||
       video->mime_type.rfind("video/") == 0 ||
       video->mime_type.rfind("audio/") == 0)) {
@@ -71,7 +71,7 @@ FileId VideosManager::parse_video(ParserT &parser) {
   if (parser.version() >= static_cast<int32>(Version::SupportMinithumbnails)) {
     string tmp_minithumbnail;
     parse(tmp_minithumbnail, parser);
-    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    if (!G()->get_option_boolean("disable_minithumbnails")) {
       video->minithumbnail = tmp_minithumbnail;
     }
   }

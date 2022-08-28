@@ -14,7 +14,6 @@
 #include "td/telegram/Td.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
-#include "td/telegram/ConfigShared.h"
 
 #include "td/actor/actor.h"
 
@@ -77,7 +76,7 @@ FileId VideosManager::on_get_video(unique_ptr<Video> new_video, bool replace) {
       LOG(DEBUG) << "Video " << file_id << " file name has changed";
       v->file_name = std::move(new_video->file_name);
     }
-    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    if (!G()->get_option_boolean("disable_minithumbnails")) {
       if (v->minithumbnail != new_video->minithumbnail) {
         v->minithumbnail = std::move(new_video->minithumbnail);
       }
@@ -178,7 +177,7 @@ void VideosManager::create_video(FileId file_id, string minithumbnail, PhotoSize
   v->mime_type = std::move(mime_type);
   v->duration = max(duration, 0);
   v->dimensions = dimensions;
-  if (!td_->auth_manager_->is_bot() && G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+  if (!td_->auth_manager_->is_bot() && G()->get_option_boolean("disable_minithumbnails")) {
     v->minithumbnail = std::move(minithumbnail);
   }
   v->thumbnail = std::move(thumbnail);

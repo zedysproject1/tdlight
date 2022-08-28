@@ -193,7 +193,7 @@ FileId AnimationsManager::on_get_animation(unique_ptr<Animation> new_animation, 
       LOG(DEBUG) << "Animation " << file_id << " duration has changed";
       a->duration = new_animation->duration;
     }
-    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    if (!G()->get_option_boolean("disable_minithumbnails")) {
       if (a->minithumbnail != new_animation->minithumbnail) {
         a->minithumbnail = std::move(new_animation->minithumbnail);
       }
@@ -299,7 +299,7 @@ void AnimationsManager::create_animation(FileId file_id, string minithumbnail, P
   a->mime_type = std::move(mime_type);
   a->duration = max(duration, 0);
   a->dimensions = dimensions;
-  if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+  if (!G()->get_option_boolean("disable_minithumbnails")) {
     if (!td_->auth_manager_->is_bot()) {
       a->minithumbnail = std::move(minithumbnail);
     }

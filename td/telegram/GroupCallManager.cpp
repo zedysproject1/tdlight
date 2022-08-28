@@ -9,7 +9,6 @@
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/ConfigManager.h"
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/ContactsManager.h"
 #include "td/telegram/DialogAction.h"
 #include "td/telegram/DialogParticipantFilter.h"
@@ -1174,7 +1173,7 @@ bool GroupCallManager::is_group_call_joined(InputGroupCallId input_group_call_id
 }
 
 GroupCallId GroupCallManager::get_group_call_id(InputGroupCallId input_group_call_id, DialogId dialog_id) {
-  if (G()->shared_config().get_option_boolean("disable_group_calls") || td_->auth_manager_->is_bot() || !input_group_call_id.is_valid()) {
+  if (G()->get_option_boolean("disable_group_calls") || td_->auth_manager_->is_bot() || !input_group_call_id.is_valid()) {
     return GroupCallId();
   }
   return add_group_call(input_group_call_id, dialog_id)->group_call_id;
@@ -4152,7 +4151,7 @@ void GroupCallManager::on_update_group_call_connection(string &&connection_param
 }
 
 void GroupCallManager::on_update_group_call(tl_object_ptr<telegram_api::GroupCall> group_call_ptr, DialogId dialog_id) {
-  if (G()->shared_config().get_option_boolean("disable_group_calls") || td_->auth_manager_->is_bot()) {
+  if (G()->get_option_boolean("disable_group_calls") || td_->auth_manager_->is_bot()) {
     return;
   }
   if (dialog_id != DialogId() && !dialog_id.is_valid()) {
@@ -4856,7 +4855,7 @@ tl_object_ptr<td_api::updateGroupCallParticipant> GroupCallManager::get_update_g
 
 void GroupCallManager::send_update_group_call(const GroupCall *group_call, const char *source) {
   LOG(INFO) << "Send update about " << group_call->group_call_id << " from " << source;
-  if (G()->shared_config().get_option_boolean("disable_group_calls")) {
+  if (G()->get_option_boolean("disable_group_calls")) {
     return;
   }
   send_closure(G()->td(), &Td::send_update,
@@ -4865,7 +4864,7 @@ void GroupCallManager::send_update_group_call(const GroupCall *group_call, const
 
 void GroupCallManager::send_update_group_call_participant(GroupCallId group_call_id,
                                                           const GroupCallParticipant &participant, const char *source) {
-  if (G()->shared_config().get_option_boolean("disable_group_calls")) {
+  if (G()->get_option_boolean("disable_group_calls")) {
     return;
   }
   LOG(INFO) << "Send update about " << participant << " in " << group_call_id << " from " << source;
@@ -4874,7 +4873,7 @@ void GroupCallManager::send_update_group_call_participant(GroupCallId group_call
 
 void GroupCallManager::send_update_group_call_participant(InputGroupCallId input_group_call_id,
                                                           const GroupCallParticipant &participant, const char *source) {
-  if (G()->shared_config().get_option_boolean("disable_group_calls")) {
+  if (G()->get_option_boolean("disable_group_calls")) {
     return;
   }
   auto group_call = get_group_call(input_group_call_id);

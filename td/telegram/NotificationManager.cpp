@@ -164,7 +164,7 @@ void NotificationManager::on_flush_pending_updates_timeout_callback(void *notifi
 }
 
 bool NotificationManager::is_disabled() const {
-  if ( G()->shared_config().get_option_boolean("disable_notifications")) {
+  if ( G()->get_option_boolean("disable_notifications")) {
     return true;
   } else {
     return !td_->auth_manager_->is_authorized() || td_->auth_manager_->is_bot() || G()->close_flag();

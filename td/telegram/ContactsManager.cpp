@@ -8821,7 +8821,7 @@ class ContactsManager::UserLogEvent {
 
 void ContactsManager::save_user(User *u, UserId user_id, bool from_binlog) {
   if (!G()->parameters().use_chat_info_db) {
-    if (u != nullptr && G()->shared_config().get_option_boolean("receive_access_hashes", false)) {
+    if (u != nullptr && G()->get_option_boolean("receive_access_hashes", false)) {
       send_closure(G()->td(), &Td::send_update,
                    make_tl_object<td_api::updateAccessHash>(get_user_access_hash_object(user_id, u)));
     }
@@ -8829,7 +8829,7 @@ void ContactsManager::save_user(User *u, UserId user_id, bool from_binlog) {
   }
   CHECK(u != nullptr);
   if (!u->is_saved || !u->is_status_saved) {  // TODO more effective handling of !u->is_status_saved
-    if (u != nullptr && G()->shared_config().get_option_boolean("receive_access_hashes", false)) {
+    if (u != nullptr && G()->get_option_boolean("receive_access_hashes", false)) {
       send_closure(G()->td(), &Td::send_update,
                    make_tl_object<td_api::updateAccessHash>(get_user_access_hash_object(user_id, u)));
     }
@@ -9376,7 +9376,7 @@ class ContactsManager::ChannelLogEvent {
 
 void ContactsManager::save_channel(Channel *c, ChannelId channel_id, bool from_binlog) {
   if (!G()->parameters().use_chat_info_db) {
-    if (c != nullptr && G()->shared_config().get_option_boolean("receive_access_hashes", false)) {
+    if (c != nullptr && G()->get_option_boolean("receive_access_hashes", false)) {
       send_closure(G()->td(), &Td::send_update,
                    make_tl_object<td_api::updateAccessHash>(get_channel_access_hash_object(channel_id, c)));
     }
@@ -9384,7 +9384,7 @@ void ContactsManager::save_channel(Channel *c, ChannelId channel_id, bool from_b
   }
   CHECK(c != nullptr);
   if (!c->is_saved) {
-    if (c != nullptr && G()->shared_config().get_option_boolean("receive_access_hashes", false)) {
+    if (c != nullptr && G()->get_option_boolean("receive_access_hashes", false)) {
       send_closure(G()->td(), &Td::send_update,
                    make_tl_object<td_api::updateAccessHash>(get_channel_access_hash_object(channel_id, c)));
     }

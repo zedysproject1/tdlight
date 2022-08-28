@@ -12,7 +12,6 @@
 #include "td/telegram/files/FileManager.h"
 #include "td/telegram/files/FileType.h"
 #include "td/telegram/net/DcId.h"
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/PhotoFormat.h"
 #include "td/telegram/PhotoSizeSource.h"
 
@@ -40,7 +39,7 @@ ProfilePhoto get_profile_photo(FileManager *file_manager, UserId user_id, int64 
       auto dc_id = DcId::create(profile_photo->dc_id_);
       result.has_animation = profile_photo->has_video_;
       result.id = profile_photo->photo_id_;
-      if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+      if (!G()->get_option_boolean("disable_minithumbnails")) {
         result.minithumbnail = profile_photo->stripped_thumb_.as_slice().str();
       }
       result.small_file_id = register_photo_size(
@@ -313,7 +312,7 @@ Photo get_photo(FileManager *file_manager, tl_object_ptr<telegram_api::photo> &&
       }
       res.photos.push_back(std::move(size));
     } else {
-      if (G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+      if (G()->get_option_boolean("disable_minithumbnails")) {
         res.minithumbnail = "";
       } else {
         res.minithumbnail = std::move(photo_size.get<1>());

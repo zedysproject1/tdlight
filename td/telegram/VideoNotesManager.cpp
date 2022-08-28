@@ -17,7 +17,6 @@
 
 #include "td/actor/actor.h"
 
-#include "td/telegram/ConfigShared.h"
 #include "td/utils/logging.h"
 #include "td/utils/Status.h"
 
@@ -62,7 +61,7 @@ FileId VideoNotesManager::on_get_video_note(unique_ptr<VideoNote> new_video_note
       v->duration = new_video_note->duration;
       v->dimensions = new_video_note->dimensions;
     }
-    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    if (!G()->get_option_boolean("disable_minithumbnails")) {
       if (v->minithumbnail != new_video_note->minithumbnail) {
         v->minithumbnail = std::move(new_video_note->minithumbnail);
       }
@@ -136,7 +135,7 @@ void VideoNotesManager::create_video_note(FileId file_id, string minithumbnail, 
   } else {
     LOG(INFO) << "Receive wrong video note dimensions " << dimensions;
   }
-  if (!td_->auth_manager_->is_bot() && !G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+  if (!td_->auth_manager_->is_bot() && !G()->get_option_boolean("disable_minithumbnails")) {
     v->minithumbnail = std::move(minithumbnail);
   }
   v->thumbnail = std::move(thumbnail);

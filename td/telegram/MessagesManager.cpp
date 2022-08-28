@@ -10535,7 +10535,7 @@ void MessagesManager::on_get_message_public_forwards(int32 total_count,
 }
 
 void MessagesManager::delete_messages_from_updates(const vector<MessageId> &message_ids) {
-  if (G()->shared_config().get_option_boolean("ignore_server_deletes_and_reads", false)) {
+  if (G()->get_option_boolean("ignore_server_deletes_and_reads", false)) {
     return;
   }
   FlatHashMap<DialogId, vector<int64>, DialogIdHash> deleted_message_ids;
@@ -12062,7 +12062,7 @@ void MessagesManager::read_all_dialog_reactions_on_server(DialogId dialog_id, ui
 }
 
 void MessagesManager::read_message_content_from_updates(MessageId message_id) {
-  if (G()->shared_config().get_option_boolean("ignore_server_deletes_and_reads", false)) {
+  if (G()->get_option_boolean("ignore_server_deletes_and_reads", false)) {
     return;
   }
   if (!message_id.is_valid() || !message_id.is_server()) {
@@ -15934,7 +15934,7 @@ void MessagesManager::dump_debug_message_op(const Dialog *d, int priority) {
 }
 
 bool MessagesManager::is_message_unload_enabled() const {
-  auto has_custom_unload_time = G()->shared_config().have_option("message_unload_delay");
+  auto has_custom_unload_time = G()->have_option("message_unload_delay");
   return G()->parameters().use_message_db || td_->auth_manager_->is_bot() || has_custom_unload_time;
 }
 
@@ -16452,7 +16452,7 @@ void MessagesManager::on_message_deleted(Dialog *d, Message *m, bool is_permanen
     case DialogType::User:
     case DialogType::Chat:
       if (m->message_id.is_server()) {
-        if (!G()->shared_config().get_option_boolean("ignore_server_deletes_and_reads", false)) {
+        if (!G()->get_option_boolean("ignore_server_deletes_and_reads", false)) {
           message_id_to_dialog_id_.erase(m->message_id);
         }
       }
@@ -30765,7 +30765,7 @@ void MessagesManager::send_update_chat_last_message_impl(const Dialog *d, const 
     return;
   }
 
-  if (G()->shared_config().get_option_boolean("ignore_update_chat_last_message")) {
+  if (G()->get_option_boolean("ignore_update_chat_last_message")) {
     return;
   }
 
@@ -30931,7 +30931,7 @@ void MessagesManager::send_update_chat_read_inbox(const Dialog *d, bool force, c
     LOG(INFO) << "Send updateChatReadInbox in " << d->dialog_id << "(" << get_dialog_title(d->dialog_id) << ") to "
               << d->server_unread_count << " + " << d->local_unread_count << " from " << source;
 
-    if (!G()->shared_config().get_option_boolean("ignore_update_chat_read_inbox")) {
+    if (!G()->get_option_boolean("ignore_update_chat_read_inbox")) {
       send_closure(G()->td(), &Td::send_update,
                    make_tl_object<td_api::updateChatReadInbox>(d->dialog_id.get(), d->last_read_inbox_message_id.get(),
                                                                d->server_unread_count + d->local_unread_count));

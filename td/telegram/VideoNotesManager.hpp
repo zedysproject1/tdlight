@@ -36,7 +36,7 @@ FileId VideoNotesManager::parse_video_note(ParserT &parser) {
   if (parser.version() >= static_cast<int32>(Version::SupportMinithumbnails)) {
     string tmp_minithumbnail;
     parse(tmp_minithumbnail, parser);
-    if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+    if (!G()->get_option_boolean("disable_minithumbnails")) {
       video_note->minithumbnail = tmp_minithumbnail;
     }
   }

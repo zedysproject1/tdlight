@@ -14,7 +14,6 @@
 #include "td/telegram/VideoNotesManager.h"
 #include "td/telegram/VideosManager.h"
 #include "td/telegram/Global.h"
-#include "td/telegram/ConfigShared.h"
 
 #include "td/utils/algorithm.h"
 
@@ -38,7 +37,7 @@ void Document::append_file_ids(const Td *td, vector<FileId> &file_ids) const {
 
   file_ids.push_back(file_id);
 
-  if (!G()->shared_config().get_option_boolean("disable_minithumbnails")) {
+  if (!G()->get_option_boolean("disable_minithumbnails")) {
     FileId thumbnail_file_id = [&] {
       switch (type) {
         case Type::Animation:
