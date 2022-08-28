@@ -11,7 +11,6 @@
 #include "td/telegram/BotMenuButton.h"
 #include "td/telegram/ChannelParticipantFilter.h"
 #include "td/telegram/ConfigManager.h"
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/Dependencies.h"
 #include "td/telegram/DialogInviteLink.h"
 #include "td/telegram/DialogLocation.h"
@@ -36,6 +35,7 @@
 #include "td/telegram/misc.h"
 #include "td/telegram/net/NetQuery.h"
 #include "td/telegram/NotificationManager.h"
+#include "td/telegram/OptionManager.h"
 #include "td/telegram/PasswordManager.h"
 #include "td/telegram/Photo.h"
 #include "td/telegram/Photo.hpp"
@@ -3334,11 +3334,11 @@ ContactsManager::ContactsManager(Td *td, ActorShared<> parent) : td_(td), parent
 
   my_id_ = load_my_id();
 
-  G()->shared_config().set_option_integer("telegram_service_notifications_chat_id",
-                                          DialogId(get_service_notifications_user_id()).get());
-  G()->shared_config().set_option_integer("replies_bot_chat_id", DialogId(get_replies_bot_user_id()).get());
-  G()->shared_config().set_option_integer("group_anonymous_bot_user_id", get_anonymous_bot_user_id().get());
-  G()->shared_config().set_option_integer("channel_bot_user_id", get_channel_bot_user_id().get());
+  td_->option_manager_->set_option_integer("telegram_service_notifications_chat_id",
+                                           DialogId(get_service_notifications_user_id()).get());
+  td_->option_manager_->set_option_integer("replies_bot_chat_id", DialogId(get_replies_bot_user_id()).get());
+  td_->option_manager_->set_option_integer("group_anonymous_bot_user_id", get_anonymous_bot_user_id().get());
+  td_->option_manager_->set_option_integer("channel_bot_user_id", get_channel_bot_user_id().get());
 
   if (G()->parameters().use_chat_info_db) {
     auto next_contacts_sync_date_string = G()->td_db()->get_binlog_pmc()->get("next_contacts_sync_date");
@@ -3374,7 +3374,6 @@ ContactsManager::ContactsManager(Td *td, ActorShared<> parent) : td_(td), parent
       G()->td_db()->get_binlog_pmc()->get("pending_location_visibility_expire_date");
   if (!pending_location_visibility_expire_date_string.empty()) {
     pending_location_visibility_expire_date_ = to_integer<int32>(pending_location_visibility_expire_date_string);
-    try_send_set_location_visibility_query();
   }
   update_is_location_visible();
   LOG(INFO) << "Loaded location_visibility_expire_date = " << location_visibility_expire_date_
@@ -3410,6 +3409,12 @@ ContactsManager::~ContactsManager() {
       unavailable_channel_fulls_, loaded_from_database_secret_chats_, dialog_administrators_,
       cached_channel_participants_, resolved_phone_numbers_, channel_participants_, all_imported_contacts_,
       linked_channel_ids_, restricted_user_ids_, restricted_channel_ids_);
+}
+
+void ContactsManager::start_up() {
+  if (!pending_location_visibility_expire_date_) {
+    try_send_set_location_visibility_query();
+  }
 }
 
 void ContactsManager::tear_down() {
@@ -5100,7 +5105,7 @@ void ContactsManager::set_my_id(UserId my_id) {
   if (my_old_id != my_id) {
     my_id_ = my_id;
     G()->td_db()->get_binlog_pmc()->set("my_id", to_string(my_id.get()));
-    G()->shared_config().set_option_integer("my_id", my_id_.get());
+    td_->option_manager_->set_option_integer("my_id", my_id_.get());
     G()->td_db()->get_binlog_pmc()->force_sync(Promise<Unit>());
   }
 }
@@ -6037,20 +6042,24 @@ void ContactsManager::set_location(const Location &location, Promise<Unit> &&pro
   td_->create_handler<SearchDialogsNearbyQuery>(std::move(query_promise))->send(location, true, -1);
 }
 
-void ContactsManager::set_location_visibility() {
-  bool is_location_visible = G()->shared_config().get_option_boolean("is_location_visible");
+void ContactsManager::set_location_visibility(Td *td) {
+  bool is_location_visible = td->option_manager_->get_option_boolean("is_location_visible");
   auto pending_location_visibility_expire_date = is_location_visible ? std::numeric_limits<int32>::max() : 0;
-  if (pending_location_visibility_expire_date_ == -1 &&
-      pending_location_visibility_expire_date == location_visibility_expire_date_) {
-    return;
-  }
-  if (pending_location_visibility_expire_date_ != pending_location_visibility_expire_date) {
-    pending_location_visibility_expire_date_ = pending_location_visibility_expire_date;
+  if (td->contacts_manager_ == nullptr) {
     G()->td_db()->get_binlog_pmc()->set("pending_location_visibility_expire_date",
                                         to_string(pending_location_visibility_expire_date));
-    update_is_location_visible();
+    return;
   }
-  try_send_set_location_visibility_query();
+  if (td->contacts_manager_->pending_location_visibility_expire_date_ == -1 &&
+      pending_location_visibility_expire_date == td->contacts_manager_->location_visibility_expire_date_) {
+    return;
+  }
+  if (td->contacts_manager_->pending_location_visibility_expire_date_ != pending_location_visibility_expire_date) {
+    td->contacts_manager_->pending_location_visibility_expire_date_ = pending_location_visibility_expire_date;
+    G()->td_db()->get_binlog_pmc()->set("pending_location_visibility_expire_date",
+                                        to_string(pending_location_visibility_expire_date));
+  }
+  td->contacts_manager_->try_send_set_location_visibility_query();
 }
 
 void ContactsManager::try_send_set_location_visibility_query() {
@@ -6061,6 +6070,7 @@ void ContactsManager::try_send_set_location_visibility_query() {
     return;
   }
 
+  LOG(INFO) << "Trying to send set location visibility query";
   if (is_set_location_visibility_request_sent_) {
     return;
   }
@@ -6261,7 +6271,7 @@ void ContactsManager::set_location_visibility_expire_date(int32 expire_date) {
 void ContactsManager::update_is_location_visible() {
   auto expire_date = pending_location_visibility_expire_date_ != -1 ? pending_location_visibility_expire_date_
                                                                     : location_visibility_expire_date_;
-  G()->shared_config().set_option_boolean("is_location_visible", expire_date != 0);
+  td_->option_manager_->set_option_boolean("is_location_visible", expire_date != 0);
 }
 
 void ContactsManager::on_update_bot_commands(DialogId dialog_id, UserId bot_user_id,
@@ -6491,7 +6501,7 @@ void ContactsManager::set_name(const string &first_name, const string &last_name
 }
 
 void ContactsManager::set_bio(const string &bio, Promise<Unit> &&promise) {
-  auto max_bio_length = static_cast<size_t>(G()->shared_config().get_option_integer("bio_length_max"));
+  auto max_bio_length = static_cast<size_t>(td_->option_manager_->get_option_integer("bio_length_max"));
   auto new_bio = strip_empty_characters(bio, max_bio_length);
   for (auto &c : new_bio) {
     if (c == '\n') {
@@ -8613,7 +8623,7 @@ void ContactsManager::on_get_user(tl_object_ptr<telegram_api::User> &&user_ptr, 
   if (flags & USER_FLAG_IS_ME) {
     set_my_id(user_id);
     if (!is_bot) {
-      G()->shared_config().set_option_string("my_phone_number", user->phone_);
+      td_->option_manager_->set_option_string("my_phone_number", user->phone_);
     }
   }
 
@@ -10208,8 +10218,8 @@ void ContactsManager::for_each_secret_chat_with_user(UserId user_id, const std::
 void ContactsManager::update_user(User *u, UserId user_id, bool from_binlog, bool from_database) {
   CHECK(u != nullptr);
   if (user_id == get_my_id()) {
-    if (G()->shared_config().get_option_boolean("is_premium") != u->is_premium) {
-      G()->shared_config().set_option_boolean("is_premium", u->is_premium);
+    if (td_->option_manager_->get_option_boolean("is_premium") != u->is_premium) {
+      td_->option_manager_->set_option_boolean("is_premium", u->is_premium);
       send_closure(td_->config_manager_, &ConfigManager::request_config, true);
     }
   }
@@ -11940,15 +11950,15 @@ void ContactsManager::on_update_user_full_need_phone_number_privacy_exception(
 }
 
 void ContactsManager::on_ignored_restriction_reasons_changed() {
-  for (auto user_id : restricted_user_ids_) {
+  restricted_user_ids_.foreach([&](const UserId &user_id) {
     send_closure(G()->td(), &Td::send_update,
                  td_api::make_object<td_api::updateUser>(get_user_object(user_id, get_user(user_id))));
-  }
-  for (auto channel_id : restricted_channel_ids_) {
+  });
+  restricted_channel_ids_.foreach([&](const ChannelId &channel_id) {
     send_closure(
         G()->td(), &Td::send_update,
         td_api::make_object<td_api::updateSupergroup>(get_supergroup_object(channel_id, get_channel(channel_id))));
-  }
+  });
 }
 
 void ContactsManager::on_set_profile_photo(tl_object_ptr<telegram_api::photos_photo> &&photo, int64 old_photo_id) {

@@ -307,7 +307,6 @@ set(TDLIB_SOURCE
   td/telegram/ChannelParticipantFilter.cpp
   td/telegram/ClientActor.cpp
   td/telegram/ConfigManager.cpp
-  td/telegram/ConfigShared.cpp
   td/telegram/ConnectionState.cpp
   td/telegram/Contact.cpp
   td/telegram/ContactsManager.cpp
@@ -442,6 +441,7 @@ set(TDLIB_SOURCE
   td/telegram/StorageManager.cpp
   td/telegram/MemoryManager.cpp
   td/telegram/SuggestedAction.cpp
+  td/telegram/Support.cpp
   td/telegram/Td.cpp
   td/telegram/TdDb.cpp
   td/telegram/TermsOfService.cpp
@@ -512,7 +512,6 @@ set(TDLIB_SOURCE
   td/telegram/ChatId.h
   td/telegram/ClientActor.h
   td/telegram/ConfigManager.h
-  td/telegram/ConfigShared.h
   td/telegram/ConnectionState.h
   td/telegram/Contact.h
   td/telegram/ContactsManager.h
@@ -691,6 +690,7 @@ set(TDLIB_SOURCE
   td/telegram/StorageManager.h
   td/telegram/MemoryManager.h
   td/telegram/SuggestedAction.h
+  td/telegram/Support.h
   td/telegram/Td.h
   td/telegram/TdCallback.h
   td/telegram/TdDb.h

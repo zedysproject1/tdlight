@@ -78,6 +78,7 @@
 #include "td/utils/Status.h"
 #include "td/utils/StringBuilder.h"
 #include "td/utils/WaitFreeHashMap.h"
+#include "td/utils/WaitFreeHashSet.h"
 
 #include <array>
 #include <functional>
@@ -1373,7 +1374,7 @@ class MessagesManager final : public Actor {
 
     FlatHashMap<int32, MessageId> last_assigned_scheduled_message_id;  // date -> message_id
 
-    FlatHashSet<MessageId, MessageIdHash> deleted_message_ids;
+    WaitFreeHashSet<MessageId, MessageIdHash> deleted_message_ids;
     FlatHashSet<ScheduledServerMessageId, ScheduledServerMessageIdHash> deleted_scheduled_server_message_ids;
 
     vector<std::pair<DialogId, MessageId>> pending_new_message_notifications;
@@ -1894,7 +1895,7 @@ class MessagesManager final : public Actor {
 
   bool can_edit_message(DialogId dialog_id, const Message *m, bool is_editing, bool only_reply_markup = false) const;
 
-  static bool has_qts_messages(DialogId dialog_id);
+  bool has_qts_messages(DialogId dialog_id) const;
 
   bool can_report_dialog(DialogId dialog_id) const;
 
@@ -1918,8 +1919,8 @@ class MessagesManager final : public Actor {
 
   MessageId get_reply_to_message_id(Dialog *d, MessageId top_thread_message_id, MessageId message_id, bool for_draft);
 
-  static void fix_server_reply_to_message_id(DialogId dialog_id, MessageId message_id, DialogId reply_in_dialog_id,
-                                             MessageId &reply_to_message_id);
+  void fix_server_reply_to_message_id(DialogId dialog_id, MessageId message_id, DialogId reply_in_dialog_id,
+                                      MessageId &reply_to_message_id) const;
 
   bool can_set_game_score(DialogId dialog_id, const Message *m) const;
 
@@ -2588,7 +2589,7 @@ class MessagesManager final : public Actor {
 
   void remove_dialog_newer_messages(Dialog *d, MessageId from_message_id, const char *source);
 
-  static int32 get_pinned_dialogs_limit(DialogListId dialog_list_id);
+  int32 get_pinned_dialogs_limit(DialogListId dialog_list_id) const;
 
   static vector<DialogId> remove_secret_chat_dialog_ids(vector<DialogId> dialog_ids);
 
@@ -2950,6 +2951,9 @@ class MessagesManager final : public Actor {
   void ttl_db_loop_start(double server_now);
   void ttl_db_loop(double server_now);
   void ttl_db_on_result(Result<std::pair<std::vector<MessagesDbMessage>, int32>> r_result, bool dummy);
+
+  void on_restore_missing_message_after_get_difference(FullMessageId full_message_id, MessageId old_message_id,
+                                                       Result<Unit> result);
 
   void on_get_message_link_dialog(MessageLinkInfo &&info, Promise<MessageLinkInfo> &&promise);
 
@@ -3715,6 +3719,8 @@ class MessagesManager final : public Actor {
   DialogId being_added_new_dialog_id_;
 
   DialogId debug_channel_difference_dialog_;
+  DialogId debug_last_get_channel_difference_dialog_id_;
+  const char *debug_last_get_channel_difference_source_ = "unknown";
 
   double start_time_ = 0;
   bool is_inited_ = false;

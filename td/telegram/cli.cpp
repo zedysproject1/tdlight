@@ -1127,6 +1127,12 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::getTextEntities>(
           "@telegram /test_command https://telegram.org telegram.me @gif @test"));
 
+      send_request(
+          td_api::make_object<td_api::setOption>("xxx", td_api::make_object<td_api::optionValueBoolean>(true)));
+      send_request(td_api::make_object<td_api::setOption>("xxx", td_api::make_object<td_api::optionValueInteger>(1)));
+      send_request(td_api::make_object<td_api::setOption>("xxx", td_api::make_object<td_api::optionValueString>("2")));
+      send_request(td_api::make_object<td_api::setOption>("xxx", td_api::make_object<td_api::optionValueEmpty>()));
+
       send_request(td_api::make_object<td_api::getOption>("use_pfs"));
       send_request(td_api::make_object<td_api::setOption>(
           "use_pfs", td_api::make_object<td_api::optionValueBoolean>(std::time(nullptr) / 86400 % 2 == 0)));
@@ -4823,6 +4829,15 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::getProxyLink>(as_proxy_id(args)));
     } else if (op == "pproxy") {
       send_request(td_api::make_object<td_api::pingProxy>(as_proxy_id(args)));
+    } else if (op == "gusi") {
+      UserId user_id;
+      get_args(args, user_id);
+      send_request(td_api::make_object<td_api::getUserSupportInfo>(user_id));
+    } else if (op == "susi") {
+      UserId user_id;
+      string text;
+      get_args(args, user_id, text);
+      send_request(td_api::make_object<td_api::setUserSupportInfo>(user_id, as_formatted_text(text)));
     } else if (op == "touch") {
       auto r_fd = FileFd::open(args, FileFd::Read | FileFd::Write);
       if (r_fd.is_error()) {

@@ -6,7 +6,6 @@
 //
 #include "td/telegram/files/FileManager.h"
 
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/DownloadManager.h"
 #include "td/telegram/FileReferenceManager.h"
 #include "td/telegram/files/FileData.h"
@@ -999,7 +998,7 @@ Status FileManager::check_local_location(FullLocalFileLocation &location, int64 
     return get_file_size_error(" for a photo");
   }
   if (location.file_type_ == FileType::VideoNote &&
-      size > G()->shared_config().get_option_integer("video_note_size_max", DEFAULT_VIDEO_NOTE_SIZE_MAX)) {
+      size > G()->get_option_integer("video_note_size_max", DEFAULT_VIDEO_NOTE_SIZE_MAX)) {
     return get_file_size_error(" for a video note");
   }
   return Status::OK();
@@ -2027,7 +2026,7 @@ bool FileManager::set_encryption_key(FileId file_id, FileEncryptionKey key) {
 }
 
 bool FileManager::set_content(FileId file_id, BufferSlice bytes) {
-  if (G()->shared_config().get_option_boolean("ignore_inline_thumbnails")) {
+  if (G()->get_option_boolean("ignore_inline_thumbnails")) {
     return false;
   }
 
@@ -2577,7 +2576,7 @@ void FileManager::resume_upload(FileId file_id, vector<int> bad_parts, std::shar
     return;
   }
 
-  if (file_view.has_local_location()) {
+  if (file_view.has_local_location() && new_priority != 0) {
     auto status = check_local_location(node);
     if (status.is_error()) {
       LOG(INFO) << "Full local location of file " << file_id << " for upload is invalid: " << status;
@@ -3169,7 +3168,7 @@ Result<FileId> FileManager::get_input_file_id(FileType type, const tl_object_ptr
           return FileId();
         }
         string hash;
-        if (G()->shared_config().get_option_boolean("reuse_uploaded_photos_by_hash") && new_type == FileType::Photo) {
+        if (G()->get_option_boolean("reuse_uploaded_photos_by_hash") && new_type == FileType::Photo) {
           auto r_stat = stat(path);
           if (r_stat.is_ok() && r_stat.ok().size_ > 0 && r_stat.ok().size_ < 11000000) {
             auto r_file_content = read_file_str(path, r_stat.ok().size_);

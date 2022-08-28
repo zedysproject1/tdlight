@@ -34,6 +34,7 @@
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 #include "td/utils/WaitFreeHashMap.h"
+#include "td/utils/WaitFreeHashSet.h"
 
 #include <memory>
 #include <tuple>
@@ -281,9 +282,9 @@ class StickersManager final : public Actor {
 
   void clear_recent_stickers(bool is_attached, Promise<Unit> &&promise);
 
-  void on_update_recent_stickers_limit(int32 recent_stickers_limit);
+  void on_update_recent_stickers_limit();
 
-  void on_update_favorite_stickers_limit(int32 favorite_stickers_limit);
+  void on_update_favorite_stickers_limit();
 
   void reload_favorite_stickers(bool force);
 
@@ -1004,17 +1005,17 @@ class StickersManager final : public Actor {
   };
   FlatHashMap<int32, unique_ptr<GiftPremiumMessages>> premium_gift_messages_;
 
-  FlatHashMap<string, FlatHashSet<FullMessageId, FullMessageIdHash>> dice_messages_;
+  FlatHashMap<string, WaitFreeHashSet<FullMessageId, FullMessageIdHash>> dice_messages_;
 
   struct EmojiMessages {
-    FlatHashSet<FullMessageId, FullMessageIdHash> full_message_ids_;
+    WaitFreeHashSet<FullMessageId, FullMessageIdHash> full_message_ids_;
     std::pair<FileId, int> animated_emoji_sticker_;
     FileId sound_file_id_;
   };
   FlatHashMap<string, unique_ptr<EmojiMessages>> emoji_messages_;
 
   struct CustomEmojiMessages {
-    FlatHashSet<FullMessageId, FullMessageIdHash> full_message_ids_;
+    WaitFreeHashSet<FullMessageId, FullMessageIdHash> full_message_ids_;
     FileId sticker_id_;
   };
   FlatHashMap<int64, unique_ptr<CustomEmojiMessages>> custom_emoji_messages_;

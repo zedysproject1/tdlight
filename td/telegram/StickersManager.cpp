@@ -10,7 +10,6 @@
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/AvailableReaction.h"
 #include "td/telegram/ConfigManager.h"
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/ContactsManager.h"
 #include "td/telegram/DialogId.h"
 #include "td/telegram/Document.h"
@@ -28,6 +27,7 @@
 #include "td/telegram/net/DcId.h"
 #include "td/telegram/net/MtprotoHeader.h"
 #include "td/telegram/net/NetQueryDispatcher.h"
+#include "td/telegram/OptionManager.h"
 #include "td/telegram/PhotoSizeSource.h"
 #include "td/telegram/secret_api.h"
 #include "td/telegram/SecretChatLayer.h"
@@ -1390,11 +1390,8 @@ StickersManager::StickersManager(Td *td, ActorShared<> parent) : td_(td), parent
   upload_sticker_file_callback_ = std::make_shared<UploadStickerFileCallback>();
 
   on_update_animated_emoji_zoom();
-
-  on_update_recent_stickers_limit(
-      narrow_cast<int32>(G()->shared_config().get_option_integer("recent_stickers_limit", 200)));
-  on_update_favorite_stickers_limit(
-      narrow_cast<int32>(G()->shared_config().get_option_integer("favorite_stickers_limit", 5)));
+  on_update_recent_stickers_limit();
+  on_update_favorite_stickers_limit();
 
   next_click_animated_emoji_message_time_ = Time::now();
   next_update_animated_emoji_clicked_time_ = Time::now();
@@ -1439,7 +1436,7 @@ void StickersManager::init() {
   load_special_sticker_set_info_from_binlog(sticker_set);
 
   dice_emojis_str_ =
-      G()->shared_config().get_option_string("dice_emojis", "🎲\x01🎯\x01🏀\x01⚽\x01⚽️\x01🎰\x01🎳");
+      td_->option_manager_->get_option_string("dice_emojis", "🎲\x01🎯\x01🏀\x01⚽\x01⚽️\x01🎰\x01🎳");
   dice_emojis_ = full_split(dice_emojis_str_, '\x01');
   for (auto &dice_emoji : dice_emojis_) {
     auto &animated_dice_sticker_set = add_special_sticker_set(SpecialStickerSetType::animated_dice(dice_emoji));
@@ -1450,6 +1447,7 @@ void StickersManager::init() {
   send_closure_later(actor_id(this), &StickersManager::load_reactions);
 
   on_update_dice_success_values();
+  on_update_dice_emojis();
 
   on_update_emoji_sounds();
 
@@ -1473,9 +1471,9 @@ void StickersManager::init() {
     G()->td_db()->get_binlog_pmc()->erase("invalidate_old_featured_sticker_sets");
   }
 
-  G()->td_db()->get_binlog_pmc()->erase("animated_dice_sticker_set");        // legacy
-  G()->shared_config().set_option_empty("animated_dice_sticker_set_name");   // legacy
-  G()->shared_config().set_option_empty("animated_emoji_sticker_set_name");  // legacy
+  G()->td_db()->get_binlog_pmc()->erase("animated_dice_sticker_set");         // legacy
+  td_->option_manager_->set_option_empty("animated_dice_sticker_set_name");   // legacy
+  td_->option_manager_->set_option_empty("animated_emoji_sticker_set_name");  // legacy
 }
 
 void StickersManager::reload_reactions() {
@@ -1690,9 +1688,7 @@ void StickersManager::on_load_special_sticker_set(const SpecialStickerSetType &t
   }
 
   vector<FullMessageId> full_message_ids;
-  for (const auto &full_message_id : it->second) {
-    full_message_ids.push_back(full_message_id);
-  }
+  it->second.foreach([&](const FullMessageId &full_message_id) { full_message_ids.push_back(full_message_id); });
   CHECK(!full_message_ids.empty());
   for (const auto &full_message_id : full_message_ids) {
     td_->messages_manager_->on_external_update_message_content(full_message_id);
@@ -2234,7 +2230,7 @@ tl_object_ptr<td_api::stickerSetInfo> StickersManager::get_sticker_set_info_obje
     vector<FileId> regular_sticker_ids;
     vector<FileId> premium_sticker_ids;
     std::tie(regular_sticker_ids, premium_sticker_ids) = split_stickers_by_premium(sticker_set);
-    auto is_premium = G()->shared_config().get_option_boolean("is_premium");
+    auto is_premium = td_->option_manager_->get_option_boolean("is_premium");
     size_t max_premium_stickers = is_premium ? covers_limit : 1;
     if (premium_sticker_ids.size() > max_premium_stickers) {
       premium_sticker_ids.resize(max_premium_stickers);
@@ -2428,7 +2424,7 @@ FileId StickersManager::get_custom_animated_emoji_sticker_id(int64 custom_emoji_
 
 td_api::object_ptr<td_api::animatedEmoji> StickersManager::get_animated_emoji_object(const string &emoji,
                                                                                      int64 custom_emoji_id) {
-  if (disable_animated_emojis_) {
+  if (td_->auth_manager_->is_bot() || disable_animated_emojis_) {
     return nullptr;
   }
 
@@ -4114,8 +4110,8 @@ vector<FileId> StickersManager::get_stickers(StickerType sticker_type, string em
       vector<FileId> regular_sticker_ids;
       vector<FileId> premium_sticker_ids;
       std::tie(regular_sticker_ids, premium_sticker_ids) = split_stickers_by_premium(result);
-      if (G()->shared_config().get_option_boolean("is_premium") || allow_premium) {
-        auto normal_count = G()->shared_config().get_option_integer("stickers_normal_by_emoji_per_premium_num", 2);
+      if (td_->option_manager_->get_option_boolean("is_premium") || allow_premium) {
+        auto normal_count = td_->option_manager_->get_option_integer("stickers_normal_by_emoji_per_premium_num", 2);
         if (normal_count < 0) {
           normal_count = 2;
         }
@@ -4150,7 +4146,7 @@ vector<FileId> StickersManager::get_stickers(StickerType sticker_type, string em
           }
         }
         if (sorted.size() < limit_size_t) {
-          auto premium_count = G()->shared_config().get_option_integer("stickers_premium_by_emoji_num", 0);
+          auto premium_count = td_->option_manager_->get_option_integer("stickers_premium_by_emoji_num", 0);
           if (premium_count > 0) {
             for (const auto &sticker_id : premium_sticker_ids) {
               LOG(INFO) << "Add premium sticker " << sticker_id << " from installed sticker set";
@@ -5014,7 +5010,7 @@ void StickersManager::on_update_dice_emojis() {
     return;
   }
   if (td_->auth_manager_->is_bot()) {
-    G()->shared_config().set_option_empty("dice_emojis");
+    td_->option_manager_->set_option_empty("dice_emojis");
     return;
   }
   if (!is_inited_) {
@@ -5022,7 +5018,7 @@ void StickersManager::on_update_dice_emojis() {
   }
 
   auto dice_emojis_str =
-      G()->shared_config().get_option_string("dice_emojis", "🎲\x01🎯\x01🏀\x01⚽\x01⚽️\x01🎰\x01🎳");
+      td_->option_manager_->get_option_string("dice_emojis", "🎲\x01🎯\x01🏀\x01⚽\x01⚽️\x01🎰\x01🎳");
   if (dice_emojis_str == dice_emojis_str_) {
     return;
   }
@@ -5054,7 +5050,7 @@ void StickersManager::on_update_dice_success_values() {
     return;
   }
   if (td_->auth_manager_->is_bot()) {
-    G()->shared_config().set_option_empty("dice_success_values");
+    td_->option_manager_->set_option_empty("dice_success_values");
     return;
   }
   if (!is_inited_) {
@@ -5062,7 +5058,7 @@ void StickersManager::on_update_dice_success_values() {
   }
 
   auto dice_success_values_str =
-      G()->shared_config().get_option_string("dice_success_values", "0,6:62,5:110,5:110,5:110,64:110,6:110");
+      td_->option_manager_->get_option_string("dice_success_values", "0,6:62,5:110,5:110,5:110,64:110,6:110");
   if (dice_success_values_str == dice_success_values_str_) {
     return;
   }
@@ -5080,7 +5076,7 @@ void StickersManager::on_update_emoji_sounds() {
     return;
   }
 
-  auto emoji_sounds_str = G()->shared_config().get_option_string("emoji_sounds");
+  auto emoji_sounds_str = td_->option_manager_->get_option_string("emoji_sounds");
   if (emoji_sounds_str == emoji_sounds_str_) {
     return;
   }
@@ -5127,7 +5123,7 @@ void StickersManager::on_update_disable_animated_emojis() {
     return;
   }
 
-  auto disable_animated_emojis = G()->shared_config().get_option_boolean("disable_animated_emoji");
+  auto disable_animated_emojis = td_->option_manager_->get_option_boolean("disable_animated_emoji");
   if (disable_animated_emojis == disable_animated_emojis_) {
     return;
   }
@@ -5174,9 +5170,8 @@ void StickersManager::try_update_animated_emoji_messages() {
         (new_animated_sticker.first.is_valid() && new_sound_file_id != it.second->sound_file_id_)) {
       it.second->animated_emoji_sticker_ = new_animated_sticker;
       it.second->sound_file_id_ = new_sound_file_id;
-      for (const auto &full_message_id : it.second->full_message_ids_) {
-        full_message_ids.push_back(full_message_id);
-      }
+      it.second->full_message_ids_.foreach(
+          [&](const FullMessageId &full_message_id) { full_message_ids.push_back(full_message_id); });
     }
   }
   for (const auto &full_message_id : full_message_ids) {
@@ -5194,9 +5189,8 @@ void StickersManager::try_update_custom_emoji_messages(int64 custom_emoji_id) {
   auto new_sticker_id = get_custom_animated_emoji_sticker_id(custom_emoji_id);
   if (new_sticker_id != it->second->sticker_id_) {
     it->second->sticker_id_ = new_sticker_id;
-    for (const auto &full_message_id : it->second->full_message_ids_) {
-      full_message_ids.push_back(full_message_id);
-    }
+    it->second->full_message_ids_.foreach(
+        [&](const FullMessageId &full_message_id) { full_message_ids.push_back(full_message_id); });
   }
   for (const auto &full_message_id : full_message_ids) {
     td_->messages_manager_->on_external_update_message_content(full_message_id);
@@ -5266,8 +5260,7 @@ void StickersManager::register_dice(const string &emoji, int32 value, FullMessag
 
   LOG(INFO) << "Register dice " << emoji << " with value " << value << " from " << full_message_id << " from "
             << source;
-  bool is_inserted = dice_messages_[emoji].insert(full_message_id).second;
-  LOG_CHECK(is_inserted) << source << " " << emoji << " " << value << " " << full_message_id;
+  dice_messages_[emoji].insert(full_message_id);
 
   if (!td::contains(dice_emojis_, emoji)) {
     if (full_message_id.get_message_id().is_any_server() &&
@@ -5336,8 +5329,7 @@ void StickersManager::register_emoji(const string &emoji, int64 custom_emoji_id,
         get_custom_emoji_stickers({custom_emoji_id}, true, Promise<td_api::object_ptr<td_api::stickers>>());
       }
     }
-    bool is_inserted = emoji_messages.full_message_ids_.insert(full_message_id).second;
-    LOG_CHECK(is_inserted) << source << ' ' << custom_emoji_id << ' ' << full_message_id;
+    emoji_messages.full_message_ids_.insert(full_message_id);
     return;
   }
 
@@ -5350,8 +5342,7 @@ void StickersManager::register_emoji(const string &emoji, int64 custom_emoji_id,
     emoji_messages.animated_emoji_sticker_ = get_animated_emoji_sticker(emoji);
     emoji_messages.sound_file_id_ = get_animated_emoji_sound_file_id(emoji);
   }
-  bool is_inserted = emoji_messages.full_message_ids_.insert(full_message_id).second;
-  LOG_CHECK(is_inserted) << source << ' ' << emoji << ' ' << full_message_id;
+  emoji_messages.full_message_ids_.insert(full_message_id);
 }
 
 void StickersManager::unregister_emoji(const string &emoji, int64 custom_emoji_id, FullMessageId full_message_id,
@@ -7909,10 +7900,12 @@ void StickersManager::save_recent_stickers_to_database(bool is_attached) {
 
 void StickersManager::on_update_animated_emoji_zoom() {
   animated_emoji_zoom_ =
-      static_cast<double>(G()->shared_config().get_option_integer("animated_emoji_zoom", 625000000)) * 1e-9;
+      static_cast<double>(td_->option_manager_->get_option_integer("animated_emoji_zoom", 625000000)) * 1e-9;
 }
 
-void StickersManager::on_update_recent_stickers_limit(int32 recent_stickers_limit) {
+void StickersManager::on_update_recent_stickers_limit() {
+  auto recent_stickers_limit =
+      narrow_cast<int32>(td_->option_manager_->get_option_integer("recent_stickers_limit", 200));
   if (recent_stickers_limit != recent_stickers_limit_) {
     if (recent_stickers_limit > 0) {
       LOG(INFO) << "Update recent stickers limit to " << recent_stickers_limit;
@@ -7929,7 +7922,9 @@ void StickersManager::on_update_recent_stickers_limit(int32 recent_stickers_limi
   }
 }
 
-void StickersManager::on_update_favorite_stickers_limit(int32 favorite_stickers_limit) {
+void StickersManager::on_update_favorite_stickers_limit() {
+  auto favorite_stickers_limit =
+      narrow_cast<int32>(td_->option_manager_->get_option_integer("favorite_stickers_limit", 5));
   if (favorite_stickers_limit != favorite_stickers_limit_) {
     if (favorite_stickers_limit > 0) {
       LOG(INFO) << "Update favorite stickers limit to " << favorite_stickers_limit;
@@ -8458,7 +8453,7 @@ vector<string> StickersManager::get_emoji_language_codes(const vector<string> &i
   }
   if (!text.empty()) {
     uint32 code = 0;
-    next_utf8_unsafe(text.ubegin(), &code, "get_emoji_language_codes");
+    next_utf8_unsafe(text.ubegin(), &code);
     if ((0x410 <= code && code <= 0x44F) || code == 0x401 || code == 0x451) {
       // the first letter is cyrillic
       if (!td::contains(language_codes, "ru") && !td::contains(language_codes, "uk") &&

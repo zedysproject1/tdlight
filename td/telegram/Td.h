@@ -39,7 +39,7 @@
   #include <malloc.h>
 #endif
 #include <memory>
-#include <unordered_set>
+#include <unordered_map>
 #include <utility>
 
 namespace td {
@@ -140,6 +140,7 @@ class Td final : public Actor {
   unique_ptr<AudiosManager> audios_manager_;
   unique_ptr<CallbackQueriesManager> callback_queries_manager_;
   unique_ptr<DocumentsManager> documents_manager_;
+  unique_ptr<OptionManager> option_manager_;
   unique_ptr<VideoNotesManager> video_notes_manager_;
   unique_ptr<VideosManager> videos_manager_;
 
@@ -175,8 +176,6 @@ class Td final : public Actor {
   ActorOwn<NotificationManager> notification_manager_actor_;
   unique_ptr<NotificationSettingsManager> notification_settings_manager_;
   ActorOwn<NotificationSettingsManager> notification_settings_manager_actor_;
-  unique_ptr<OptionManager> option_manager_;
-  ActorOwn<OptionManager> option_manager_actor_;
   unique_ptr<PollManager> poll_manager_;
   ActorOwn<PollManager> poll_manager_actor_;
   unique_ptr<SponsoredMessageManager> sponsored_message_manager_;
@@ -294,7 +293,7 @@ class Td final : public Actor {
 
   ConnectionState connection_state_ = ConnectionState::Empty;
 
-  std::unordered_multiset<uint64> request_set_;
+  std::unordered_multimap<uint64, int32> request_set_;
   int actor_refcnt_ = 0;
   int request_actor_refcnt_ = 0;
   int stop_cnt_ = 2;
@@ -1357,6 +1356,10 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::getProxyLink &request);
 
   void on_request(uint64 id, const td_api::pingProxy &request);
+
+  void on_request(uint64 id, const td_api::getUserSupportInfo &request);
+
+  void on_request(uint64 id, td_api::setUserSupportInfo &request);
 
   void on_request(uint64 id, const td_api::getTextEntities &request);
 

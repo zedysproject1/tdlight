@@ -25,7 +25,6 @@
 #include "td/telegram/ChannelType.h"
 #include "td/telegram/ChatId.h"
 #include "td/telegram/ConfigManager.h"
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/ContactsManager.h"
 #include "td/telegram/CountryInfoManager.h"
 #include "td/telegram/DeviceTokenManager.h"
@@ -112,6 +111,7 @@
 #include "td/telegram/StorageManager.h"
 #include "td/telegram/MemoryManager.h"
 #include "td/telegram/SuggestedAction.h"
+#include "td/telegram/Support.h"
 #include "td/telegram/td_api.hpp"
 #include "td/telegram/TdDb.h"
 #include "td/telegram/telegram_api.hpp"
@@ -2646,8 +2646,7 @@ void Td::on_online_updated(bool force, bool send_update) {
   }
   if (is_online_) {
     alarm_timeout_.set_timeout_in(
-        ONLINE_ALARM_ID,
-        static_cast<double>(G()->shared_config().get_option_integer("online_update_period_ms", 210000)) * 1e-3);
+        ONLINE_ALARM_ID, static_cast<double>(G()->get_option_integer("online_update_period_ms", 210000)) * 1e-3);
   } else {
     alarm_timeout_.cancel_timeout(ONLINE_ALARM_ID);
   }
@@ -2762,7 +2761,7 @@ void Td::set_is_online(bool is_online) {
 }
 
 void Td::set_is_bot_online(bool is_bot_online) {
-  if (G()->shared_config().get_option_integer("session_count") > 1) {
+  if (G()->get_option_integer("session_count") > 1) {
     is_bot_online = false;
   }
 
@@ -2946,12 +2945,12 @@ void Td::request(uint64 id, tl_object_ptr<td_api::Function> function) {
     return;
   }
 
-  request_set_.insert(id);
   if (function == nullptr) {
-    return send_error_impl(id, make_error(400, "Request is empty"));
+    return callback_->on_error(id, make_error(400, "Request is empty"));
   }
 
   VLOG(td_requests) << "Receive request " << id << ": " << to_string(function);
+  request_set_.emplace(id, function->get_id());
   if (is_synchronous_request(function.get())) {
     // send response synchronously
     return send_result(id, static_request(std::move(function)));
@@ -3279,8 +3278,6 @@ void Td::dec_actor_refcnt() {
       LOG(DEBUG) << "NotificationManager was cleared" << timer;
       notification_settings_manager_.reset();
       LOG(DEBUG) << "NotificationSettingsManager was cleared" << timer;
-      option_manager_.reset();
-      LOG(DEBUG) << "OptionManager was cleared" << timer;
       poll_manager_.reset();
       LOG(DEBUG) << "PollManager was cleared" << timer;
       sponsored_message_manager_.reset();
@@ -3303,9 +3300,12 @@ void Td::dec_actor_refcnt() {
       LOG(DEBUG) << "VoiceNotesManager was cleared" << timer;
       web_pages_manager_.reset();
       LOG(DEBUG) << "WebPagesManager was cleared" << timer;
-      Promise<> promise = PromiseCreator::lambda([actor_id = create_reference()](Unit) mutable { actor_id.reset(); });
 
-      G()->set_shared_config(nullptr);
+      G()->set_option_manager(nullptr);
+      option_manager_.reset();
+      LOG(DEBUG) << "OptionManager was cleared" << timer;
+
+      Promise<> promise = PromiseCreator::lambda([actor_id = create_reference()](Unit) mutable { actor_id.reset(); });
       if (destroy_flag_) {
         G()->close_and_destroy_all(std::move(promise));
       } else {
@@ -3370,7 +3370,7 @@ void Td::clear_requests() {
     alarm_timeout_.cancel_timeout(alarm_id);
   }
   while (!request_set_.empty()) {
-    uint64 id = *request_set_.begin();
+    uint64 id = request_set_.begin()->first;
     if (destroy_flag_) {
       send_error_impl(id, make_error(401, "Unauthorized"));
     } else {
@@ -3389,7 +3389,7 @@ void Td::clear() {
 
   Timer timer;
   if (destroy_flag_) {
-    OptionManager::clear_options();
+    option_manager_->clear_options();
     if (!auth_manager_->is_bot()) {
       notification_manager_->destroy_all_notifications();
     }
@@ -3484,8 +3484,6 @@ void Td::clear() {
   LOG(DEBUG) << "NotificationManager actor was cleared" << timer;
   notification_settings_manager_actor_.reset();
   LOG(DEBUG) << "NotificationSettingsManager actor was cleared" << timer;
-  option_manager_actor_.reset();
-  LOG(DEBUG) << "OptionManager actor was cleared" << timer;
   poll_manager_actor_.reset();
   LOG(DEBUG) << "PollManager actor was cleared" << timer;
   sponsored_message_manager_actor_.reset();
@@ -3664,6 +3662,9 @@ void Td::init(Result<TdDb::OpenedDatabase> r_opened_database) {
 
   init_options_and_network();
 
+  // we need to process td_api::getOption along with td_api::setOption for consistency
+  // we need to process td_api::setOption before managers and MTProto header are created,
+  // because their initialiation may be affected by the options
   complete_pending_preauthentication_requests([](int32 id) {
     switch (id) {
       case td_api::getOption::ID:
@@ -3674,15 +3675,14 @@ void Td::init(Result<TdDb::OpenedDatabase> r_opened_database) {
     }
   });
 
-  options_.language_pack = G()->shared_config().get_option_string("localization_target");
-  options_.language_code = G()->shared_config().get_option_string("language_pack_id");
-  options_.parameters = G()->shared_config().get_option_string("connection_parameters");
-  options_.tz_offset = static_cast<int32>(G()->shared_config().get_option_integer("utc_time_offset"));
-  options_.is_emulator = G()->shared_config().get_option_boolean("is_emulator");
+  options_.language_pack = G()->get_option_string("localization_target");
+  options_.language_code = G()->get_option_string("language_pack_id");
+  options_.parameters = G()->get_option_string("connection_parameters");
+  options_.tz_offset = static_cast<int32>(G()->get_option_integer("utc_time_offset"));
+  options_.is_emulator = G()->get_option_boolean("is_emulator");
   // options_.proxy = Proxy();
   G()->set_mtproto_header(make_unique<MtprotoHeader>(options_));
-  G()->set_store_all_files_in_files_directory(
-      G()->shared_config().get_option_boolean("store_all_files_in_files_directory"));
+  G()->set_store_all_files_in_files_directory(G()->get_option_boolean("store_all_files_in_files_directory"));
 
   VLOG(td_init) << "Create NetQueryDispatcher";
   auto net_query_dispatcher = make_unique<NetQueryDispatcher>([&] { return create_reference(); });
@@ -3696,15 +3696,16 @@ void Td::init(Result<TdDb::OpenedDatabase> r_opened_database) {
   VLOG(td_init) << "Create AuthManager";
   auth_manager_ = td::make_unique<AuthManager>(parameters_.api_id, parameters_.api_hash, create_reference());
   auth_manager_actor_ = register_actor("AuthManager", auth_manager_.get());
+  G()->set_auth_manager(auth_manager_actor_.get());
 
   init_file_manager();
 
   init_managers();
 
-  G()->set_my_id(G()->shared_config().get_option_integer("my_id"));
-
   storage_manager_ = create_actor<StorageManager>("StorageManager", create_reference(), G()->get_gc_scheduler_id());
   G()->set_storage_manager(storage_manager_.get());
+
+  option_manager_->on_td_inited();
 
   VLOG(td_init) << "Send binlog events";
   for (auto &event : events.user_events) {
@@ -3730,6 +3731,10 @@ void Td::init(Result<TdDb::OpenedDatabase> r_opened_database) {
 
   for (auto &event : events.save_app_log_events) {
     on_save_app_log_binlog_event(this, std::move(event));
+  }
+
+  if (option_manager_->get_option_boolean("default_reaction_needs_sync")) {
+    send_set_default_reaction_query(this);
   }
 
   if (is_online_) {
@@ -3826,8 +3831,9 @@ void Td::init_options_and_network() {
   send_closure(state_manager_, &StateManager::add_callback, make_unique<StateManagerCallback>(create_reference()));
   G()->set_state_manager(state_manager_.get());
 
-  VLOG(td_init) << "Create ConfigShared";
-  G()->set_shared_config(td::make_unique<ConfigShared>(G()->td_db()->get_config_pmc_shared()));
+  VLOG(td_init) << "Create OptionManager";
+  option_manager_ = make_unique<OptionManager>(this);
+  G()->set_option_manager(option_manager_.get());
 
   init_connection_creator();
 
@@ -3838,30 +3844,6 @@ void Td::init_options_and_network() {
   VLOG(td_init) << "Create ConfigManager";
   config_manager_ = create_actor<ConfigManager>("ConfigManager", create_reference());
   G()->set_config_manager(config_manager_.get());
-
-  VLOG(td_init) << "Create OptionManager";
-  option_manager_ = make_unique<OptionManager>(this, create_reference());
-  option_manager_actor_ = register_actor("OptionManager", option_manager_.get());
-  G()->set_option_manager(option_manager_actor_.get());
-
-  VLOG(td_init) << "Set ConfigShared callback";
-  class ConfigSharedCallback final : public ConfigShared::Callback {
-   public:
-    void on_option_updated(const string &name, const string &value) const final {
-      send_closure_later(G()->option_manager(), &OptionManager::on_option_updated, name);
-    }
-    ~ConfigSharedCallback() final {
-      LOG(INFO) << "Destroy ConfigSharedCallback";
-    }
-  };
-  // we need to set ConfigShared callback before td_api::getOption requests are processed for consistency
-  // TODO currently they will be inconsistent anyway, because td_api::getOption returns current value,
-  // but in td_api::updateOption there will be a newer value, obtained at the time of update creation
-  // so, there can be even two succesive updateOption with the same value
-  // we need to process td_api::getOption along with td_api::setOption for consistency
-  // we need to process td_api::setOption before managers and MTProto header are created,
-  // because their initialiation may be affected by the options
-  G()->shared_config().set_callback(make_unique<ConfigSharedCallback>());
 }
 
 void Td::init_connection_creator() {
@@ -4112,11 +4094,11 @@ void Td::send_result(uint64 id, tl_object_ptr<td_api::Object> object) {
 
   auto it = request_set_.find(id);
   if (it != request_set_.end()) {
-    request_set_.erase(it);
-    VLOG(td_requests) << "Sending result for request " << id << ": " << to_string(object);
     if (object == nullptr) {
       object = make_tl_object<td_api::error>(404, "Not Found");
     }
+    VLOG(td_requests) << "Sending result for request " << id << ": " << to_string(object);
+    request_set_.erase(it);
     callback_->on_result(id, std::move(object));
   }
 }
@@ -4126,11 +4108,11 @@ void Td::send_error_impl(uint64 id, tl_object_ptr<td_api::error> error) {
   CHECK(error != nullptr);
   auto it = request_set_.find(id);
   if (it != request_set_.end()) {
-    request_set_.erase(it);
-    VLOG(td_requests) << "Sending error for request " << id << ": " << oneline(to_string(error));
     if (error->code_ == 0 && error->message_ == "Lost promise") {
-      LOG(FATAL) << "Lost promise for query " << id;
+      LOG(FATAL) << "Lost promise for query " << id << " of type " << it->second;
     }
+    VLOG(td_requests) << "Sending error for request " << id << ": " << oneline(to_string(error));
+    request_set_.erase(it);
     callback_->on_error(id, std::move(error));
   }
 }
@@ -4884,7 +4866,7 @@ void Td::on_request(uint64 id, td_api::optimizeStorage &request) {
 }
 
 void Td::on_request(uint64 id, td_api::getNetworkStatistics &request) {
-  if (!request.only_current_ && G()->shared_config().get_option_boolean("disable_persistent_network_statistics")) {
+  if (!request.only_current_ && G()->get_option_boolean("disable_persistent_network_statistics")) {
     return send_error_raw(id, 400, "Persistent network statistics is disabled");
   }
   CREATE_REQUEST_PROMISE();
@@ -4988,15 +4970,15 @@ void Td::on_request(uint64 id, const td_api::getTopChats &request) {
       promise.set_value(MessagesManager::get_chats_object(-1, result.ok()));
     }
   });
-  top_dialog_manager_->get_top_dialogs(get_top_dialog_category(request.category_), request.limit_,
-                                       std::move(query_promise));
+  send_closure(top_dialog_manager_actor_, &TopDialogManager::get_top_dialogs,
+               get_top_dialog_category(request.category_), request.limit_, std::move(query_promise));
 }
 
 void Td::on_request(uint64 id, const td_api::removeTopChat &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  top_dialog_manager_->remove_dialog(get_top_dialog_category(request.category_), DialogId(request.chat_id_),
-                                     std::move(promise));
+  send_closure(top_dialog_manager_actor_, &TopDialogManager::remove_dialog, get_top_dialog_category(request.category_),
+               DialogId(request.chat_id_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::loadChats &request) {
@@ -5333,17 +5315,17 @@ void Td::on_request(uint64 id, td_api::getMessagePublicForwards &request) {
 void Td::on_request(uint64 id, const td_api::removeNotification &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  notification_manager_->remove_notification(NotificationGroupId(request.notification_group_id_),
-                                             NotificationId(request.notification_id_), false, true, std::move(promise),
-                                             "td_api::removeNotification");
+  send_closure(notification_manager_actor_, &NotificationManager::remove_notification,
+               NotificationGroupId(request.notification_group_id_), NotificationId(request.notification_id_), false,
+               true, std::move(promise), "td_api::removeNotification");
 }
 
 void Td::on_request(uint64 id, const td_api::removeNotificationGroup &request) {
   CHECK_IS_USER();
   CREATE_OK_REQUEST_PROMISE();
-  notification_manager_->remove_notification_group(NotificationGroupId(request.notification_group_id_),
-                                                   NotificationId(request.max_notification_id_), MessageId(), -1, true,
-                                                   std::move(promise));
+  send_closure(notification_manager_actor_, &NotificationManager::remove_notification_group,
+               NotificationGroupId(request.notification_group_id_), NotificationId(request.max_notification_id_),
+               MessageId(), -1, true, std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::deleteMessages &request) {
@@ -5670,7 +5652,7 @@ void Td::on_request(uint64 id, const td_api::createCall &request) {
     return send_error_raw(id, r_input_user.error().code(), r_input_user.error().message());
   }
 
-  if (!G()->shared_config().get_option_boolean("calls_enabled")) {
+  if (!G()->get_option_boolean("calls_enabled")) {
     return send_error_raw(id, 400, "Calls are not enabled for the current user");
   }
 
@@ -8029,6 +8011,18 @@ void Td::on_request(uint64 id, const td_api::pingProxy &request) {
     }
   });
   send_closure(G()->connection_creator(), &ConnectionCreator::ping_proxy, request.proxy_id_, std::move(query_promise));
+}
+
+void Td::on_request(uint64 id, const td_api::getUserSupportInfo &request) {
+  CHECK_IS_USER();
+  CREATE_REQUEST_PROMISE();
+  get_user_info(this, UserId(request.user_id_), std::move(promise));
+}
+
+void Td::on_request(uint64 id, td_api::setUserSupportInfo &request) {
+  CHECK_IS_USER();
+  CREATE_REQUEST_PROMISE();
+  set_user_info(this, UserId(request.user_id_), std::move(request.message_), std::move(promise));
 }
 
 void Td::on_request(uint64 id, const td_api::getTextEntities &request) {

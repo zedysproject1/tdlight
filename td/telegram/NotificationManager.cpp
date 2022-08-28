@@ -9,7 +9,6 @@
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/ChannelId.h"
 #include "td/telegram/ChatId.h"
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/ContactsManager.h"
 #include "td/telegram/DeviceTokenManager.h"
 #include "td/telegram/Document.h"
@@ -22,6 +21,7 @@
 #include "td/telegram/misc.h"
 #include "td/telegram/net/ConnectionCreator.h"
 #include "td/telegram/net/DcId.h"
+#include "td/telegram/OptionManager.h"
 #include "td/telegram/Photo.h"
 #include "td/telegram/Photo.hpp"
 #include "td/telegram/SecretChatId.h"
@@ -95,10 +95,10 @@ class SetContactSignUpNotificationQuery final : public Td::ResultHandler {
 };
 
 class GetContactSignUpNotificationQuery final : public Td::ResultHandler {
-  Promise<Unit> promise_;
+  Promise<bool> promise_;
 
  public:
-  explicit GetContactSignUpNotificationQuery(Promise<Unit> &&promise) : promise_(std::move(promise)) {
+  explicit GetContactSignUpNotificationQuery(Promise<bool> &&promise) : promise_(std::move(promise)) {
   }
 
   void send() {
@@ -111,8 +111,7 @@ class GetContactSignUpNotificationQuery final : public Td::ResultHandler {
       return on_error(result_ptr.move_as_error());
     }
 
-    td_->notification_manager_->on_get_disable_contact_registered_notifications(result_ptr.ok());
-    promise_.set_value(Unit());
+    promise_.set_value(result_ptr.move_as_ok());
   }
 
   void on_error(Status status) final {
@@ -209,7 +208,7 @@ void NotificationManager::init() {
   }
 
   disable_contact_registered_notifications_ =
-      G()->shared_config().get_option_boolean("disable_contact_registered_notifications");
+      td_->option_manager_->get_option_boolean("disable_contact_registered_notifications");
   auto sync_state = G()->td_db()->get_binlog_pmc()->get(get_is_contact_registered_notifications_synchronized_key());
   if (sync_state.empty()) {
     sync_state = "00";
@@ -2394,7 +2393,7 @@ void NotificationManager::on_notification_group_count_max_changed(bool send_upda
   }
 
   auto new_max_notification_group_count = narrow_cast<int32>(
-      G()->shared_config().get_option_integer("notification_group_count_max", DEFAULT_GROUP_COUNT_MAX));
+      td_->option_manager_->get_option_integer("notification_group_count_max", DEFAULT_GROUP_COUNT_MAX));
   CHECK(MIN_NOTIFICATION_GROUP_COUNT_MAX <= new_max_notification_group_count &&
         new_max_notification_group_count <= MAX_NOTIFICATION_GROUP_COUNT_MAX);
 
@@ -2458,7 +2457,7 @@ void NotificationManager::on_notification_group_size_max_changed() {
   }
 
   auto new_max_notification_group_size = narrow_cast<int32>(
-      G()->shared_config().get_option_integer("notification_group_size_max", DEFAULT_GROUP_SIZE_MAX));
+      td_->option_manager_->get_option_integer("notification_group_size_max", DEFAULT_GROUP_SIZE_MAX));
   CHECK(MIN_NOTIFICATION_GROUP_SIZE_MAX <= new_max_notification_group_size &&
         new_max_notification_group_size <= MAX_NOTIFICATION_GROUP_SIZE_MAX);
 
@@ -2541,7 +2540,7 @@ void NotificationManager::on_online_cloud_timeout_changed() {
   }
 
   online_cloud_timeout_ms_ = narrow_cast<int32>(
-      G()->shared_config().get_option_integer("online_cloud_timeout_ms", DEFAULT_ONLINE_CLOUD_TIMEOUT_MS));
+      td_->option_manager_->get_option_integer("online_cloud_timeout_ms", DEFAULT_ONLINE_CLOUD_TIMEOUT_MS));
   VLOG(notifications) << "Set online_cloud_timeout_ms to " << online_cloud_timeout_ms_;
 }
 
@@ -2551,7 +2550,7 @@ void NotificationManager::on_notification_cloud_delay_changed() {
   }
 
   notification_cloud_delay_ms_ = narrow_cast<int32>(
-      G()->shared_config().get_option_integer("notification_cloud_delay_ms", DEFAULT_ONLINE_CLOUD_DELAY_MS));
+      td_->option_manager_->get_option_integer("notification_cloud_delay_ms", DEFAULT_ONLINE_CLOUD_DELAY_MS));
   VLOG(notifications) << "Set notification_cloud_delay_ms to " << notification_cloud_delay_ms_;
 }
 
@@ -2561,7 +2560,7 @@ void NotificationManager::on_notification_default_delay_changed() {
   }
 
   notification_default_delay_ms_ = narrow_cast<int32>(
-      G()->shared_config().get_option_integer("notification_default_delay_ms", DEFAULT_DEFAULT_DELAY_MS));
+      td_->option_manager_->get_option_integer("notification_default_delay_ms", DEFAULT_DEFAULT_DELAY_MS));
   VLOG(notifications) << "Set notification_default_delay_ms to " << notification_default_delay_ms_;
 }
 
@@ -2570,8 +2569,7 @@ void NotificationManager::on_disable_contact_registered_notifications_changed() 
     return;
   }
 
-  auto is_disabled = G()->shared_config().get_option_boolean("disable_contact_registered_notifications");
-
+  auto is_disabled = td_->option_manager_->get_option_boolean("disable_contact_registered_notifications");
   if (is_disabled == disable_contact_registered_notifications_) {
     return;
   }
@@ -2582,17 +2580,18 @@ void NotificationManager::on_disable_contact_registered_notifications_changed() 
   }
 }
 
-void NotificationManager::on_get_disable_contact_registered_notifications(bool is_disabled) {
-  if (disable_contact_registered_notifications_ == is_disabled) {
-    return;
+void NotificationManager::on_get_disable_contact_registered_notifications(bool is_disabled, Promise<Unit> &&promise) {
+  if (G()->close_flag() || disable_contact_registered_notifications_ == is_disabled) {
+    return promise.set_value(Unit());
   }
   disable_contact_registered_notifications_ = is_disabled;
 
   if (is_disabled) {
-    G()->shared_config().set_option_boolean("disable_contact_registered_notifications", is_disabled);
+    td_->option_manager_->set_option_boolean("disable_contact_registered_notifications", is_disabled);
   } else {
-    G()->shared_config().set_option_empty("disable_contact_registered_notifications");
+    td_->option_manager_->set_option_empty("disable_contact_registered_notifications");
   }
+  promise.set_value(Unit());
 }
 
 void NotificationManager::set_contact_registered_notifications_sync_state(SyncState new_state) {
@@ -2649,7 +2648,16 @@ void NotificationManager::get_disable_contact_registered_notifications(Promise<U
     return;
   }
 
-  td_->create_handler<GetContactSignUpNotificationQuery>(std::move(promise))->send();
+  auto query_promise =
+      PromiseCreator::lambda([actor_id = actor_id(this), promise = std::move(promise)](Result<bool> &&result) mutable {
+        if (result.is_error()) {
+          promise.set_error(result.move_as_error());
+        } else {
+          send_closure(actor_id, &NotificationManager::on_get_disable_contact_registered_notifications, result.ok(),
+                       std::move(promise));
+        }
+      });
+  td_->create_handler<GetContactSignUpNotificationQuery>(std::move(query_promise))->send();
 }
 
 void NotificationManager::process_push_notification(string payload, Promise<Unit> &&user_promise) {
@@ -2705,7 +2713,7 @@ void NotificationManager::process_push_notification(string payload, Promise<Unit
     send_closure(G()->state_manager(), &StateManager::on_online, false);
   }
 
-  if (receiver_id == 0 || receiver_id == G()->get_my_id()) {
+  if (receiver_id == 0 || receiver_id == td_->option_manager_->get_option_integer("my_id")) {
     auto status = process_push_notification_payload(payload, was_encrypted, promise);
     if (status.is_error()) {
       if (status.code() == 406 || status.code() == 200) {

@@ -51,6 +51,7 @@
 #include "td/utils/StringBuilder.h"
 #include "td/utils/Time.h"
 #include "td/utils/WaitFreeHashMap.h"
+#include "td/utils/WaitFreeHashSet.h"
 
 #include <functional>
 #include <memory>
@@ -326,7 +327,7 @@ class ContactsManager final : public Actor {
 
   void set_location(const Location &location, Promise<Unit> &&promise);
 
-  void set_location_visibility();
+  static void set_location_visibility(Td *td);
 
   void get_is_location_visible(Promise<Unit> &&promise);
 
@@ -1693,6 +1694,8 @@ class ContactsManager final : public Actor {
 
   void on_channel_participant_cache_timeout(ChannelId channel_id);
 
+  void start_up() final;
+
   void tear_down() final;
 
   Td *td_;
@@ -1724,7 +1727,7 @@ class ContactsManager final : public Actor {
   WaitFreeHashMap<ChannelId, unique_ptr<Channel>, ChannelIdHash> channels_;
   WaitFreeHashMap<ChannelId, unique_ptr<ChannelFull>, ChannelIdHash> channels_full_;
   mutable FlatHashSet<ChannelId, ChannelIdHash> unknown_channels_;
-  FlatHashSet<ChannelId, ChannelIdHash> invalidated_channels_full_;
+  WaitFreeHashSet<ChannelId, ChannelIdHash> invalidated_channels_full_;
   WaitFreeHashMap<ChannelId, FileSourceId, ChannelIdHash> channel_full_file_source_ids_;
 
   WaitFreeHashMap<SecretChatId, unique_ptr<SecretChat>, SecretChatIdHash> secret_chats_;
@@ -1843,8 +1846,8 @@ class ContactsManager final : public Actor {
 
   WaitFreeHashMap<ChannelId, ChannelId, ChannelIdHash> linked_channel_ids_;
 
-  FlatHashSet<UserId, UserIdHash> restricted_user_ids_;
-  FlatHashSet<ChannelId, ChannelIdHash> restricted_channel_ids_;
+  WaitFreeHashSet<UserId, UserIdHash> restricted_user_ids_;
+  WaitFreeHashSet<ChannelId, ChannelIdHash> restricted_channel_ids_;
 
   vector<Contact> next_all_imported_contacts_;
   vector<size_t> imported_contacts_unique_id_;
