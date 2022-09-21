@@ -54,17 +54,18 @@ OptionManager::OptionManager(Td *td)
   all_options["utc_time_offset"] = PSTRING() << 'I' << Clocks::tz_offset();
   for (const auto &name_value : all_options) {
     const string &name = name_value.first;
-    const string &value = name_value.second;
-    options_->set(name, value);
+    options_->set(name, name_value.second);
     if (!is_internal_option(name)) {
       send_closure(G()->td(), &Td::send_update,
-                   td_api::make_object<td_api::updateOption>(name, get_option_value_object(value)));
+                   td_api::make_object<td_api::updateOption>(name, get_option_value_object(name_value.second)));
     } else if (name == "otherwise_relogin_days") {
       auto days = narrow_cast<int32>(get_option_integer(name));
       if (days > 0) {
         vector<SuggestedAction> added_actions{SuggestedAction{SuggestedAction::Type::SetPassword, DialogId(), days}};
         send_closure(G()->td(), &Td::send_update, get_update_suggested_actions_object(added_actions, {}));
       }
+    } else if (name == "default_reaction") {
+      send_update_default_reaction_type(get_option_string(name));
     }
   }
 
@@ -100,6 +101,11 @@ OptionManager::OptionManager(Td *td)
   }
   if (!have_option("chat_filter_chosen_chat_count_max")) {
     set_option_integer("chat_filter_chosen_chat_count_max", G()->is_test_dc() ? 5 : 100);
+  }
+  if (!have_option("themed_emoji_statuses_sticker_set_id")) {
+    auto sticker_set_id =
+        G()->is_test_dc() ? static_cast<int64>(2964141614563343) : static_cast<int64>(773947703670341676);
+    set_option_integer("themed_emoji_statuses_sticker_set_id", sticker_set_id);
   }
 }
 
@@ -245,7 +251,7 @@ bool OptionManager::is_internal_option(Slice name) {
              name == "channels_read_media_period" || name == "chat_read_mark_expire_period" ||
              name == "chat_read_mark_size_threshold";
     case 'd':
-      return name == "dc_txt_domain_name" || name == "default_reaction_needs_sync" ||
+      return name == "dc_txt_domain_name" || name == "default_reaction" || name == "default_reaction_needs_sync" ||
              name == "dialog_filters_chats_limit_default" || name == "dialog_filters_chats_limit_premium" ||
              name == "dialog_filters_limit_default" || name == "dialog_filters_limit_premium" ||
              name == "dialogs_folder_pinned_limit_default" || name == "dialogs_folder_pinned_limit_premium" ||
@@ -266,8 +272,9 @@ bool OptionManager::is_internal_option(Slice name) {
     case 'p':
       return name == "premium_bot_username" || name == "premium_features" || name == "premium_invoice_slug";
     case 'r':
-      return name == "rating_e_decay" || name == "reactions_uniq_max" || name == "recent_stickers_limit" ||
-             name == "revoke_pm_inbox" || name == "revoke_time_limit" || name == "revoke_pm_time_limit";
+      return name == "rating_e_decay" || name == "reactions_uniq_max" || name == "reactions_user_max_default" ||
+             name == "reactions_user_max_premium" || name == "recent_stickers_limit" || name == "revoke_pm_inbox" ||
+             name == "revoke_time_limit" || name == "revoke_pm_time_limit";
     case 's':
       return name == "saved_animations_limit" || name == "saved_gifs_limit_default" ||
              name == "saved_gifs_limit_premium" || name == "session_count" || name == "stickers_faved_limit_default" ||
@@ -317,8 +324,8 @@ void OptionManager::on_option_updated(Slice name) {
       }
       break;
     case 'd':
-      if (name == "default_reaction_needs_sync" && get_option_boolean(name)) {
-        send_set_default_reaction_query(td_);
+      if (name == "default_reaction") {
+        send_update_default_reaction_type(get_option_string(name));
       }
       if (name == "dice_emojis") {
         send_closure(td_->stickers_manager_actor_, &StickersManager::on_update_dice_emojis);
@@ -504,7 +511,7 @@ td_api::object_ptr<td_api::OptionValue> OptionManager::get_option_synchronously(
       break;
     case 'v':
       if (name == "version") {
-        return td_api::make_object<td_api::optionValueString>("1.8.5");
+        return td_api::make_object<td_api::optionValueString>("1.8.6");
       }
       break;
   }
@@ -621,14 +628,6 @@ void OptionManager::set_option(const string &name, td_api::object_ptr<td_api::Op
       }
       break;
     case 'd':
-      if (!is_bot && name == "default_reaction") {
-        string reaction;
-        if (value_constructor_id == td_api::optionValueString::ID) {
-          reaction = static_cast<td_api::optionValueString *>(value.get())->value_;
-        }
-        set_default_reaction(td_, std::move(reaction), std::move(promise));
-        return;
-      }
       if (!is_bot && set_boolean_option("disable_animated_emoji")) {
         return;
       }

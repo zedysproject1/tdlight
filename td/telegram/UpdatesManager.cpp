@@ -20,6 +20,7 @@
 #include "td/telegram/DialogInviteLink.h"
 #include "td/telegram/DialogParticipant.h"
 #include "td/telegram/DownloadManager.h"
+#include "td/telegram/EmojiStatus.h"
 #include "td/telegram/FolderId.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/GroupCallManager.h"
@@ -473,7 +474,7 @@ Promise<> UpdatesManager::set_pts(int32 pts, const char *source) {
       last_get_difference_pts_ = get_pts();
       schedule_get_difference("rare pts getDifference");
     }
-  } else if (pts < get_pts()) {
+  } else if (pts < get_pts() && (pts > 1 || td_->option_manager_->get_option_integer("session_count") <= 1)) {
     LOG(ERROR) << "Receive wrong pts = " << pts << " from " << source << ". Current pts = " << get_pts();
   }
   return result;
@@ -1063,7 +1064,10 @@ void UpdatesManager::on_get_updates_state(tl_object_ptr<telegram_api::updates_st
     LOG(WARNING) << "Restore pts to " << state->pts_;
     // restoring right pts
     CHECK(pending_pts_updates_.empty());
+    auto real_running_get_difference = running_get_difference_;
+    running_get_difference_ = false;
     process_postponed_pts_updates();  // drop all updates with old pts
+    running_get_difference_ = real_running_get_difference;
     pts_manager_.init(state->pts_);
     last_get_difference_pts_ = get_pts();
     last_pts_save_time_ = Time::now() - 2 * MAX_PTS_SAVE_DELAY;
@@ -1697,6 +1701,7 @@ void UpdatesManager::try_reload_data() {
   td_->animations_manager_->get_saved_animations(Auto());
   td_->contacts_manager_->reload_created_public_dialogs(PublicDialogType::HasUsername, Auto());
   td_->contacts_manager_->reload_created_public_dialogs(PublicDialogType::IsLocationBased, Auto());
+  get_default_emoji_statuses(td_, Auto());
   td_->notification_settings_manager_->reload_saved_ringtones(Auto());
   td_->notification_settings_manager_->send_get_scope_notification_settings_query(NotificationSettingsScope::Private,
                                                                                   Auto());
@@ -1705,6 +1710,8 @@ void UpdatesManager::try_reload_data() {
   td_->notification_settings_manager_->send_get_scope_notification_settings_query(NotificationSettingsScope::Channel,
                                                                                   Auto());
   td_->stickers_manager_->reload_reactions();
+  td_->stickers_manager_->reload_recent_reactions();
+  td_->stickers_manager_->reload_top_reactions();
   for (int32 type = 0; type < MAX_STICKER_TYPE; type++) {
     auto sticker_type = static_cast<StickerType>(type);
     td_->stickers_manager_->get_installed_sticker_sets(sticker_type, Auto());
@@ -1716,6 +1723,8 @@ void UpdatesManager::try_reload_data() {
   td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::animated_emoji());
   td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::animated_emoji_click());
   td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::premium_gifts());
+  td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::generic_animations());
+  td_->stickers_manager_->reload_special_sticker_set_by_type(SpecialStickerSetType::default_statuses());
 
   schedule_data_reload();
 }
@@ -2940,6 +2949,11 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateMessageReaction
       std::move(promise));
 }
 
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateRecentReactions> update, Promise<Unit> &&promise) {
+  td_->stickers_manager_->reload_recent_reactions();
+  promise.set_value(Unit());
+}
+
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateAttachMenuBots> update, Promise<Unit> &&promise) {
   td_->attach_menu_manager_->reload_attach_menu_bots(std::move(promise));
 }
@@ -3165,8 +3179,17 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateUserPhone> upda
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateUserPhoto> update, Promise<Unit> &&promise) {
-  // TODO update->previous_, update->date_
   td_->contacts_manager_->on_update_user_photo(UserId(update->user_id_), std::move(update->photo_));
+  promise.set_value(Unit());
+}
+
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateUserEmojiStatus> update, Promise<Unit> &&promise) {
+  td_->contacts_manager_->on_update_user_emoji_status(UserId(update->user_id_), std::move(update->emoji_status_));
+  promise.set_value(Unit());
+}
+
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateRecentEmojiStatuses> update, Promise<Unit> &&promise) {
+  get_recent_emoji_statuses(td_, Auto());
   promise.set_value(Unit());
 }
 
@@ -3352,19 +3375,21 @@ void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateNewStickerSet> 
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateStickerSets> update, Promise<Unit> &&promise) {
-  td_->stickers_manager_->on_update_sticker_sets();
+  auto sticker_type = get_sticker_type(update->masks_, update->emojis_);
+  td_->stickers_manager_->on_update_sticker_sets(sticker_type);
   promise.set_value(Unit());
 }
 
 void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateStickerSetsOrder> update, Promise<Unit> &&promise) {
-  StickerType sticker_type = StickerType::Regular;
-  if (update->emojis_) {
-    sticker_type = StickerType::CustomEmoji;
-  } else if (update->masks_) {
-    sticker_type = StickerType::Mask;
-  }
+  auto sticker_type = get_sticker_type(update->masks_, update->emojis_);
   td_->stickers_manager_->on_update_sticker_sets_order(sticker_type,
                                                        StickersManager::convert_sticker_set_ids(update->order_));
+  promise.set_value(Unit());
+}
+
+void UpdatesManager::on_update(tl_object_ptr<telegram_api::updateMoveStickerSetToTop> update, Promise<Unit> &&promise) {
+  auto sticker_type = get_sticker_type(update->masks_, update->emojis_);
+  td_->stickers_manager_->on_update_move_sticker_set_to_top(sticker_type, StickerSetId(update->stickerset_));
   promise.set_value(Unit());
 }
 

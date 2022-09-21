@@ -17,12 +17,20 @@
 #include "td/utils/port/detail/ThreadIdGuard.h"
 #include "td/utils/port/thread_local.h"
 #include "td/utils/Slice.h"
+#include "td/utils/Status.h"
 
 #include <tuple>
 #include <type_traits>
 #include <utility>
 
+#if TD_OPENBSD || TD_SOLARIS
+#include <pthread.h>
+#endif
 #include <sys/types.h>
+
+#if TD_LINUX || TD_FREEBSD || TD_NETBSD
+#define TD_HAVE_THREAD_AFFINITY 1
+#endif
 
 namespace td {
 namespace detail {
@@ -65,6 +73,12 @@ class ThreadPthread {
   using id = pthread_t;
 
   static void send_real_time_signal(id thread_id, int real_time_signal_number);
+
+#if TD_HAVE_THREAD_AFFINITY
+  static Status set_affinity_mask(id thread_id, uint64 mask);
+
+  static uint64 get_affinity_mask(id thread_id);
+#endif
 
  private:
   MovableValue<bool> is_inited_;

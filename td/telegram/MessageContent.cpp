@@ -2080,14 +2080,14 @@ Result<InputMessageContent> get_input_message_content(
       auto input_message = static_cast<td_api::inputMessageDocument *>(input_message_content.get());
       auto file_type = input_message->disable_content_type_detection_ ? FileType::DocumentAsFile : FileType::Document;
       r_file_id =
-          td->file_manager_->get_input_file_id(file_type, input_message->document_, dialog_id, false, is_secret, true);
+          td->file_manager_->get_input_file_id(file_type, input_message->document_, dialog_id, false, is_secret);
       input_thumbnail = std::move(input_message->thumbnail_);
       break;
     }
     case td_api::inputMessagePhoto::ID: {
       auto input_message = static_cast<td_api::inputMessagePhoto *>(input_message_content.get());
-      r_file_id =
-          td->file_manager_->get_input_file_id(FileType::Photo, input_message->photo_, dialog_id, false, is_secret);
+      r_file_id = td->file_manager_->get_input_file_id(FileType::Photo, input_message->photo_, dialog_id, false,
+                                                       is_secret, false, false, true);
       input_thumbnail = std::move(input_message->thumbnail_);
       if (!input_message->added_sticker_file_ids_.empty()) {
         sticker_file_ids = td->stickers_manager_->get_attached_sticker_file_ids(input_message->added_sticker_file_ids_);
@@ -2794,7 +2794,7 @@ bool can_forward_message_content(const MessageContent *content) {
   auto content_type = content->get_type();
   if (content_type == MessageContentType::Text) {
     auto *text = static_cast<const MessageText *>(content);
-    return !is_empty_string(text->text.text);  // text can't be empty in the new message
+    return !is_empty_string(text->text.text);  // text must be non-empty in the new message
   }
   if (content_type == MessageContentType::Poll) {
     auto *poll = static_cast<const MessagePoll *>(content);
@@ -4686,7 +4686,7 @@ unique_ptr<MessageContent> dup_message_content(Td *td, DialogId dialog_id, const
       if (type == MessageContentDupType::Copy || type == MessageContentDupType::ServerCopy) {
         remove_unallowed_entities(td, result->text, dialog_id);
       }
-      return result;
+      return std::move(result);
     }
     case MessageContentType::Venue:
       return make_unique<MessageVenue>(*static_cast<const MessageVenue *>(content));
@@ -5937,12 +5937,34 @@ void add_message_content_dependencies(Dependencies &dependencies, const MessageC
 void on_sent_message_content(Td *td, const MessageContent *content) {
   switch (content->get_type()) {
     case MessageContentType::Animation:
-      return td->animations_manager_->add_saved_animation_by_id(get_message_content_any_file_id(content));
+      return td->animations_manager_->add_saved_animation_by_id(get_message_content_upload_file_id(content));
     case MessageContentType::Sticker:
-      return td->stickers_manager_->add_recent_sticker_by_id(false, get_message_content_any_file_id(content));
+      return td->stickers_manager_->add_recent_sticker_by_id(false, get_message_content_upload_file_id(content));
     default:
       // nothing to do
       return;
+  }
+}
+
+void move_message_content_sticker_set_to_top(Td *td, const MessageContent *content) {
+  CHECK(content != nullptr);
+  if (content->get_type() == MessageContentType::Sticker) {
+    td->stickers_manager_->move_sticker_set_to_top_by_sticker_id(get_message_content_upload_file_id(content));
+    return;
+  }
+
+  auto text = get_message_content_text(content);
+  if (text == nullptr) {
+    return;
+  }
+  vector<int64> custom_emoji_ids;
+  for (auto &entity : text->entities) {
+    if (entity.type == MessageEntity::Type::CustomEmoji) {
+      custom_emoji_ids.push_back(entity.document_id);
+    }
+  }
+  if (!custom_emoji_ids.empty()) {
+    td->stickers_manager_->move_sticker_set_to_top_by_custom_emoji_ids(custom_emoji_ids);
   }
 }
 

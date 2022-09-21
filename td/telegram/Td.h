@@ -300,10 +300,8 @@ class Td final : public Actor {
   bool destroy_flag_ = false;
   int close_flag_ = 0;
 
-  enum class State : int32 { WaitParameters, Decrypt, Run, Close } state_ = State::WaitParameters;
-  uint64 init_request_id_ = 0;
+  enum class State : int32 { WaitParameters, Run, Close } state_ = State::WaitParameters;
   uint64 set_parameters_request_id_ = 0;
-  bool is_database_encrypted_ = false;
 
   FlatHashMap<uint64, std::shared_ptr<ResultHandler>> result_handlers_;
   enum : int8 { RequestActorIdType = 1, ActorIdType = 2 };
@@ -399,15 +397,15 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::setTdlibParameters &request);
 
-  void on_request(uint64 id, const td_api::checkDatabaseEncryptionKey &request);
-
-  void on_request(uint64 id, td_api::setDatabaseEncryptionKey &request);
-
   void on_request(uint64 id, const td_api::getAuthorizationState &request);
 
   void on_request(uint64 id, td_api::setAuthenticationPhoneNumber &request);
 
+  void on_request(uint64 id, td_api::setAuthenticationEmailAddress &request);
+
   void on_request(uint64 id, const td_api::resendAuthenticationCode &request);
+
+  void on_request(uint64 id, td_api::checkAuthenticationEmailCode &request);
 
   void on_request(uint64 id, td_api::checkAuthenticationCode &request);
 
@@ -433,11 +431,19 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::confirmQrCodeAuthentication &request);
 
+  void on_request(uint64 id, td_api::setDatabaseEncryptionKey &request);
+
   void on_request(uint64 id, const td_api::getCurrentState &request);
 
   void on_request(uint64 id, td_api::getPasswordState &request);
 
   void on_request(uint64 id, td_api::setPassword &request);
+
+  void on_request(uint64 id, td_api::setLoginEmailAddress &request);
+
+  void on_request(uint64 id, const td_api::resendLoginEmailAddressCode &request);
+
+  void on_request(uint64 id, td_api::checkLoginEmailAddressCode &request);
 
   void on_request(uint64 id, td_api::getRecoveryEmailAddress &request);
 
@@ -661,11 +667,21 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::getChatScheduledMessages &request);
 
+  void on_request(uint64 id, const td_api::getEmojiReaction &request);
+
+  void on_request(uint64 id, const td_api::getCustomEmojiReactionAnimations &request);
+
   void on_request(uint64 id, const td_api::getMessageAvailableReactions &request);
 
-  void on_request(uint64 id, td_api::setMessageReaction &request);
+  void on_request(uint64 id, const td_api::clearRecentReactions &request);
+
+  void on_request(uint64 id, td_api::addMessageReaction &request);
+
+  void on_request(uint64 id, td_api::removeMessageReaction &request);
 
   void on_request(uint64 id, td_api::getMessageAddedReactions &request);
+
+  void on_request(uint64 id, td_api::setDefaultReactionType &request);
 
   void on_request(uint64 id, td_api::getMessagePublicForwards &request);
 
@@ -1021,6 +1037,16 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::setUsername &request);
 
+  void on_request(uint64 id, const td_api::setEmojiStatus &request);
+
+  void on_request(uint64 id, const td_api::getThemedEmojiStatuses &request);
+
+  void on_request(uint64 id, const td_api::getDefaultEmojiStatuses &request);
+
+  void on_request(uint64 id, const td_api::getRecentEmojiStatuses &request);
+
+  void on_request(uint64 id, const td_api::clearRecentEmojiStatuses &request);
+
   void on_request(uint64 id, td_api::setCommands &request);
 
   void on_request(uint64 id, td_api::deleteCommands &request);
@@ -1160,6 +1186,8 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::reportChat &request);
 
   void on_request(uint64 id, td_api::reportChatPhoto &request);
+
+  void on_request(uint64 id, const td_api::reportMessageReactions &request);
 
   void on_request(uint64 id, const td_api::getChatStatistics &request);
 
@@ -1453,11 +1481,7 @@ class Td final : public Actor {
 
   static int32 get_database_scheduler_id();
 
-  void on_parameters_checked(Result<TdDb::CheckedParameters> r_checked_parameters);
-
   void finish_set_parameters();
-
-  void start_init(uint64 id, string &&key);
 
   void init(Result<TdDb::OpenedDatabase> r_opened_database);
 
@@ -1469,15 +1493,13 @@ class Td final : public Actor {
 
   void init_managers();
 
-  void finish_init();
-
   void clear();
 
   void close_impl(bool destroy_flag);
 
   static Status fix_parameters(TdParameters &parameters) TD_WARN_UNUSED_RESULT;
 
-  Status set_parameters(td_api::object_ptr<td_api::tdlibParameters> parameters) TD_WARN_UNUSED_RESULT;
+  Status set_parameters(td_api::object_ptr<td_api::setTdlibParameters> parameters) TD_WARN_UNUSED_RESULT;
 
   static td_api::object_ptr<td_api::error> make_error(int32 code, CSlice error) {
     return td_api::make_object<td_api::error>(code, error.str());

@@ -12,6 +12,7 @@
 #include "td/telegram/JsonValue.h"
 #include "td/telegram/LinkManager.h"
 #include "td/telegram/logevent/LogEvent.h"
+#include "td/telegram/MessageReaction.h"
 #include "td/telegram/net/AuthDataShared.h"
 #include "td/telegram/net/ConnectionCreator.h"
 #include "td/telegram/net/DcId.h"
@@ -1414,6 +1415,13 @@ void ConfigManager::process_config(tl_object_ptr<telegram_api::config> config) {
   options.set_option_integer("notification_cloud_delay_ms", fix_timeout_ms(config->notify_cloud_delay_ms_));
   options.set_option_integer("notification_default_delay_ms", fix_timeout_ms(config->notify_default_delay_ms_));
 
+  if (is_from_main_dc && !options.have_option("default_reaction_need_sync")) {
+    auto reaction_str = get_message_reaction_string(config->reactions_default_);
+    if (!reaction_str.empty()) {
+      options.set_option_string("default_reaction", reaction_str);
+    }
+  }
+
   // delete outdated options
   options.set_option_empty("suggested_language_code");
   options.set_option_empty("chat_big_size");
@@ -1470,11 +1478,10 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
   string animation_search_emojis;
   vector<SuggestedAction> suggested_actions;
   bool can_archive_and_mute_new_chats_from_unknown_users = false;
-  int64 chat_read_mark_expire_period = 0;
-  int64 chat_read_mark_size_threshold = 0;
+  int32 chat_read_mark_expire_period = 0;
+  int32 chat_read_mark_size_threshold = 0;
   double animated_emoji_zoom = 0.0;
-  string default_reaction;
-  int64 reactions_uniq_max = 0;
+  int32 reactions_uniq_max = 0;
   vector<string> premium_features;
   auto &premium_limit_keys = get_premium_limit_keys();
   string premium_bot_username;
@@ -1722,10 +1729,6 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
         chat_read_mark_size_threshold = get_json_value_int(std::move(key_value->value_), key);
         continue;
       }
-      if (key == "reactions_default") {
-        default_reaction = get_json_value_string(std::move(key_value->value_), key);
-        continue;
-      }
       if (key == "reactions_uniq_max") {
         reactions_uniq_max = get_json_value_int(std::move(key_value->value_), key);
         continue;
@@ -1798,6 +1801,16 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
         stickers_normal_by_emoji_per_premium_num = get_json_value_int(std::move(key_value->value_), key);
         continue;
       }
+      if (key == "default_emoji_statuses_stickerset_id") {
+        auto setting_value = get_json_value_long(std::move(key_value->value_), key);
+        G()->set_option_integer("themed_emoji_statuses_sticker_set_id", setting_value);
+        continue;
+      }
+      if (key == "reactions_user_max_default" || key == "reactions_user_max_premium") {
+        auto setting_value = get_json_value_int(std::move(key_value->value_), key);
+        G()->set_option_integer(key, setting_value);
+        continue;
+      }
 
       new_values.push_back(std::move(key_value));
     }
@@ -1814,13 +1827,15 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
   if (ignored_restriction_reasons.empty()) {
     options.set_option_empty("ignored_restriction_reasons");
 
-    if (options.get_option_boolean("ignore_sensitive_content_restrictions", true)) {
+    if (options.get_option_boolean("ignore_sensitive_content_restrictions", true) ||
+        options.get_option_boolean("can_ignore_sensitive_content_restrictions", true)) {
       get_content_settings(Auto());
     }
   } else {
     options.set_option_string("ignored_restriction_reasons", ignored_restriction_reasons);
 
-    if (!options.get_option_boolean("can_ignore_sensitive_content_restrictions")) {
+    if (!options.get_option_boolean("can_ignore_sensitive_content_restrictions") ||
+        !options.get_option_boolean("ignore_sensitive_content_restrictions")) {
       get_content_settings(Auto());
     }
   }
@@ -1871,9 +1886,6 @@ void ConfigManager::process_app_config(tl_object_ptr<telegram_api::JSONValue> &c
     options.set_option_empty("chat_read_mark_size_threshold");
   } else {
     options.set_option_integer("chat_read_mark_size_threshold", chat_read_mark_size_threshold);
-  }
-  if (!options.have_option("default_reaction_need_sync")) {
-    options.set_option_string("default_reaction", default_reaction);
   }
   if (reactions_uniq_max <= 0 || reactions_uniq_max == 11) {
     options.set_option_empty("reactions_uniq_max");
